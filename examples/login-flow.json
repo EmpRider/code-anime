@@ -1,0 +1,40 @@
+{
+  "endpoint": "POST /login \u00b7 sample flow",
+  "steps": [
+    {
+      "from": "LoginController",
+      "to": "AuthService",
+      "dtoName": "LoginRequest",
+      "dtoFields": {
+        "email": "demo@example.com",
+        "password": "[mock]"
+      }
+    },
+    {
+      "from": "AuthService",
+      "to": "UserRepository",
+      "dtoName": "UserLookup",
+      "dtoFields": {
+        "email": "demo@example.com"
+      }
+    },
+    {
+      "from": "UserRepository",
+      "to": "AuthService",
+      "dtoName": "UserRecord",
+      "dtoFields": {
+        "id": "user-demo",
+        "passwordHash": "[mock hash]"
+      }
+    },
+    {
+      "from": "AuthService",
+      "to": "LoginController",
+      "dtoName": "LoginResponse",
+      "dtoFields": {
+        "token": "[mock token]",
+        "userId": "user-demo"
+      }
+    }
+  ]
+}
