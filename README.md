@@ -19,6 +19,23 @@ npm run demo
 
 Open the URL printed in the terminal. The demo uses `examples/login-flow.json` and requires no database or AI host. Stop it with Ctrl+C.
 
+## Install through npx (after the first npm release)
+
+The planned public package name is `code-anime`. It is not published yet. Once released, an MCP host that uses a `servers` configuration can run it directly:
+
+```json
+{
+  "servers": {
+    "code-anime": {
+      "command": "npx",
+      "args": ["-y", "code-anime"]
+    }
+  }
+}
+```
+
+Some hosts use `mcpServers` or another configuration format. Use the same command and arguments in your host's supported format. Node.js 22+ is required. Pin `code-anime@0.1.0` for a reproducible version after that version is published. Installing the MCP does not install an agent skill or add source analysis.
+
 ## Connect an AI agent
 
 ```sh
@@ -109,4 +126,4 @@ The next milestone moves repetitive analysis into the server: provider adapters,
 
 ## License status
 
-An open-source license has not yet been chosen. The package is marked private to prevent accidental npm publication. License selection is required before presenting this project as licensed open source.
+An open-source license has not yet been chosen. Package metadata currently says `UNLICENSED`; removing the publish block does not grant an open-source license. The maintainer should select a license before the public release. See [release instructions](docs/releasing.md).

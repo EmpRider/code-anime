@@ -32,4 +32,4 @@ This roadmap describes planned capabilities, not features already available.
 
 ## Before a public release
 
-Select a license, verify host compatibility, add browser automation, review dependency updates, design stale-session recovery and document support boundaries. Additional programming languages come through separate analyzer adapters after the first language is verified.
+Select a license, configure npm publishing, verify host compatibility, add browser automation, review dependency updates, design stale-session recovery and document support boundaries. Additional programming languages come through separate analyzer adapters after the first language is verified.

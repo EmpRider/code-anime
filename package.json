@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "description": "An MCP server that turns agent-authored code flows into an interactive local animation.",
   "type": "module",
-  "private": true,
   "engines": {
     "node": ">=22"
   },
@@ -24,7 +23,9 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "npm run typecheck && npm test && npm run build && npm run format:check"
+    "check": "npm run typecheck && npm test && npm run build && npm run format:check",
+    "prepack": "npm run build",
+    "package:check": "node scripts/verify-package.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
@@ -40,6 +41,18 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/EmpRider/code-anime.git"
-  }
+    "url": "git+https://github.com/EmpRider/code-anime.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "license": "UNLICENSED",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "visualization",
+    "ai",
+    "code-flow"
+  ]
 }
