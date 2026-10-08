@@ -28,7 +28,7 @@ try {
     'public/player.js',
     'public/styles.css',
     'public/replay.js',
-    'skills/visualize-code-flow/SKILL.md',
+    'skills/code-anime/SKILL.md',
     'LICENSE',
   ])
     assert.ok(paths.includes(path), 'Missing package asset: ' + path);

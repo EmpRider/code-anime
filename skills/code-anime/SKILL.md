@@ -1,9 +1,9 @@
 ---
-name: visualize-code-flow
+name: code-anime
 description: Explain codebase functions, API endpoints, business workflows and proposed feature changes through Code Anime's animated player. Use when a user asks to see how code works visually, trace data or parameters, inspect a function flow, or review a visual implementation plan. Requires a connected Code Anime MCP server.
 ---
 
-# Visualize code flow
+# Code Anime
 
 Use the connected Code Anime tools to analyze the current repository and deliver a playable URL. Let the server produce trace events; do not manually build a complete animation payload for supported source analysis.
 
