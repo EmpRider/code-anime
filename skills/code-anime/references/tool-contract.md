@@ -2,7 +2,7 @@
 
 ## Language setup gate
 
-Check the requested target's language before submitting a job. The built-in `source` provider supports only TypeScript and JavaScript. For Java or other unsupported languages, stop the current workflow and tell the user to install CodeGraph and initialize/index it for the active project. Resume only after a compatible bridge supporting that language is configured and advertised by `visualizer_capabilities`. A sibling MCP connection alone is insufficient. Do not use the legacy mock renderer as a fallback or invent CodeGraph install/init commands.
+Check the requested target's language before submitting a job. The built-in `source` provider supports only TypeScript and JavaScript. For Java or other unsupported languages, verify existing CodeGraph installation, initialization/indexing for the active project, target-language support and a compatible bridge advertised by `visualizer_capabilities`. When all are ready, continue automatically with `provider: "codegraph"`; do not request reinstall or repeated initialization. Stop only for missing or unverified setup: request installation if absent, project initialization/indexing if missing, or compatible bridge setup if disconnected. Missing bridge configuration does not prove CodeGraph is uninstalled; a sibling MCP connection alone is insufficient. Do not use the legacy mock renderer as a fallback or invent CodeGraph install/init commands.
 
 ## Main request
 

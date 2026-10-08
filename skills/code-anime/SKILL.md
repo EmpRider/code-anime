@@ -22,10 +22,12 @@ Use the project currently open in Cursor or the connected AI agent host as the a
 Identify the language of the requested target from the active project's files and build metadata before submitting an analysis job. In a mixed-language repository, check the target's implementation, not merely whether TS/JS files exist elsewhere.
 
 - Use the built-in source analyzer only for TypeScript or JavaScript targets.
-- For Java or another language outside TS/JS, stop the current analysis attempt before calling the source analyzer. Tell the user: "This project's target is written in <language>. Code Anime's built-in analyzer supports only TypeScript and JavaScript. Install CodeGraph and initialize/index it for this open project before continuing."
-- Explain that CodeGraph must also be connected through a compatible Code Anime bridge before server-owned analysis can resume. Installing a sibling CodeGraph MCP in the host alone does not configure that bridge. If the CodeGraph implementation is unknown, ask which package or repository they use; do not invent install/init commands or claim initialization succeeded.
-- After setup is verified for this project, resume with `provider: "codegraph"` only when `visualizer_capabilities` advertises `codegraph-bridge` and the bridge supports the target language.
-- Do not fall back to agent-authored mock animations for an unsupported-language codebase. Do not enqueue or poll an unsupported source-analysis job. Stop the workflow; keep the MCP server running for subsequent requests.
+- For Java or another language outside TS/JS, check existing CodeGraph setup first. Use available host tools, documented installation/status checks and project index metadata to verify installation, initialization/indexing for the active project, and support for the target language. Do not treat missing Code Anime bridge configuration as proof that CodeGraph is not installed.
+- If CodeGraph is already installed, initialized/indexed for this project and connected through a compatible bridge, continue automatically with `provider: "codegraph"`. Confirm that `visualizer_capabilities` advertises `codegraph-bridge`. Do not ask the user to reinstall, repeat initialization or approve continuation.
+- If CodeGraph is absent, stop the analysis workflow and tell the user to install CodeGraph and initialize/index the open project.
+- If CodeGraph is installed but the active project is not initialized/indexed, request only project initialization/indexing. If installation and indexing are ready but the bridge is missing or incompatible, explain only the required connection/bridge setup. A sibling CodeGraph MCP in the host alone does not configure the Code Anime bridge.
+- If the CodeGraph implementation or setup status cannot be verified, state what is unknown and ask for the package/repository or relevant status. Do not invent install/init commands or claim setup succeeded.
+- Never call the TS/JS source analyzer or fall back to agent-authored mock animations for an unsupported-language target. Stop only when required setup is missing or unverified; keep the MCP server running for subsequent requests.
 
 ## Analyze and present the flow
 
