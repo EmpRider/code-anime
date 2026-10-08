@@ -1,7 +1,7 @@
 {
   "name": "@empirerider/code-anime",
-  "version": "0.3.1",
-  "description": "CodeGraph-backed code flow replay for AI agents through MCP",
+  "version": "0.4.0",
+  "description": "CodeGraph-grounded mock execution and value animation for AI agents through MCP",
   "type": "module",
   "engines": {
     "node": ">=22"

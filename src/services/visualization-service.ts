@@ -42,7 +42,7 @@ export class VisualizationService {
     private readonly baseUrl: string,
     private readonly allowedRoot?: string,
   ) {}
-  private async root(requested: string) {
+  async root(requested: string) {
     const root = await realpath(resolve(requested));
     if (!this.allowedRoot) return root;
     const allowed = await realpath(resolve(this.allowedRoot));
@@ -59,7 +59,7 @@ export class VisualizationService {
   }
   capabilities() {
     return {
-      version: '0.3.1',
+      version: '0.4.0',
       languages: [],
       languageSupport: 'Determined by the configured CodeGraph provider',
       analysis: 'CodeGraph evidence only; no built-in source analysis',
@@ -87,7 +87,13 @@ export class VisualizationService {
         events: 2000,
         concurrentJobs: 2,
       },
-      tools: 8,
+      tools: 9,
+      workflow:
+        'read_codegraph_evidence → host AI mock simulation → generate_mock_flow_animation',
+      simulation:
+        'Host AI authors source-backed statement events with mock values; server validates and renders.',
+      continuation:
+        '2000 events per chunk; submit subsequent chunks with continuationOf',
     };
   }
   async start(raw: unknown) {
@@ -197,6 +203,10 @@ export class VisualizationService {
         flow.trace?.events.filter((e) => e.certainty === 'unresolved').length ??
         0,
       diagnostics: flow.trace?.diagnostics ?? [],
+      mode: flow.trace?.simulation ? 'ai-mock' : 'structural-evidence',
+      nextAction: flow.trace?.simulation
+        ? 'Replay mock scenario'
+        : 'Retrieve full CodeGraph evidence and generate a mock trace before presenting execution',
       sourceHash: flow.trace?.sourceHash,
     };
   }

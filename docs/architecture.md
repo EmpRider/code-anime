@@ -1,29 +1,24 @@
 # Architecture
 
-The entry point composes a file-backed session store, a loopback HTTP server, and a stdio MCP server. Domain types have no transport dependencies. Both transports receive a storage interface, allowing memory or database implementations later without changing the tool contract.
+The entry point composes a bounded file-backed session store, loopback HTTP player and stdio MCP server. Domain schemas do not depend on transports.
 
-## Request lifecycle
+## Default mock execution lifecycle
 
-1. The AI host calls `generate_mock_flow_animation`.
-2. The MCP handler validates the legacy flow payload.
-3. The session store enforces quotas and atomically writes a UUID session.
-4. The handler returns a compact URL and mock-data label.
-5. The browser fetches the flow and handles playback locally.
+1. The host resolves its active workspace and requests `read_codegraph_evidence`.
+2. The native adapter checks CodeGraph installation and index readiness, then retrieves source/relationships through CodeGraph. It never parses application syntax itself.
+3. The simulation service retains provider text and issues a project-scoped, expiring evidence receipt. Responses can be read in pages; additional file ranges come from CodeGraph.
+4. The host AI interprets evidence, chooses mock inputs and builds ordered statement/expression events. It tracks DTO/object state, transformations, invocation frames, branch decisions, loop iterations and returns.
+5. `generate_mock_flow_animation` validates receipts, source/state fields, event identity and continuation constraints, then stores an immutable flow.
+6. The browser renders fields inside moving packets, highlights changes, and restores complete local/stack snapshots for replay/seek. Linked chunks preserve a long scenario; baseline/proposed scenarios can be selected in one player.
 
-Storage serializes writes to enforce concurrent quotas. Each process owns a unique temporary directory; cleanup never removes another process's sessions. TTL is checked on reads. Errors are converted to MCP tool failures or sanitized HTTP responses; diagnostics go to stderr.
+The server does not embed an LLM, execute application code or prove semantic correctness. The skill supplies the AI orchestration. Receipts establish source retrieval and project identity, not correctness of every calculated value. Unknown effects remain explicitly assumed/unresolved.
 
-## Why a small modular project?
+## Structural tools
 
-The prototype's HTML strings, disk operations and protocol handlers were tightly coupled. Separating these responsibilities makes the next changes testable without introducing a framework or a monorepo. The browser remains plain JavaScript because the current rendering model is simple.
+The earlier graph job pipeline remains an optional exploration path, with native CodeGraph or a configured normalized bridge. Its visited symbols, graph-path stacks and traversal ordering are not execution. The skill must generate a mock trace before presenting a requested execution animation. Structural refinement and edge overlays remain explicitly labeled legacy functions.
 
-## Analysis pipeline
+## Storage and trust
 
-The MCP service validates the active project root and requires a usable CodeGraph installation/index before creating native analysis jobs. It launches the installed CLI automatically or uses an optional normalized bridge. No local source analyzer exists. Provider events are validated and converted into replay steps; the browser presents their evidence, stack and values. Legacy mock payloads are illustrations and cannot substitute for CodeGraph analysis.
+Writes are serialized and atomic, with UUID validation, byte/session quotas and read-time expiry. Each process owns its directory; graceful cleanup cannot remove another process's sessions. Force-kill orphan recovery is not implemented.
 
-## Current limitations
-
-See [analysis.md](analysis.md) for exact supported syntax and provider contracts. The simulator does not execute the application, infer every data lineage or fully model closure/class-instance/async semantics. The player is a scenario teaching tool. Proposed overlays are not proof of dependency impact. AST work is bounded within the main process; worker isolation and broader language support remain future work.
-
-## Trust boundary
-
-Source-derived names and snippets are text, never HTML or agent instructions. Root/file containment prevents tools from scanning arbitrary paths. Repository code is parsed rather than executed. Provider commands are explicitly configured by the user and must be trusted. Temporary sessions may contain code snippets and supplied scenario data; use synthetic values. This remains a loopback development tool rather than a multi-user remote service.
+Root validation respects the optional configured boundary. Provider calls receive the validated project path. Names, source and DTO values are rendered with textContent/DOM nodes, not innerHTML. Source content is evidence, not agent instructions. Provider errors stop the workflow rather than initiating direct source analysis. This is a local development tool, not a remotely authenticated service.

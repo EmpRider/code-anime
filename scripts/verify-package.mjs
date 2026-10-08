@@ -105,7 +105,7 @@ try {
   });
   await client.connect(transport);
   const tools = await client.listTools();
-  assert.equal(tools.tools.length, 8);
+  assert.equal(tools.tools.length, 9);
   const submission = await client.callTool({
     name: 'visualize_code_flow',
     arguments: {
@@ -144,25 +144,77 @@ try {
     !paths.some((path) => path.includes('analysis/analyzer')),
     'Source analyzer leaked into package',
   );
-  const flow = JSON.parse(
-    await readFile(resolve('examples/login-flow.json'), 'utf8'),
-  );
-  const result = await client.callTool({
+  let session = ready;
+  if (nativeCommand) {
+    const evidenceResult = await client.callTool({
+      name: 'read_codegraph_evidence',
+      arguments: {
+        projectRoot: project,
+        tool: 'node',
+        arguments: { symbol: 'Generator.normalize' },
+      },
+    });
+    assert.notEqual(
+      evidenceResult.isError,
+      true,
+      JSON.stringify(evidenceResult),
+    );
+    const evidence = JSON.parse(evidenceResult.content[0].text);
+    assert.match(evidence.text, /input.trim/);
+    const result = await client.callTool({
+      name: 'generate_mock_flow_animation',
+      arguments: {
+        projectRoot: project,
+        endpoint: 'Generator.normalize',
+        evidenceIds: [evidence.evidenceId],
+        scenario: { input: '  ACH  ' },
+        coverage: 'Mock trim call result',
+        events: [
+          {
+            id: 'trim-1',
+            kind: 'transform',
+            symbolId: 'Generator.normalize',
+            label: 'trim input',
+            callId: 'normalize-1',
+            evidenceIds: [evidence.evidenceId],
+            source: { file: 'Generator.kt', line: 3, endLine: 3 },
+            inputs: { receiver: '  ACH  ' },
+            result: 'ACH',
+            before: { result: null },
+            after: { result: 'ACH' },
+            values: {},
+            locals: { input: '  ACH  ' },
+            stack: ['normalize-1'],
+            certainty: 'mock',
+          },
+        ],
+      },
+    });
+    assert.notEqual(result.isError, true, JSON.stringify(result));
+    session = JSON.parse(result.content[0].text);
+    const data = await (
+      await fetch(new URL('/api/flow/' + session.sessionId, session.url))
+    ).json();
+    assert.equal(data.trace.events[0].result, 'ACH');
+    assert.equal(data.steps[0].dtoFields.result, 'ACH');
+  }
+  const blocked = await client.callTool({
     name: 'generate_mock_flow_animation',
-    arguments: flow,
+    arguments: {
+      endpoint: 'bypass',
+      steps: [{ from: 'a', to: 'b', dtoName: 'x', dtoFields: {} }],
+    },
   });
-  assert.notEqual(result.isError, true);
-  const session = JSON.parse(result.content[0].text);
+  assert.equal(
+    blocked.isError,
+    true,
+    'ungrounded legacy payload must not bypass CodeGraph',
+  );
   const page = await fetch(session.url);
   assert.equal(page.status, 200);
   assert.match(await page.text(), /Code Anime/);
-  for (const asset of ['/player.js', '/styles.css']) {
+  for (const asset of ['/player.js', '/styles.css'])
     assert.equal((await fetch(new URL(asset, session.url))).status, 200);
-  }
-  const data = await fetch(
-    new URL('/api/flow/' + session.sessionId, session.url),
-  );
-  assert.deepEqual(await data.json(), flow);
   console.log(
     'Packed npm package: installed CLI, MCP handshake, player assets and flow API passed.',
   );

@@ -80,7 +80,7 @@ input {
   border: 1px solid #2d3d55;
   border-radius: 12px;
   background: #151e2c;
-  min-height: 230px;
+  min-height: 420px;
 }
 .node {
   flex: 0 0 210px;
@@ -96,13 +96,13 @@ input {
 .packet {
   position: absolute;
   top: 150px;
-  width: 120px;
+  width: 290px;
   padding: 10px;
   border-radius: 7px;
   background: #ffc76b;
   color: #172031;
   font-size: 12px;
-  text-align: center;
+  text-align: left;
   overflow-wrap: anywhere;
 }
 .inspector {
@@ -137,4 +137,48 @@ pre {
 }
 details {
   margin-bottom: 20px;
+}
+
+.packet {
+  max-height: 480px;
+  overflow-y: auto;
+  pointer-events: auto;
+  box-shadow: 0 8px 30px #0008;
+}
+.field {
+  padding: 5px 8px;
+  border-radius: 4px;
+  margin-top: 5px;
+  background: #ffffff0a;
+  font-family: monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.packet .field {
+  background: #ffffffa8;
+}
+.field.changed {
+  background: #246a4a;
+  color: #fff;
+  border-left: 3px solid #78dcca;
+}
+.object-fields {
+  margin: 8px 0;
+  padding-left: 8px;
+  border-left: 1px solid #70849d;
+}
+.packet-inputs {
+  margin-top: 8px;
+}
+#coverage,
+nav {
+  color: #aab7cc;
+  margin: 12px 0;
+}
+a {
+  color: #78dcca;
+  margin-right: 16px;
+}
+[hidden] {
+  display: none !important;
 }

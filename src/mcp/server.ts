@@ -5,7 +5,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { readFileSync } from 'node:fs';
-import { flowSchema, type SessionStore } from '../domain/flow.js';
+import { type SessionStore } from '../domain/flow.js';
+import { SimulationService } from '../services/simulation-service.js';
 import { VisualizationService } from '../services/visualization-service.js';
 
 const string = { type: 'string' };
@@ -25,6 +26,9 @@ export function createMcpServer(
     ) as { version: string }
   ).version;
   const service = new VisualizationService(store, baseUrl, projectRoot);
+  const simulation = new SimulationService(store, baseUrl, (root) =>
+    service.root(root),
+  );
   const server = new Server(
     { name: 'code-anime', version },
     { capabilities: { tools: {} } },
@@ -39,7 +43,7 @@ export function createMcpServer(
     {
       name: 'visualize_code_flow',
       description:
-        'Use installed CodeGraph automatically for the active project, or an optional normalized bridge. Stop if missing/unindexed. No independent source analysis. Returns jobId; poll get_visualization_status.',
+        'Optional structural graph overview only; does not simulate values. For the default execution animation use read_codegraph_evidence then generate_mock_flow_animation. Returns jobId; poll get_visualization_status.',
       inputSchema: schema(
         {
           provider: { type: 'string', enum: ['codegraph'] },
@@ -122,12 +126,110 @@ export function createMcpServer(
       ),
     },
     {
-      name: 'generate_mock_flow_animation',
+      name: 'read_codegraph_evidence',
       description:
-        'Legacy compatibility: render an agent-authored mock flow. Illustrations only; cannot replace required CodeGraph analysis.',
+        'Required first step for mock execution. Verify installed/indexed CodeGraph and retrieve full source, DTOs and relationships for the active project. Use explore for a natural-language flow/endpoint, node for complete source with file offset/limit, search for symbols. Follow nextOffset with evidenceId to read cached response pages. Returns evidenceId required by generate_mock_flow_animation. Never reads/parses project source independently.',
       inputSchema: schema(
         {
+          projectRoot: string,
+          tool: {
+            type: 'string',
+            enum: ['explore', 'node', 'search', 'callees', 'files'],
+          },
+          arguments: object,
+          evidenceId: string,
+          offset: { type: 'integer', minimum: 0 },
+          limit: { type: 'integer', minimum: 100, maximum: 32000 },
+        },
+        ['projectRoot'],
+      ),
+    },
+    {
+      name: 'generate_mock_flow_animation',
+      description:
+        'Render the host AI’s CodeGraph-grounded, statement-by-statement mock execution. Include transforms (trim/min), assignments, DTO fields, branch/loop decisions, calls/returns, complete locals and stack snapshots. CodeGraph evidence receipts are mandatory. Use before/after for state changes. Values are simulated, not live execution. For large traces submit chunks with complete:false then continuationOf. For visual plans supply baselineSessionId and a full proposed scenario.',
+      inputSchema: schema(
+        {
+          projectRoot: string,
           endpoint: string,
+          evidenceIds: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 200,
+            items: string,
+          },
+          scenario: object,
+          coverage: string,
+          complete: { type: 'boolean' },
+          continuationOf: string,
+          baselineSessionId: string,
+          events: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 2000,
+            items: schema(
+              {
+                id: string,
+                kind: {
+                  type: 'string',
+                  enum: [
+                    'enter',
+                    'call',
+                    'return',
+                    'assign',
+                    'transform',
+                    'mutate',
+                    'branch',
+                    'loop',
+                    'await',
+                    'throw',
+                    'unresolved',
+                    'plan',
+                  ],
+                },
+                symbolId: string,
+                label: string,
+                callId: string,
+                parentCallId: string,
+                source: schema(
+                  {
+                    file: string,
+                    line: { type: 'integer', minimum: 1 },
+                    endLine: { type: 'integer', minimum: 1 },
+                  },
+                  ['file', 'line', 'endLine'],
+                ),
+                evidenceIds: { type: 'array', minItems: 1, items: string },
+                values: object,
+                inputs: object,
+                result: {},
+                before: object,
+                after: object,
+                objectId: string,
+                origins: { type: 'object', additionalProperties: string },
+                locals: object,
+                snippet: { type: 'string', maxLength: 800 },
+                stack: { type: 'array', items: string },
+                certainty: {
+                  type: 'string',
+                  enum: ['mock', 'assumed', 'unresolved', 'proposed'],
+                },
+                note: string,
+              },
+              [
+                'id',
+                'kind',
+                'symbolId',
+                'label',
+                'callId',
+                'evidenceIds',
+                'values',
+                'locals',
+                'stack',
+                'certainty',
+              ],
+            ),
+          },
           steps: {
             type: 'array',
             minItems: 1,
@@ -138,7 +240,7 @@ export function createMcpServer(
             ),
           },
         },
-        ['endpoint', 'steps'],
+        ['projectRoot', 'endpoint', 'evidenceIds', 'coverage'],
       ),
     },
   ];
@@ -227,17 +329,12 @@ export function createMcpServer(
           } else result = await service.manage(p.action, p.id);
           break;
         }
-        case 'generate_mock_flow_animation': {
-          const flow = flowSchema.parse(raw);
-          const session = await store.create(flow);
-          result = {
-            sessionId: session.id,
-            url: baseUrl + '/flow/' + session.id,
-            steps: flow.steps.length,
-            dataSource: 'agent-authored mock flow',
-          };
+        case 'read_codegraph_evidence':
+          result = await simulation.read(raw);
           break;
-        }
+        case 'generate_mock_flow_animation':
+          result = await simulation.submit(raw);
+          break;
         default:
           throw new Error('Unknown tool');
       }
@@ -255,6 +352,9 @@ export function createMcpServer(
       };
     }
   });
-  server.onclose = () => service.close();
+  server.onclose = () => {
+    service.close();
+    simulation.close();
+  };
   return server;
 }

@@ -18,8 +18,18 @@ test('player renders evidence safely and Previous/seek restore local state', asy
   const flow = {
     endpoint: '<img src=x onerror=alert(1)>',
     steps: [
-      { from: 'a', to: 'a', dtoName: 'assign', dtoFields: { after: 1 } },
-      { from: 'a', to: 'b', dtoName: 'enter', dtoFields: { after: 2 } },
+      {
+        from: 'a',
+        to: 'a',
+        dtoName: 'assign',
+        dtoFields: { name: '  Alice  ', nested: { x: '<img src=x>' } },
+      },
+      {
+        from: 'a',
+        to: 'b',
+        dtoName: 'enter',
+        dtoFields: { name: 'Alice', nested: { x: '<img src=x>' } },
+      },
     ],
     trace: {
       provider: 'test',
@@ -28,6 +38,9 @@ test('player renders evidence safely and Previous/seek restore local state', asy
         {
           symbolId: 'a',
           label: 'A',
+          callId: 'call-1',
+          objectId: 'dto-1',
+          after: { name: '  Alice  ', nested: { x: '<img src=x>' } },
           stack: ['a'],
           locals: { value: 1 },
           source: { file: 'a.ts', line: 1, endLine: 1 },
@@ -37,6 +50,12 @@ test('player renders evidence safely and Previous/seek restore local state', asy
         {
           symbolId: 'b',
           label: '<script>bad</script>',
+          callId: 'call-2',
+          objectId: 'dto-1',
+          before: { name: '  Alice  ' },
+          after: { name: 'Alice', nested: { x: '<img src=x>' } },
+          inputs: { receiver: '  Alice  ' },
+          result: 'Alice',
           stack: ['a', 'b'],
           locals: { value: 2 },
           certainty: 'proposed',
@@ -44,6 +63,10 @@ test('player renders evidence safely and Previous/seek restore local state', asy
       ],
     },
   };
+  flow.baselineTrace = structuredClone(flow.trace);
+  flow.baselineTrace.events[1].locals = { value: 99 };
+  flow.baselineTrace.events[1].values = {};
+  flow.baselineTrace.events[0].values = {};
   const dom = new JSDOM(html, {
     url: 'http://127.0.0.1/flow/test',
     runScripts: 'outside-only',
@@ -69,12 +92,29 @@ test('player renders evidence safely and Previous/seek restore local state', asy
     assert.match(get('locals').textContent, /"value": 1/);
     get('next').click();
     assert.match(get('locals').textContent, /"value": 2/);
+    assert.match(get('canvas').querySelector('.packet').textContent, /Alice/);
+    assert.match(
+      get('canvas').querySelector('.changed').textContent,
+      /"  Alice  " → "Alice"/,
+    );
+    assert.equal(get('canvas').querySelectorAll('.packet').length, 1);
+    assert.equal(get('canvas').querySelector('img'), null);
     assert.equal(get('canvas').querySelector('script'), null);
     get('previous').click();
     assert.match(get('locals').textContent, /"value": 1/);
     get('timeline').value = '2';
     get('timeline').dispatchEvent(new window.Event('input'));
     assert.match(get('stack').textContent, /"b"/);
+    get('variant').value = 'baseline';
+    get('variant').dispatchEvent(new window.Event('change'));
+    get('next').click();
+    get('next').click();
+    assert.match(get('locals').textContent, /"value": 99/);
+    get('variant').value = 'proposed';
+    get('variant').dispatchEvent(new window.Event('change'));
+    get('next').click();
+    get('next').click();
+    assert.match(get('locals').textContent, /"value": 2/);
     get('restart').click();
     assert.equal(get('progress').textContent, '0 / 2');
     assert.equal(get('locals').textContent, '');

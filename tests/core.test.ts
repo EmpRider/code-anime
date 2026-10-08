@@ -146,10 +146,11 @@ test('MCP handshake and valid/invalid tool calls', async () => {
       name: 'generate_mock_flow_animation',
       arguments: flow,
     });
-    assert.notEqual(result.isError, true);
-    const blocks = result.content as Array<{ text: string }>;
-    const data = JSON.parse(blocks[0]!.text) as { sessionId: string };
-    assert.ok(await store.get(data.sessionId));
+    assert.equal(
+      result.isError,
+      true,
+      'mock rendering cannot bypass required CodeGraph evidence',
+    );
     const invalid = await client.callTool({
       name: 'generate_mock_flow_animation',
       arguments: { endpoint: '/login', steps: [] },

@@ -17,6 +17,15 @@
           execution trace.
         </p>
       </header>
+      <p id="coverage"></p>
+      <nav aria-label="Trace chunks">
+        <a id="previous-chunk" hidden>Previous chunk</a>
+        <a id="next-chunk" hidden>Next chunk</a>
+      </nav>
+      <select id="variant" aria-label="Scenario comparison" hidden>
+        <option value="proposed">Proposed scenario</option>
+        <option value="baseline">Baseline scenario</option>
+      </select>
       <section class="toolbar" aria-label="Playback controls">
         <button id="previous">Previous</button><button id="play">Play</button
         ><button id="next">Next</button><button id="restart">Restart</button
@@ -42,7 +51,9 @@
         <h2 id="packet-title">Select a step</h2>
         <p id="route"></p>
         <p id="certainty"></p>
-        <pre id="fields">{}</pre>
+        <pre id="operation"></pre>
+        <div id="fields" aria-label="Object fields and changes"></div>
+        <pre id="origins" aria-label="Value origins"></pre>
         <div class="trace-grid">
           <section>
             <h3>Call stack</h3>

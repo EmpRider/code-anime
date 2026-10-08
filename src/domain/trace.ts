@@ -11,6 +11,7 @@ export const eventSchema = z.object({
     'call',
     'return',
     'assign',
+    'transform',
     'mutate',
     'branch',
     'loop',
@@ -25,6 +26,13 @@ export const eventSchema = z.object({
   parentCallId: z.string().optional(),
   source: sourceSchema.optional(),
   values: z.record(z.unknown()),
+  evidenceIds: z.array(z.string().uuid()).optional(),
+  inputs: z.record(z.unknown()).optional(),
+  result: z.unknown().optional(),
+  before: z.record(z.unknown()).optional(),
+  after: z.record(z.unknown()).optional(),
+  objectId: z.string().optional(),
+  origins: z.record(z.string()).optional(),
   locals: z.record(z.unknown()).optional(),
   snippet: z.string().max(800).optional(),
   stack: z.array(z.string()),
@@ -43,6 +51,16 @@ export const traceSchema = z.object({
   truncated: z.boolean(),
   filesAnalyzed: z.number(),
   cacheHits: z.number(),
+  simulation: z
+    .object({
+      mode: z.literal('ai-mock'),
+      complete: z.boolean(),
+      coverage: z.string(),
+      evidenceIds: z.array(z.string().uuid()),
+      previousSessionId: z.string().uuid().optional(),
+      baselineSessionId: z.string().uuid().optional(),
+    })
+    .optional(),
 });
 export type Trace = z.infer<typeof traceSchema>;
 export type TraceEvent = z.infer<typeof eventSchema>;

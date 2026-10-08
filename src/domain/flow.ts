@@ -5,6 +5,7 @@ import { traceSchema } from './trace.js';
 export const flowSchema = z
   .object({
     trace: traceSchema.optional(),
+    baselineTrace: traceSchema.optional(),
     endpoint: z.string().trim().min(1).max(200),
     steps: z
       .array(

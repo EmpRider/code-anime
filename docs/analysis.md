@@ -1,44 +1,29 @@
-# CodeGraph integration
+# CodeGraph evidence and AI simulation
 
-Code Anime 0.3.1 uses the installed `codegraph` CLI automatically. It never parses or simulates project source itself. `provider: "source"` is rejected.
+Code Anime 0.4.0 uses CodeGraph for source discovery/retrieval and the host AI for mock execution. No built-in language parser or application executor exists.
 
-## Native mode: no bridge config
+## Native connection
 
-For an active workspace request, Code Anime launches:
+Code Anime launches the installed `codegraph serve --mcp --path <active-project>` executable with read-only tools enabled: status, node, callees, search, explore and files. It disables an extra watcher. It checks for a nonempty, usable index before accepting evidence. Already indexed projects continue automatically; missing setup stops with the actual blocker. The server does not install/index automatically.
 
-```sh
-codegraph serve --mcp --path <active-project>
-```
+The installed CLI may use its own daemon/proxy lifecycle. Code Anime does not discover Cursor configurations or reuse a sibling MCP connection. `CODE_ANIME_CODEGRAPH_COMMAND` optionally selects a launcher outside PATH. Tests use CodeGraph 1.6.2 and Kotlin on Linux; direct Windows verification remains outstanding.
 
-It requests the documented `codegraph_status`, `codegraph_node` and `codegraph_callees` tools, setting the child process's tool allowlist. It disables an additional file watcher and reuses CodeGraph's existing index. The installed CLI can use its own daemon/proxy lifecycle. No Cursor configuration discovery or sibling-session reuse is attempted; the executable is resolved from PATH. An optional `CODE_ANIME_CODEGRAPH_COMMAND` selects a different executable, including a Windows launcher.
+## Evidence and simulation
 
-Before creating a job, the server checks that the required tools and a nonempty project index are available. Missing installation or index stops the workflow with setup guidance. Already installed/indexed projects continue automatically. It never runs `init`, installs packages or indexes a project on the user's behalf.
+`read_codegraph_evidence` preserves provider text rather than truncating it to an 800-character snippet. Cached output is paginated by character offset. `node` supports provider file line ranges; use these when explore or a symbol response is truncated. The provider response cap is 256,000 characters; narrow the upstream request if exceeded. Each receipt records project, query tool and provider-response hash, expires after one hour, and can ground submitted events.
 
-Native conversion parses CodeGraph's documented text response format, not the application's source syntax. It walks indexed symbols and relationships, preserving provider source locations and snippets. Target ambiguity returns `needs_selection`; retry using a returned `name@file:line` candidate ID. Kotlin was verified with CodeGraph 1.6.2 on Linux. Windows launcher support uses the SDK's cross-spawn transport; it has not been exercised on a Windows machine.
+The host reads retrieved source and simulates the selected scenario, including library operations like trim/min from evidenced call sites, assignments, helpers, objects, branches and loops. Language-standard operations do not require indexed library internals. Unsupported semantics remain unresolved. This produces simulated execution order and values, not live runtime data.
 
-## Evidence and depth
+Each event includes a unique event ID, invocation ID, stack/local snapshots, source reference and receipt IDs. Transforms/assignments/mutations include before/after. Optional inputs, result, objectId and origins show data propagation. Every call iteration is independent even when it reuses a symbol definition.
 
-This is a structural graph walkthrough. Animation order is traversal order, stacks are graph paths, and relationships may represent calls, member containment, callbacks or references. No runtime execution, arguments, mutation values or return values are invented. Scenario inputs are retained for context but are not evaluated by native CodeGraph. Standard library calls are displayed only when CodeGraph returns their indexed evidence; otherwise they may be visible only in provider source snippets.
+2,000-event/8-MiB chunks link through continuationOf, keeping scenario inputs and unique IDs. Values are not recomputed by the player or server; changed inputs require the host AI to regenerate the scenario. Proposed full scenarios reference a baseline session for comparison.
 
-The default depth is 12, configurable to 30. Events default to 1000, capped at 2000. Native traversal makes at most 100 evidence requests per job and has a 60-second connection budget. Provider output or depth limits mark truncation; this is not a complete whole-codebase trace. `sourceHash` fingerprints received evidence, not locally read source. Target/location formats or provider versions that cannot be interpreted safely fail or mark the affected relationship unresolved.
+## Optional structural jobs and bridge
 
-## Optional normalized bridge
+`visualize_code_flow` walks indexed relationships. Its defaults remain depth 12/events 1000, maximum depth 30/events 2000 and a 100-request traversal budget. Those limits apply only to graph jobs; they do not set simulation depth. The graph output is labeled structural evidence.
 
-Existing normalized providers may still set `CODE_ANIME_CODEGRAPH_CONFIG` to a local configuration file:
+An optional `CODE_ANIME_CODEGRAPH_CONFIG` may configure a normalized stdio/HTTP bridge for structural job tools. The v2 trace contract remains supported. The default evidence/AI workflow uses the native CLI and needs no bridge file. Importing an export preserves producer-supplied claims and is not live verification.
 
-```json
-{
-  "transport": "stdio",
-  "command": "node",
-  "args": ["/absolute/path/your-codegraph-bridge.js"],
-  "toolName": "your_documented_trace_tool"
-}
-```
+## Scope
 
-Alternatively use `transport: "http"`, `url` and `toolName` for a Streamable HTTP bridge. This optional mode expects the v2 trace schema in `src/domain/trace.ts`. Language support and simulation semantics belong to that producer. Custom HTTP authentication is not configured here.
-
-## Workspace and storage
-
-Use the host's active workspace as `projectRoot`. An optional `CODE_ANIME_PROJECT_ROOT` restricts requests and imports to its directory. Two jobs run concurrently, at most 100 jobs are retained, and refinement requests CodeGraph again. Provider failures have no independent source-analysis fallback. Imports are producer-supplied evidence, proposed plans are overlays, and the legacy mock renderer cannot substitute for CodeGraph analysis.
-
-Adapter references: [CodeGraph MCP tools](https://github.com/colbymchenry/codegraph/blob/main/src/mcp/tools.ts) and [MCP documentation](https://github.com/colbymchenry/codegraph/blob/main/site/src/content/docs/reference/mcp-server.md).
+Use the current host workspace root, respecting any `CODE_ANIME_PROJECT_ROOT` restriction. Full codebase coverage means tracing any requested entry point across relevant indexed source; it does not mean every possible path or every file in one animation. Completeness and unresolved boundaries must be visible. Provider-response hashes identify retrieved evidence, not independently read project files.

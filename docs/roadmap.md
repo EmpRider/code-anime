@@ -1,18 +1,20 @@
 # Roadmap
 
-## Implemented in 0.3.1
+## 0.4.0 MVP restoration
 
-- CodeGraph-only analysis and refinement with automatic installed-CLI integration and immediate rejection of missing installation/index.
-- Removed local source parsing and scenario simulation; all languages depend on provider coverage.
-- Eight MCP tools, background jobs, inspection, cancellation and session controls.
-- Provider evidence rendering, replay snapshots, proposed overlays and offline imports.
-- Portable `code-anime` skill, regression tests and packaged CLI verification.
+- CodeGraph-first source retrieval with paging and project-scoped evidence receipts.
+- Host-AI statement-level mock simulation via the portable code-anime skill.
+- Transforms, assignments, calls/returns, loops/branches, invocation IDs and complete snapshots.
+- Moving DTO packets with nested fields and before/after highlights.
+- Replay/seek, continuation chunks and full baseline/proposed scenario comparison.
+- Required-dependency checks and execution-outcome/packaged-CLI tests.
 
-## Next work
+## Remaining reliability and polish
 
-- Broader provider/version coverage; native CodeGraph 1.6.2 Kotlin is already verified on Linux.
-- Provider readiness, indexing and language-support discovery through documented tools.
-- Whole-project views, lazy expansion and measured large-project performance.
-- Browser automation, host-specific skill checks and multilingual labels.
+- Direct Windows and additional AI-host validation.
+- Force-kill orphan-directory recovery.
+- Broader CodeGraph provider/version compatibility.
+- More accessible object-tree navigation, synchronized side-by-side comparison and richer visual layouts.
+- Larger real-project scenario evaluations to measure host-AI simulation accuracy; server validation cannot prove all language semantics.
 
-Graph structure does not establish runtime execution or values. See [provider setup](analysis.md).
+These do not replace the default deep mock-execution workflow. New work must preserve source grounding, basic method transforms and object-field animation.

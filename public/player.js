@@ -1,6 +1,7 @@
 import { replayState } from './replay.js';
 const $ = (id) => document.getElementById(id);
 let flow;
+let originalFlow;
 let cursor = 0;
 let timer;
 let packet;
@@ -11,6 +12,89 @@ function pause() {
   timer = undefined;
   $('play').textContent = 'Play';
 }
+function valueText(value) {
+  return value === undefined ? '∅' : JSON.stringify(value);
+}
+function fieldRows(parent, after, before, prefix = '') {
+  const keys = new Set([
+    ...Object.keys(before ?? {}),
+    ...Object.keys(after ?? {}),
+  ]);
+  for (const key of keys) {
+    const next = after?.[key];
+    const prior = before?.[key];
+    const path = prefix ? prefix + '.' + key : key;
+    if (
+      next &&
+      typeof next === 'object' &&
+      (prior === undefined ||
+        (prior !== null &&
+          typeof prior === 'object' &&
+          Array.isArray(next) === Array.isArray(prior)))
+    ) {
+      const child = document.createElement('div');
+      child.className = 'object-fields';
+      const title = document.createElement('strong');
+      title.textContent = path + (Array.isArray(next ?? prior) ? ' []' : ' {}');
+      child.append(title);
+      fieldRows(
+        child,
+        next && typeof next === 'object' ? next : {},
+        prior && typeof prior === 'object' ? prior : {},
+        path,
+      );
+      parent.append(child);
+    } else {
+      const row = document.createElement('div');
+      row.className = 'field';
+      const changed =
+        before !== undefined && valueText(prior) !== valueText(next);
+      if (changed) row.classList.add('changed');
+      row.textContent =
+        path +
+        ': ' +
+        (changed ? valueText(prior) + ' → ' : '') +
+        valueText(next);
+      parent.append(row);
+    }
+  }
+}
+function buildNodes() {
+  nodes.clear();
+  $('canvas').replaceChildren();
+  const labels = new Map(
+    flow.trace?.events.map((e) => [e.symbolId, e.symbolId]) ?? [],
+  );
+  for (const step of flow.steps)
+    for (const name of [step.from, step.to]) {
+      if (nodes.has(name)) continue;
+      const node = document.createElement('div');
+      node.className = 'node';
+      node.textContent = labels.get(name) ?? name;
+      node.title = name;
+      if (
+        flow.trace?.events.some(
+          (e) => e.symbolId === name && e.certainty === 'proposed',
+        )
+      )
+        node.classList.add('proposed');
+      nodes.set(name, node);
+      $('canvas').append(node);
+    }
+  $('timeline').max = flow.steps.length;
+}
+function traceSteps(trace) {
+  return trace.events.map((e, i) => ({
+    from:
+      e.values.from ??
+      (e.kind === 'enter'
+        ? e.symbolId
+        : (trace.events[i - 1]?.symbolId ?? e.symbolId)),
+    to: e.values.to ?? e.symbolId,
+    dtoName: e.kind + ' · ' + e.label,
+    dtoFields: e.after ?? e.values,
+  }));
+}
 function render() {
   animation?.cancel();
   packet?.remove();
@@ -20,11 +104,20 @@ function render() {
   $('previous').disabled = cursor === 0;
   $('next').disabled = cursor === flow.steps.length;
   $('status').textContent =
-    cursor === flow.steps.length ? 'Replay complete.' : '';
+    cursor === flow.steps.length
+      ? flow.trace?.truncated
+        ? 'This chunk ends here. Continue to the next chunk; this flow is incomplete.'
+        : 'Replay complete.'
+      : '';
+  $('coverage').textContent =
+    flow.trace?.simulation?.coverage ??
+    'Structural/legacy flow: execution completeness is not established.';
   if (!cursor) {
     $('packet-title').textContent = 'Select a step';
     $('route').textContent = '';
-    $('fields').textContent = '{}';
+    $('fields').replaceChildren();
+    $('operation').textContent = '';
+    $('origins').textContent = '';
     for (const id of ['stack', 'locals', 'source', 'snippet', 'certainty'])
       $(id).textContent = '';
     return;
@@ -43,18 +136,68 @@ function render() {
   const step = flow.steps[cursor - 1];
   $('packet-title').textContent = step.dtoName;
   $('route').textContent = step.from + ' → ' + step.to;
-  $('fields').textContent = JSON.stringify(step.dtoFields, null, 2);
+  const after = event?.after ?? step.dtoFields;
+  let before = event?.before;
+  if (before === undefined && event?.objectId) {
+    before = flow.trace.events
+      .slice(0, cursor - 1)
+      .findLast((e) => e.objectId === event.objectId)?.after;
+  }
+  $('fields').replaceChildren();
+  fieldRows($('fields'), after, before);
+  $('operation').textContent = event
+    ? [
+        event.kind + ' · frame ' + event.callId,
+        event.objectId ? 'Object: ' + event.objectId : '',
+        event.inputs ? 'Inputs: ' + valueText(event.inputs) : '',
+        Object.hasOwn(event, 'result')
+          ? 'Result: ' + valueText(event.result)
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+    : '';
+  $('origins').textContent = event?.origins
+    ? Object.entries(event.origins)
+        .map(([key, origin]) => key + ' ← ' + origin)
+        .join('\n')
+    : '';
   const from = nodes.get(step.from);
   const to = nodes.get(step.to);
   from.classList.add('active');
   to.classList.add('active');
   packet = document.createElement('div');
   packet.className = 'packet';
-  packet.textContent = step.dtoName;
+  const heading = document.createElement('strong');
+  heading.textContent = step.dtoName;
+  packet.append(heading);
+  if (event?.objectId) {
+    const identity = document.createElement('div');
+    identity.textContent = event.objectId;
+    packet.append(identity);
+  }
+  if (event?.inputs) {
+    const input = document.createElement('div');
+    input.className = 'packet-inputs';
+    input.textContent = 'Inputs: ' + valueText(event.inputs);
+    packet.append(input);
+  }
+  fieldRows(packet, after, before);
+  if (event && Object.hasOwn(event, 'result')) {
+    const result = document.createElement('div');
+    result.className = 'field changed';
+    result.textContent = 'Return: ' + valueText(event.result);
+    packet.append(result);
+  }
   const canvas = $('canvas');
   canvas.append(packet);
   to.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  const x = (node) => node.offsetLeft + node.offsetWidth / 2 - 60;
+  canvas.style.minHeight = Math.max(360, packet.offsetHeight + 180) + 'px';
+  const x = (node) =>
+    Math.max(
+      0,
+      node.offsetLeft + node.offsetWidth / 2 - packet.offsetWidth / 2,
+    );
   packet.style.left = x(to) + 'px';
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches)
     animation = packet.animate(
@@ -125,26 +268,32 @@ async function load() {
           2,
         )
       : 'Legacy agent-authored flow; not verified source analysis';
-    const labels = new Map(
-      flow.trace?.events.map((e) => [e.symbolId, e.label]) ?? [],
-    );
-    for (const step of flow.steps)
-      for (const name of [step.from, step.to]) {
-        if (nodes.has(name)) continue;
-        const node = document.createElement('div');
-        node.className = 'node';
-        node.textContent = labels.get(name) ?? name;
-        node.title = name;
-        if (
-          flow.trace?.events.some(
-            (e) => e.symbolId === name && e.certainty === 'proposed',
-          )
-        )
-          node.classList.add('proposed');
-        nodes.set(name, node);
-        $('canvas').append(node);
-      }
-    $('timeline').max = flow.steps.length;
+    originalFlow = flow;
+    $('variant').hidden = !flow.baselineTrace;
+    $('variant').onchange = () => {
+      pause();
+      cursor = 0;
+      flow =
+        $('variant').value === 'baseline'
+          ? {
+              ...originalFlow,
+              trace: originalFlow.baselineTrace,
+              steps: traceSteps(originalFlow.baselineTrace),
+            }
+          : originalFlow;
+      buildNodes();
+      render();
+    };
+    const previous = flow.trace?.simulation?.previousSessionId;
+    if (previous) {
+      $('previous-chunk').hidden = false;
+      $('previous-chunk').href = '/flow/' + previous;
+    }
+    if (flow.nextSessionId) {
+      $('next-chunk').hidden = false;
+      $('next-chunk').href = '/flow/' + flow.nextSessionId;
+    }
+    buildNodes();
     render();
   } catch (error) {
     $('title').textContent = 'Flow unavailable';

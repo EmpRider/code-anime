@@ -1,151 +1,91 @@
 # Code Anime
 
-**Watch code flows move, one step at a time.**
+**Watch code execute with mock values, one step at a time.**
 
-Code Anime renders CodeGraph-supplied code-flow evidence in a local animated player. CodeGraph is required for every codebase analysis, including TypeScript and JavaScript. Code Anime does not parse or simulate project source itself.
+CodeGraph retrieves the active project's source and relationships. Your AI agent uses that evidence to simulate a scenario, including basic transforms, assignments, branches, loops, calls and returns. Code Anime validates the trace and animates objects with their fields, before/after changes and source locations in a localhost player.
 
-> Version 0.3.1 removes the built-in analyzer. The installed `codegraph serve --mcp` CLI is used automatically for the active workspace. No separate bridge-config file is required. See [provider setup](docs/analysis.md).
+Version **0.4.0** restores the original mock-execution workflow. CodeGraph is required for every language; missing installation or index stops the process. Repository code, databases and HTTP effects are not executed. Values are labeled as simulated, assumed, unresolved or proposed.
 
-## Try the player
+## Connect the MCP
 
-Requirements: Node.js 22+ and npm.
+Requirements: Node.js 22+, CodeGraph installed and initialized/indexed for the active project, and an AI host that supports MCP and skills.
 
-```sh
-git clone https://github.com/EmpRider/code-anime.git
-cd code-anime
-npm ci
-npm run demo
-```
-
-Open the URL printed in the terminal. The demo uses `examples/login-flow.json` and requires no database or AI host. Stop it with Ctrl+C.
-
-## Install through npx (after the first npm release)
-
-The planned public package name is `@empirerider/code-anime`. Version 0.3.1 requires a new npm release; repository updates alone do not publish it. Once released, an MCP host that uses a `servers` configuration can run it directly:
-
-```json
-{
-  "servers": {
-    "code-anime": {
-      "command": "npx",
-      "args": ["-y", "@empirerider/code-anime"]
-    }
-  }
-}
-```
-
-Some hosts use `mcpServers` or another configuration format. Use the same command and arguments in your host's supported format. Node.js 22+ is required. Pin `@empirerider/code-anime@0.3.1` for a reproducible version after that version is published. Install the portable skill separately; the installed CodeGraph CLI is used automatically.
-
-## Connect an AI agent
-
-```sh
-npm run build
-```
-
-Configure a stdio MCP server in your host. A common configuration shape is:
+After version 0.4.0 is published to npm, a typical host configuration is:
 
 ```json
 {
   "mcpServers": {
     "code-anime": {
-      "command": "node",
-      "args": ["/absolute/path/code-anime/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@empirerider/code-anime@0.4.0"],
       "env": { "CODE_ANIME_PORT": "0" }
     }
   }
 }
 ```
 
-Use an absolute path; escape Windows backslashes in JSON. Host configuration formats differ: translate this command and arguments into the format your agent supports. This project has not yet verified every host.
+A repository push does not publish npm. To use the source build immediately, run `npm ci` and `npm run build`, then configure `node /absolute/path/code-anime/dist/index.js` instead. Host configuration wrappers differ; use the format supported by your host.
 
-The agent resolves the project currently open in the host and checks that CodeGraph is installed and indexed for it. If absent, stop and install/initialize CodeGraph. If already ready, continue without reinstalling. Code Anime resolves `codegraph` from PATH and checks the active project index before creating a job. Use optional `CODE_ANIME_CODEGRAPH_COMMAND` only when the executable is elsewhere. Provider failures stop without fallback.
+Copy `skills/code-anime/` into your host's supported skill directory. Installing the npm package alone does not install the skill. Ask `/code-anime show ACH generation`, or ask to visualize any function or endpoint. The agent resolves the open workspace and supplies its path automatically.
 
-Call `visualizer_capabilities`, then `visualize_code_flow` with `provider: "codegraph"`, the active workspace `projectRoot` and a target. Poll for the player URL. Native replay shows CodeGraph indexed relationships and source snippets, not simulated execution or calculated runtime values. `CODE_ANIME_PROJECT_ROOT` remains an optional access restriction.
+Code Anime launches `codegraph serve --mcp --path <active-project>` using the installed CLI. No additional bridge config is required. If CodeGraph is already indexed, continue; do not repeat installation/init. Set `CODE_ANIME_CODEGRAPH_COMMAND` only when the executable is not on PATH. The adapter is exercised against CodeGraph 1.6.2 with Kotlin on Linux; Windows has not been directly exercised in this workspace.
 
-| Tool                           | Purpose                                      |
-| ------------------------------ | -------------------------------------------- |
-| `visualizer_capabilities`      | Supported scope, project root and limits     |
-| `visualize_code_flow`          | Analyze source and enqueue a replay job      |
-| `get_visualization_status`     | Progress, target candidates and player URL   |
-| `inspect_visualization`        | Paginated events, values and source evidence |
-| `refine_visualization`         | New scenario/depth analysis                  |
-| `visualize_change_plan`        | Proposed-change overlay on a baseline        |
-| `manage_visualization`         | List/cancel/delete/import                    |
-| `generate_mock_flow_animation` | Backward-compatible agent-authored renderer  |
+## Default workflow
 
-## Portable agent skill
+1. `visualizer_capabilities` advertises the workflow and limits.
+2. `read_codegraph_evidence` retrieves complete relevant source through CodeGraph, with cached-response paging and provider file-range queries. Use explore for an endpoint/business request, then node for helpers and DTO definitions.
+3. The host AI simulates every relevant statement/expression for chosen mock inputs. It includes transformations such as trim/min, parameter binding, return propagation, branch results and each loop iteration.
+4. `generate_mock_flow_animation` validates evidence receipts and structured events, stores a temporary session and returns the player URL.
+5. The player displays moving object-field cards, highlighted before/after values, inputs/results, origins, source lines, stack and locals. Play/Pause, Previous/Next, seek, speed and replay restore event snapshots.
 
-The npm tarball and repository include `skills/code-anime/SKILL.md` with a small tool-contract reference. The skill instructs agents to use the host's active workspace, re-resolve it after project switches, and avoid guessed paths or the MCP process working directory. Copy the entire `code-anime` directory into the skill location supported by your host (for example `.claude/skills/` or `.opencode/skills/`; consult your host's current documentation for Codex/other variants). This is a distributable project skill, not automatically installed in your account. Connect the MCP separately. Skill activation and setup need to be verified on your host; no all-host compatibility guarantee is made.
+For large traces, submit successive chunks with `continuationOf`. The player links them and the tool returns the first chunk's URL. For a visual feature plan, submit a full proposed scenario with `baselineSessionId`; switch between baseline and proposal in the player.
 
-## What works today
+See the [tool contract](skills/code-anime/references/tool-contract.md) for payloads. The server checks receipt membership, project identity and event structure; it does not independently prove AI calculations correct. Missing source/uncertain semantics must be marked unresolved rather than invented.
 
-- Automatic installed CodeGraph CLI adapter plus optional normalized bridge; no independent source analyzer.
-- Background jobs, cancellation, session storage and scenario refinement through the provider.
-- Rendering of provider-supplied source evidence, call stacks and values where available.
-- Replay controls, paginated inspection and proposed-change overlays.
-- Offline evidence imports and an explicitly illustrative legacy mock renderer.
-- Portable `code-anime` skill and package verification.
+## Tools
 
-The native adapter was tested against CodeGraph 1.6.2 using Kotlin on Linux. It does not reuse Cursor's sibling MCP session; it launches the installed executable with the active project path. Windows has not been tested directly. See [evidence limits](docs/analysis.md).
+| Tool                           | Purpose                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------ |
+| `visualizer_capabilities`      | Workflow, access boundary and limits                                     |
+| `read_codegraph_evidence`      | Verified CodeGraph source/context retrieval and paging                   |
+| `generate_mock_flow_animation` | AI mock trace, values, continuation and proposed scenario comparison     |
+| `inspect_visualization`        | Bounded trace-event inspection                                           |
+| `visualize_code_flow`          | Optional structural graph exploration job                                |
+| `get_visualization_status`     | Structural job status/candidate selection                                |
+| `refine_visualization`         | Structural job refinement; AI scenarios must be recomputed and submitted |
+| `visualize_change_plan`        | Legacy structural proposal overlay                                       |
+| `manage_visualization`         | List/cancel/delete/import                                                |
 
-## Tool payload
+Structural graph jobs remain available but are not the default execution animation. Legacy `steps` payloads now require CodeGraph receipts, projectRoot and coverage; they cannot bypass the dependency requirement.
 
-```json
-{
-  "endpoint": "POST /login",
-  "steps": [
-    {
-      "from": "LoginController",
-      "to": "AuthService",
-      "dtoName": "LoginRequest",
-      "dtoFields": { "email": "demo@example.com" }
-    }
-  ]
-}
-```
+## Configuration and bounds
 
-Fields are required. Up to 2,000 steps and 10 MiB per session are accepted. Names are display labels; distinct functions sharing a label currently share a node. The browser shows a simulation, not a verified execution trace.
+| Variable                       | Default                | Purpose                                             |
+| ------------------------------ | ---------------------- | --------------------------------------------------- |
+| `CODE_ANIME_PORT`              | `0`                    | Free localhost player port                          |
+| `CODE_ANIME_TEMP_DIR`          | OS temporary directory | Parent for isolated per-process sessions            |
+| `CODE_ANIME_PROJECT_ROOT`      | Per-request roots      | Optional project access boundary                    |
+| `CODE_ANIME_CODEGRAPH_COMMAND` | `codegraph`            | Optional native executable override                 |
+| `CODE_ANIME_CODEGRAPH_CONFIG`  | Unset                  | Optional normalized bridge for structural job tools |
+| `CODE_ANIME_TTL_MS`            | `3600000`              | Session lifetime                                    |
 
-## Configuration
+Trace chunks accept 2,000 events and 8 MiB of request data; stored sessions are capped at 10 MiB, with 100 sessions per process. CodeGraph receipts last an hour and are capped at 200. Cached evidence responses are paged; oversized upstream results must be narrowed with file ranges. Report incomplete coverage explicitly and continue in chunks rather than silently truncating.
 
-| Variable                       | Default                  | Purpose                                     |
-| ------------------------------ | ------------------------ | ------------------------------------------- |
-| `CODE_ANIME_PORT`              | `0`                      | Player port; `0` chooses a free port        |
-| `CODE_ANIME_TEMP_DIR`          | OS temp directory        | Parent for an isolated process directory    |
-| `CODE_ANIME_PROJECT_ROOT`      | Unrestricted per request | Optional allowed source repository root     |
-| `CODE_ANIME_CODEGRAPH_COMMAND` | `codegraph`              | Optional executable path for native adapter |
-| `CODE_ANIME_CODEGRAPH_CONFIG`  | Unset                    | Optional normalized bridge override         |
-| `CODE_ANIME_TTL_MS`            | `3600000`                | Session lifetime from creation              |
+The player binds to `127.0.0.1`. Sessions use UUIDs, quotas, expiry and isolated directories; graceful shutdown removes this process's files. Force-kill/power loss may leave temporary directories; automatic orphan recovery remains future reliability work. Remote/container hosts need supported port forwarding.
 
-The server accepts local connections at `127.0.0.1`. It creates at most 100 sessions per process. Expired sessions are removed when accessed or when a new session is created. Graceful shutdown deletes this process's directory. Force-kill and power loss can leave temporary files; automatic orphan recovery is planned. No production authentication or remote hosting is provided. A remote/container AI host needs its own supported port-forwarding setup.
-
-## Project structure
-
-| Path             | Responsibility                              |
-| ---------------- | ------------------------------------------- |
-| `src/domain/`    | Flow contract and storage interface         |
-| `src/mcp/`       | MCP registration and tool handling          |
-| `src/storage/`   | Bounded temporary session persistence       |
-| `src/web/`       | Player pages and read-only API              |
-| `src/runtime.ts` | HTTP/storage composition and lifecycle      |
-| `public/`        | Browser player, styles and page             |
-| `tests/`         | Contract, storage, HTTP and MCP regressions |
-| `docs/`          | Architecture and staged roadmap             |
-
-## Development
+## Development and demo
 
 ```sh
-npm run dev
-npm run format
+npm ci
+npm run demo
 npm run check
+npm run package:check
 ```
 
-CI runs the same checks on Node 22/24 and Linux/Windows. See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow and [docs/architecture.md](docs/architecture.md) for design boundaries.
+The offline demo renders bundled mock data without analyzing a codebase. For the real CodeGraph integration tests and packed CLI smoke test, set `CODE_ANIME_TEST_CODEGRAPH` to the installed executable path. Tests cover dependency failure, mock transform/state contracts, continuation, comparison, safe object rendering and replay restoration.
 
-## Help shape the next version
+## Structure
 
-The next milestone adds real vendor-specific CodeGraph adapters and broadens provider coverage. See [the roadmap](docs/roadmap.md). Contributions to accessibility, tests, and player usability are welcome now.
+`src/services/simulation-service.ts` manages CodeGraph evidence receipts and AI trace validation; `src/analysis/` adapts the provider; `src/domain/` defines trace/flow schemas; `src/storage/` manages sessions; `src/mcp/` exposes tools; `public/` renders replay; `skills/code-anime/` supplies agent orchestration.
 
-## License
-
-[MIT](LICENSE) © 2026 empirerider. See [release instructions](docs/releasing.md) for npm publishing.
+[Architecture](docs/architecture.md) · [CodeGraph details](docs/analysis.md) · [Release instructions](docs/releasing.md) · [MIT license](LICENSE)

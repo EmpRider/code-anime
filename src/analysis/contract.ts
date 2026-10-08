@@ -26,7 +26,7 @@ export function traceToFlow(trace: Trace, endpoint: string): Flow {
       to:
         typeof event.values.to === 'string' ? event.values.to : event.symbolId,
       dtoName: event.kind + ' · ' + event.label.slice(0, 120),
-      dtoFields: { ...event.values, certainty: event.certainty },
+      dtoFields: event.after ?? event.values,
     })),
   };
 }

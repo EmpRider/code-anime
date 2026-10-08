@@ -57,14 +57,14 @@ function selectedTarget(target: string) {
     : { symbol: target };
 }
 async function connect(input: AnalysisInput, signal: AbortSignal) {
-  const client = new Client({ name: 'code-anime', version: '0.3.1' });
+  const client = new Client({ name: 'code-anime', version: '0.4.0' });
   const transport = new StdioClientTransport({
     command: process.env.CODE_ANIME_CODEGRAPH_COMMAND || 'codegraph',
     args: ['serve', '--mcp', '--path', input.projectRoot],
     cwd: input.projectRoot,
     env: {
       ...process.env,
-      CODEGRAPH_MCP_TOOLS: 'status,node,callees',
+      CODEGRAPH_MCP_TOOLS: 'status,node,callees,search,explore,files',
       CODEGRAPH_NO_WATCH: '1',
     },
     stderr: 'pipe',
@@ -118,6 +118,7 @@ async function connect(input: AnalysisInput, signal: AbortSignal) {
     return {
       client,
       call,
+      tools: listed.tools,
       status,
       files: Number(count[1]),
       close: async () => {
@@ -342,6 +343,31 @@ export async function analyzeNativeCodeGraph(
         'Depth, event, provider-output or 100-request budget reached; not a full codebase trace.',
       );
     return traceToFlow(trace, input.target);
+  } finally {
+    await connection.close();
+  }
+}
+
+// Preserve the complete provider response for host-AI simulation. This does not
+// parse application syntax, execute source, or infer values from graph edges.
+export async function readNativeEvidence(
+  projectRoot: string,
+  tool: 'explore' | 'node' | 'search' | 'callees' | 'files',
+  args: Record<string, unknown>,
+  signal: AbortSignal,
+) {
+  const connection = await connect({ projectRoot, target: 'evidence' }, signal);
+  try {
+    const name = 'codegraph_' + tool;
+    if (!connection.tools.some((t) => t.name === name))
+      throw new Error(
+        `Installed CodeGraph does not expose ${name}; use an available evidence tool or update CodeGraph.`,
+      );
+    const text = await connection.call(name, {
+      ...args,
+      ...(tool === 'node' ? { includeCode: true } : {}),
+    });
+    return { text, files: connection.files, status: connection.status };
   } finally {
     await connection.close();
   }
