@@ -16,7 +16,8 @@ const npm = (...args) =>
 const temporary = await mkdtemp(join(tmpdir(), 'code-anime-package-'));
 let client;
 try {
-  // CI has already built and checked the source. Pack exactly those artifacts.
+  // Build here too: a failed earlier check may have left stale dist artifacts.
+  npm('run', 'build');
   const packed = JSON.parse(
     npm('pack', '--json', '--ignore-scripts', '--pack-destination', temporary),
   )[0];

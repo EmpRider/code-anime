@@ -11,7 +11,10 @@ test('player renders evidence safely and Previous/seek restore local state', asy
   );
   const code = (
     await readFile(new URL('../public/player.js', import.meta.url), 'utf8')
-  ).replace(/^import .*;\n/, '');
+  )
+    // Exercise Windows line endings even when this test runs on Linux CI.
+    .replace(/\r?\n/g, '\r\n')
+    .replace(/^import .*;\r?\n/, '');
   const flow = {
     endpoint: '<img src=x onerror=alert(1)>',
     steps: [
