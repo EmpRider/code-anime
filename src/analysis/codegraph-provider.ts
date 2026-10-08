@@ -5,7 +5,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { z } from 'zod';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { traceSchema } from '../domain/trace.js';
-import { traceToFlow, type AnalysisInput } from './analyzer.js';
+import { traceToFlow, type AnalysisInput } from './contract.js';
 
 const configSchema = z.discriminatedUnion('transport', [
   z

@@ -62,6 +62,16 @@ try {
     join(project, 'main.ts'),
     'export function double(value: number) { const result = value * 2; return result; }',
   );
+  const config = join(temporary, 'bridge.json');
+  await writeFile(
+    config,
+    JSON.stringify({
+      transport: 'stdio',
+      command: process.execPath,
+      args: [resolve('tests/fixtures/provider.mjs')],
+      toolName: 'fixture_trace',
+    }),
+  );
   client = new Client({ name: 'package-smoke', version: '1.0.0' });
   // Exercise the installed npm executable, not a development source file.
   const transport = new StdioClientTransport({
@@ -72,6 +82,7 @@ try {
       ...process.env,
       CODE_ANIME_PORT: '0',
       CODE_ANIME_TEMP_DIR: temporary,
+      CODE_ANIME_CODEGRAPH_CONFIG: config,
     },
     stderr: 'pipe',
   });
@@ -102,7 +113,11 @@ try {
   const trace = await (
     await fetch(new URL('/api/flow/' + ready.sessionId, ready.url))
   ).json();
-  assert.equal(trace.trace.events.at(-1).values.result, 6);
+  assert.equal(trace.trace.provider, 'codegraph-bridge: fixture');
+  assert.ok(
+    !paths.some((path) => path.includes('analysis/analyzer')),
+    'Source analyzer leaked into package',
+  );
   const flow = JSON.parse(
     await readFile(resolve('examples/login-flow.json'), 'utf8'),
   );

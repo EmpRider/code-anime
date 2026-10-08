@@ -1,19 +1,18 @@
 # Roadmap
 
-## Implemented in 0.2.0
+## Implemented in 0.3.0
 
-- Eight MCP tools, source-analysis jobs, scenario refinement and session controls.
-- TS/JS cross-file call resolution with source spans, bounded loops, assignments and mocks.
-- Evidence/uncertainty labels and stack/local snapshots in the player.
-- Proposed-change overlays, normalized provider bridge/export imports and portable skill bundle.
-- Legacy compatibility, package tests and npm release workflow.
+- CodeGraph-only analysis and refinement with immediate rejection of missing provider configuration.
+- Removed local source parsing and scenario simulation; all languages depend on provider coverage.
+- Eight MCP tools, background jobs, inspection, cancellation and session controls.
+- Provider evidence rendering, replay snapshots, proposed overlays and offline imports.
+- Portable `code-anime` skill, regression tests and packaged CLI verification.
 
 ## Next work
 
-- Broader expression/control-flow semantics, complete instance/closure modeling and async correlation.
-- Detailed data-lineage tracking, automated dependency-impact calculation and multilingual UI labels.
-- Worker isolation, stale-session recovery, lazy expansion and measured large-project performance.
-- Vendor-specific adapters verified against actual CodeGraph products and additional programming languages.
-- Browser automation and host-specific skill activation smoke tests.
+- Vendor-specific adapters verified against real CodeGraph implementations, including Kotlin.
+- Provider readiness, indexing and language-support discovery through documented tools.
+- Whole-project views, lazy expansion and measured large-project performance.
+- Browser automation, host-specific skill checks and multilingual labels.
 
-The current version is an evidence-backed bounded teaching simulation, not a full runtime debugger. See [analysis support](analysis.md).
+Graph structure does not establish runtime execution or values. See [provider setup](analysis.md).

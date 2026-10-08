@@ -18,7 +18,7 @@ The prototype's HTML strings, disk operations and protocol handlers were tightly
 
 ## Analysis pipeline
 
-The MCP service validates the allowed root, queues jobs and runs either the TypeScript source analyzer or a configured normalization bridge. The analyzer scans/hash-caches sources, resolves symbols, interprets its bounded AST subset and writes v2 events with immutable state snapshots. Ready results return a compact URL and quality summary; the browser fetches events and presents source evidence, stack and locals. Existing agent-authored payloads remain supported.
+The MCP service requires CodeGraph configuration before creating analysis jobs, validates the active project root, and requests evidence exclusively through a configured normalization bridge. No local source analyzer exists. Provider events are validated and converted into replay steps; the browser presents their evidence, stack and values. Legacy mock payloads are illustrations and cannot substitute for CodeGraph analysis.
 
 ## Current limitations
 

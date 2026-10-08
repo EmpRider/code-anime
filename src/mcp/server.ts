@@ -33,16 +33,16 @@ export function createMcpServer(
     {
       name: 'visualizer_capabilities',
       description:
-        'Discover analysis languages, configured project root, limits and provider support.',
+        'Check required CodeGraph configuration, project boundary and replay limits.',
       inputSchema: schema({}),
     },
     {
       name: 'visualize_code_flow',
       description:
-        'Analyze local TypeScript/JavaScript source automatically and create an evidence-backed scenario replay. Return a jobId; poll get_visualization_status. No application code is executed.',
+        'Require a configured CodeGraph bridge and request its evidence for the active project. Reject immediately if unconfigured. No built-in source analysis or fallback. Returns jobId; poll get_visualization_status.',
       inputSchema: schema(
         {
-          provider: { type: 'string', enum: ['source', 'codegraph'] },
+          provider: { type: 'string', enum: ['codegraph'] },
           projectRoot: string,
           target: string,
           scenario: object,
@@ -124,7 +124,7 @@ export function createMcpServer(
     {
       name: 'generate_mock_flow_animation',
       description:
-        'Legacy compatibility: render an agent-authored mock flow. Prefer visualize_code_flow for server-owned source analysis.',
+        'Legacy compatibility: render an agent-authored mock flow. Illustrations only; cannot replace required CodeGraph analysis.',
       inputSchema: schema(
         {
           endpoint: string,

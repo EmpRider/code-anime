@@ -5,7 +5,7 @@ description: Explain codebase functions, API endpoints, business workflows and p
 
 # Code Anime
 
-Use the connected Code Anime tools to analyze the current repository and deliver a playable URL. Let the server produce trace events; do not manually build a complete animation payload for supported source analysis.
+Use the connected Code Anime tools to analyze the current repository and deliver a playable URL. Let the configured CodeGraph bridge supply evidence and the server render it; do not author a replacement trace.
 
 ## Resolve the active workspace
 
@@ -17,27 +17,25 @@ Use the project currently open in Cursor or the connected AI agent host as the a
 - If the host exposes no reliable workspace path, ask the user to identify the open project. Explain that the host or agent must provide its path; the MCP server cannot infer every host's active project automatically.
 - Do not require `CODE_ANIME_PROJECT_ROOT` in normal setup. Treat any explicitly configured root as an optional access boundary, not evidence of the active workspace. On an access failure, report the verified workspace and server restriction or filesystem error. Do not switch to an unrelated root or bypass a configured boundary.
 
-## Check language support before analysis
+## Require CodeGraph before analysis
 
-Identify the language of the requested target from the active project's files and build metadata before submitting an analysis job. In a mixed-language repository, check the target's implementation, not merely whether TS/JS files exist elsewhere.
+Rely exclusively on CodeGraph for codebase analysis in every language, including TS/JS. Do not scan/interpret the codebase yourself, build a substitute trace, or use a mock renderer to bypass CodeGraph.
 
-- Use the built-in source analyzer only for TypeScript or JavaScript targets.
-- For Java or another language outside TS/JS, check existing CodeGraph setup first. Use available host tools, documented installation/status checks and project index metadata to verify installation, initialization/indexing for the active project, and support for the target language. Do not treat missing Code Anime bridge configuration as proof that CodeGraph is not installed.
-- If CodeGraph is already installed, initialized/indexed for this project and connected through a compatible bridge, continue automatically with `provider: "codegraph"`. Confirm that `visualizer_capabilities` advertises `codegraph-bridge`. Do not ask the user to reinstall, repeat initialization or approve continuation.
-- If CodeGraph is absent, stop the analysis workflow and tell the user to install CodeGraph and initialize/index the open project.
-- If CodeGraph is installed but the active project is not initialized/indexed, request only project initialization/indexing. If installation and indexing are ready but the bridge is missing or incompatible, explain only the required connection/bridge setup. A sibling CodeGraph MCP in the host alone does not configure the Code Anime bridge.
-- If the CodeGraph implementation or setup status cannot be verified, state what is unknown and ask for the package/repository or relevant status. Do not invent install/init commands or claim setup succeeded.
-- Never call the TS/JS source analyzer or fall back to agent-authored mock animations for an unsupported-language target. Stop only when required setup is missing or unverified; keep the MCP server running for subsequent requests.
+1. Verify existing CodeGraph installation and initialization/indexing for the active project through exposed provider tools or documented status checks. Do not reinstall or repeat initialization when already ready.
+2. If CodeGraph is absent, terminate the analysis workflow immediately and tell the user to install CodeGraph and initialize/index the open project. If only indexing is missing, request only indexing.
+3. Call `visualizer_capabilities`. Require `codeGraphConfigured: true` and `codegraph-bridge`. Missing bridge configuration does not prove CodeGraph is uninstalled. If already installed/indexed, request only a compatible connection through `CODE_ANIME_CODEGRAPH_CONFIG`. A sibling MCP connection alone does not configure the server's outbound bridge.
+4. When installation, project indexing, bridge and target-language support are verified, continue automatically with `provider: "codegraph"`. If verification or a provider request fails, stop and report the actual blocker; never fall back to independent source analysis.
+5. Do not invent vendor commands or claim runtime values from graph relationships. Provider language support and evidence detail depend on the actual CodeGraph implementation.
 
 ## Analyze and present the flow
 
-1. Resolve the active workspace above. Call `visualizer_capabilities` to confirm tools, supported languages and any optional access boundary. Apply the language-support check above before choosing a provider. Read [the tool contract](references/tool-contract.md) when constructing requests or diagnosing failures.
-2. Translate the user's request into an endpoint path, function name, qualified method name, or previously returned candidate ID. Call `visualize_code_flow` with the resolved active workspace as `projectRoot`, `target`, and any scenario inputs already supplied. Use the source provider for TS/JS; use a verified compatible CodeGraph bridge for other languages after completing the setup gate above.
-3. Poll `get_visualization_status` using its `jobId`, with a short wait between polls. Stop at `ready`, `needs_selection`, `failed` or `cancelled`. Do not flood the tool with busy polling.
-4. For `needs_selection`, use candidate names and file locations to select the target when context is sufficient. Ask only if the remaining ambiguity changes the intended flow. Never invent a candidate ID or fabricate successful analysis.
-5. For `ready`, return the player URL and a brief explanation in the user's language. Identify meaningful truncation, unresolved calls or assumptions. The source provider is a bounded static scenario simulator, not live runtime evidence.
+1. Resolve the active workspace above. Call `visualizer_capabilities` to confirm tools, supported languages and any optional access boundary. Apply the CodeGraph requirement above before submitting a job. Read [the tool contract](references/tool-contract.md) when constructing requests or diagnosing failures.
+2. Translate the user's request into an endpoint path, function name, qualified method name, or previously returned candidate ID. Call `visualize_code_flow` with the resolved active workspace as `projectRoot`, `target`, and any scenario inputs already supplied. Always use `provider: "codegraph"`; the server has no source-analysis fallback.
+3. Poll `get_visualization_status` using its `jobId`, with a short wait between polls. Stop at `ready`, `failed` or `cancelled`. Do not flood the tool with busy polling.
+4. If the provider reports target ambiguity, resolve it using its documented tools and source locations, then retry with a verified target. Ask only when context cannot resolve the intended flow. Never invent a candidate ID or fabricate successful analysis.
+5. For `ready`, return the player URL and a brief explanation in the user's language. Identify meaningful truncation, unresolved calls or assumptions. CodeGraph structural evidence is not live runtime evidence.
 6. Inspect only the events needed for a question using `inspect_visualization`; do not load the full trace into conversation context. Use `refine_visualization` to change scenario values or depth and poll the new job. Keep the original session for comparison.
 7. For a feature plan, create an analyzed baseline first. Send a compact `changes` list to `visualize_change_plan`. Each change has `from`, `to` and `description`. Present proposed events as a design overlay, not existing code or proven impact analysis. Do not edit application files unless independently requested.
-8. Use `manage_visualization` for listing, cancellation and cleanup. Keep unrelated sessions. Use the legacy `generate_mock_flow_animation` only for explicitly requested illustrative mock flows, label them as agent-authored, and never use it to bypass the unsupported-language setup gate.
+8. Use `manage_visualization` for listing, cancellation and cleanup. Keep unrelated sessions. Use the legacy `generate_mock_flow_animation` only for explicitly requested illustrative mock flows, label them as agent-authored, and never use it to bypass the CodeGraph requirement.
 
 Never claim that npm installation alone installs this skill into an agent host.

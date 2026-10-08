@@ -3,18 +3,13 @@ import { randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { resolve, relative, isAbsolute } from 'node:path';
 import { z } from 'zod';
-import {
-  SourceAnalyzer,
-  CandidateError,
-  traceToFlow,
-  type AnalysisInput,
-} from '../analysis/analyzer.js';
+import { traceToFlow, type AnalysisInput } from '../analysis/contract.js';
 import { traceSchema, type TraceEvent } from '../domain/trace.js';
 import type { Flow, SessionStore } from '../domain/flow.js';
 
 export const analyzeSchema = z
   .object({
-    provider: z.enum(['source', 'codegraph']).optional(),
+    provider: z.literal('codegraph').optional(),
     projectRoot: z.string().min(1),
     target: z.string().min(1).max(200),
     scenario: z.record(z.unknown()).optional(),
@@ -33,7 +28,6 @@ interface Job {
   createdAt: number;
 }
 export class VisualizationService {
-  private readonly analyzer = new SourceAnalyzer();
   private readonly jobs = new Map<string, Job>();
   private readonly queue: Job[] = [];
   private running = 0;
@@ -60,13 +54,15 @@ export class VisualizationService {
   }
   capabilities() {
     return {
-      version: '0.2.1',
-      languages: ['TypeScript', 'JavaScript'],
-      analysis: 'bounded static scenario simulation',
+      version: '0.3.0',
+      languages: [],
+      languageSupport: 'Determined by the configured CodeGraph provider',
+      analysis: 'CodeGraph evidence only; no built-in source analysis',
+      codeGraphRequired: true,
+      codeGraphConfigured: Boolean(process.env.CODE_ANIME_CODEGRAPH_CONFIG),
       projectRoot: this.allowedRoot ? resolve(this.allowedRoot) : null,
       projectRootPolicy: this.allowedRoot ? 'restricted' : 'per-request',
       providers: [
-        'typescript-ast',
         'normalized-export',
         ...(process.env.CODE_ANIME_CODEGRAPH_CONFIG
           ? ['codegraph-bridge']
@@ -74,10 +70,10 @@ export class VisualizationService {
       ],
       codeGraph: process.env.CODE_ANIME_CODEGRAPH_CONFIG
         ? 'Configured normalized MCP bridge'
-        : 'Use source analysis or configure a normalized CodeGraph MCP bridge',
+        : 'CodeGraph is required. Install and initialize it for this project, then configure CODE_ANIME_CODEGRAPH_CONFIG for a compatible bridge.',
       limits: {
-        files: 400,
-        sourceBytes: 20 * 1024 * 1024,
+        maxDepth: 30,
+        providerTimeoutMs: 60000,
         events: 2000,
         concurrentJobs: 2,
       },
@@ -86,6 +82,11 @@ export class VisualizationService {
   }
   async start(raw: unknown) {
     const input = analyzeSchema.parse(raw);
+    if (!process.env.CODE_ANIME_CODEGRAPH_CONFIG)
+      throw new Error(
+        'CodeGraph is required; analysis stopped before creating a job. If absent, install CodeGraph and initialize/index this project. If already installed, configure a compatible bridge through CODE_ANIME_CODEGRAPH_CONFIG. No source-analysis fallback is available.',
+      );
+    input.provider = 'codegraph';
     if (Buffer.byteLength(JSON.stringify(input.scenario ?? {})) > 256 * 1024)
       throw new Error('Scenario exceeds 256 KiB');
     input.projectRoot = await this.root(input.projectRoot);
@@ -126,29 +127,20 @@ export class VisualizationService {
   private async run(job: Job) {
     job.status = 'running';
     try {
-      let flow: Flow;
-      if (job.input.provider === 'codegraph') {
-        const config = process.env.CODE_ANIME_CODEGRAPH_CONFIG;
-        if (!config)
-          throw new Error(
-            'CODE_ANIME_CODEGRAPH_CONFIG is not configured; use provider source',
-          );
-        job.stage = 'provider';
-        flow = await analyzeWithCodeGraph(
-          config,
-          job.input,
-          job.controller.signal,
+      const config = process.env.CODE_ANIME_CODEGRAPH_CONFIG;
+      if (!config)
+        throw new Error(
+          'CodeGraph configuration is unavailable; analysis stopped',
         );
-        flow.trace!.projectRoot = await this.root(flow.trace!.projectRoot);
-      } else {
-        flow = await this.analyzer.analyze(job.input, {
-          signal: job.controller.signal,
-          progress: (stage, count) => {
-            job.stage = stage;
-            job.files = count;
-          },
-        });
-      }
+      job.stage = 'provider';
+      const flow = await analyzeWithCodeGraph(
+        config,
+        job.input,
+        job.controller.signal,
+      );
+      flow.trace!.projectRoot = await this.root(flow.trace!.projectRoot);
+      if (flow.trace!.projectRoot !== job.input.projectRoot)
+        throw new Error('CodeGraph returned evidence for a different project');
       if (job.controller.signal.aborted) throw new Error('Analysis cancelled');
       const session = await this.store.create(flow);
       if (job.controller.signal.aborted) {
@@ -159,17 +151,11 @@ export class VisualizationService {
       job.status = 'ready';
       job.stage = 'complete';
     } catch (error) {
-      job.status = job.controller.signal.aborted
-        ? 'cancelled'
-        : error instanceof CandidateError
-          ? 'needs_selection'
-          : 'failed';
-      job.result =
-        error instanceof CandidateError
-          ? { candidates: error.candidates, error: error.message }
-          : {
-              error: error instanceof Error ? error.message : 'Analysis failed',
-            };
+      job.status = job.controller.signal.aborted ? 'cancelled' : 'failed';
+      job.result = {
+        error:
+          error instanceof Error ? error.message : 'CodeGraph analysis failed',
+      };
     }
   }
   status(id: string): {

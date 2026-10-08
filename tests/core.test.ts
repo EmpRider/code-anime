@@ -105,6 +105,8 @@ test('HTTP serves flow, redirects latest and safely serves static player', async
   }
 });
 test('MCP handshake and valid/invalid tool calls', async () => {
+  const previousConfig = process.env.CODE_ANIME_CODEGRAPH_CONFIG;
+  delete process.env.CODE_ANIME_CODEGRAPH_CONFIG;
   const store = await FileSessionStore.open(tmpdir(), options);
   const server = createMcpServer(store, 'http://127.0.0.1:3456');
   const client = new Client({ name: 'test', version: '1.0.0' });
@@ -117,6 +119,26 @@ test('MCP handshake and valid/invalid tool calls', async () => {
         (t) => t.name === 'generate_mock_flow_animation',
       )?.name,
       'generate_mock_flow_animation',
+    );
+    const blocked = await client.callTool({
+      name: 'visualize_code_flow',
+      arguments: {
+        projectRoot: '/unavailable-project',
+        target: 'AnyLanguage.run',
+      },
+    });
+    assert.equal(blocked.isError, true);
+    assert.match(
+      (blocked.content as Array<{ text: string }>)[0]!.text,
+      /CodeGraph is required/,
+    );
+    const listing = await client.callTool({
+      name: 'manage_visualization',
+      arguments: { action: 'list' },
+    });
+    assert.deepEqual(
+      JSON.parse((listing.content as Array<{ text: string }>)[0]!.text),
+      { jobs: [], sessions: [] },
     );
     const result = await client.callTool({
       name: 'generate_mock_flow_animation',
@@ -135,5 +157,8 @@ test('MCP handshake and valid/invalid tool calls', async () => {
     await client.close();
     await server.close();
     await store.close();
+    if (previousConfig === undefined)
+      delete process.env.CODE_ANIME_CODEGRAPH_CONFIG;
+    else process.env.CODE_ANIME_CODEGRAPH_CONFIG = previousConfig;
   }
 });

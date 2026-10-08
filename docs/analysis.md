@@ -1,42 +1,16 @@
-# Source analysis and provider integration
+# Required CodeGraph integration
 
-## Server-owned analysis
+Code Anime 0.3.0 does not analyze project source. All new analysis jobs and refinements use the configured CodeGraph provider. The former TypeScript/JavaScript analyzer has been removed. `provider: "source"` is rejected.
 
-Code Anime 0.2 includes a TypeScript compiler-API analyzer in its npm runtime dependencies. It parses up to 400 TS/JS files and 20 MiB of source beneath an allowed root, skipping vendor/generated directories and symlinks. File hashes reuse parsed sources while each request rebuilds symbol resolution. The scanner stops after 10,000 directory entries. It does not read external dependencies through the compiler host.
+## Prerequisites and failure behavior
 
-Targets can be function names, qualified class methods, candidate IDs, direct Express-style endpoint paths or simple Nest controller/method decorator paths. Unresolved targets return a candidate list rather than silently choosing a similarly named method.
+Verify CodeGraph installation, target-language support and initialization/indexing for the project open in the agent host. Reuse existing installation and current indexes. If absent, terminate the analysis workflow immediately and tell the user to install CodeGraph and initialize/index the open project. Request only missing setup.
 
-Supported scenario operations include literals, parameter mocks, local variables, object property changes, simple arithmetic/comparisons, arrays, property access, direct calls, return, if/ternary/logical conditions, await boundaries, bounded for/for-of loops and throw markers. Function/class calls can cross project files through TypeScript symbol resolution. No repository function is executed: the interpreter handles only its explicit AST subset and never uses eval.
+Code Anime also requires a compatible outbound normalization bridge. A sibling CodeGraph MCP connection in Cursor is not automatically visible to this server. Missing `CODE_ANIME_CODEGRAPH_CONFIG` rejects `visualize_code_flow` before creating a job or reading project source. An unreachable, invalid or incompatible configured provider fails the job, with no independent analysis fallback. Capabilities indicate configuration only; they do not prove provider readiness or language support.
 
-Unknown calls/values are marked unresolved. An unknown if condition uses an explicitly assumed then path. Generated primitive inputs and user-supplied scenario inputs are mock data. Object inputs should be supplied in `scenario`. try/catch, switch, while/do, closure captures, constructors/class instance state and asynchronous ordering are not fully simulated. Inline callbacks and dynamic dispatch may be unresolved. Literal results are not claims about live database state.
+## Bridge configuration
 
-Event snapshots include symbol IDs, source spans/snippets, call IDs/parents, stack, values and locals. The player restores immutable snapshots when seeking. Data origins are represented through scenario inputs, assignment evidence and unresolved external-call expressions; complete taint/data-lineage analysis is not implemented.
-
-## Allowed roots
-
-By default, each analysis request supplies its own `projectRoot`; any local project accessible to the server can be analyzed, regardless of the server working directory. `CODE_ANIME_PROJECT_ROOT` is optional. When set, requested project roots and imported files must resolve inside it; path escapes are rejected.
-
-```json
-{
-  "mcpServers": {
-    "code-anime": {
-      "command": "npx",
-      "args": ["-y", "@empirerider/code-anime@0.2.1"],
-      "env": {
-        "CODE_ANIME_PORT": "0"
-      }
-    }
-  }
-}
-```
-
-Use this example only after 0.2.0 is published. Replace the path with your repository. Port 0 selects a free port, so follow the returned URL.
-
-## CodeGraph integration
-
-Different products called CodeGraph expose different tools and schemas. This project provides a configurable outbound MCP adapter for a **normalization bridge**, not a guessed vendor-specific query API. Existing sibling MCP connections in your AI host are not automatically visible to Code Anime.
-
-Set `CODE_ANIME_CODEGRAPH_CONFIG` to a trusted local JSON configuration:
+Set `CODE_ANIME_CODEGRAPH_CONFIG` to a local JSON file:
 
 ```json
 {
@@ -47,14 +21,14 @@ Set `CODE_ANIME_CODEGRAPH_CONFIG` to a trusted local JSON configuration:
 }
 ```
 
-Or use `transport: "http"`, `url`, and `toolName` for an accessible Streamable HTTP bridge. Authenticated HTTP providers that require custom OAuth/header setup are not configured by this adapter yet. Do not put secrets into checked-in examples.
+Alternatively use `transport: "http"`, `url` and `toolName` for a Streamable HTTP bridge. Custom HTTP authentication is not configured by this adapter.
 
-The bridge receives `projectRoot`, `target`, `scenario` and limits, and must return the `traceSchema` shape from `src/domain/trace.ts` as structured content or a JSON text block. Configure `provider: "codegraph"` in the analysis request. Incompatible vendor graphs fail validation; they are never treated as execution traces. Normalize your actual CodeGraph API into this contract in your bridge. We have tested the adapter against a fixture bridge, not your particular CodeGraph installation.
+The bridge receives `projectRoot`, `target`, `scenario`, `maxDepth` and `maxEvents` where provided. It must return the v2 trace schema in `src/domain/trace.ts` as structured content or JSON text. The server validates the schema and requested project identity, converts events into player steps and stores them. It does not infer runtime values from graph edges. Language coverage, built-in methods and analysis semantics are the provider's responsibility.
 
-For offline export producers, `manage_visualization` with `action: "import"` reads the same trace contract from a file. Exported source hashes are producer claims and are labeled unverified.
+This generic bridge is tested against a fixture, not a vendor-specific Kotlin installation. Installing CodeGraph alone does not produce a compatible normalization bridge. A real vendor adapter still needs its documented tools and response schemas.
 
-## Limits and jobs
+## Workspace and limits
 
-Two jobs may be queued/running at once; job count is capped at 100. Cancellation is checked during file scanning and provider requests, and AST tracing has an operation/event budget. Compilation/tracing remains synchronous within the process; it is bounded but is not yet a separate worker thread. Sessions expire independently from job metadata. Refinement creates a new job/session and keeps the original.
+Use the host's active workspace as `projectRoot`. An optional `CODE_ANIME_PROJECT_ROOT` restricts requests and imports to its directory. No project-specific environment root is required.
 
-Plans append proposed transitions to a baseline trace. They do not infer a comprehensive blast radius or change source files.
+Two jobs run concurrently, with at most 100 jobs. Depth requests are 1–30 and event requests 10–2000; the provider controls expansion. Provider calls time out after 60 seconds. Session storage and trace schema remain bounded. Refinement requests CodeGraph again. Imported evidence is labeled producer-supplied; imports do not analyze source. Proposed plans are overlays, not proven impact analysis. The legacy renderer is for explicitly requested illustrations and must not bypass the CodeGraph requirement.
