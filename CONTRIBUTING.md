@@ -29,4 +29,4 @@ Start with an issue for major APIs, dependencies, language analyzers, or breakin
 
 ## License
 
-This repository does not yet have an open-source license selected by its owner. A public repository is not a general license to reuse its code. License selection is a release prerequisite; contributors should discuss licensing with the maintainer before substantial contributions.
+This project is licensed under the [MIT License](LICENSE). Contributions are made under the same license.

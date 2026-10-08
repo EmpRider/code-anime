@@ -42,7 +42,12 @@ try {
     '--no-fund',
     join(temporary, packed.filename),
   );
-  const installed = join(temporary, 'node_modules', 'code-anime');
+  const installed = join(
+    temporary,
+    'node_modules',
+    '@empirerider',
+    'code-anime',
+  );
   assert.match(
     await readFile(join(installed, 'dist/index.js'), 'utf8'),
     /^#!\/usr\/bin\/env node/,

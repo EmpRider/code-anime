@@ -10,8 +10,8 @@ The package includes compiled `dist/`, browser `public/`, examples and the autom
 
 ## One-time maintainer setup
 
-1. Choose the project license and update `LICENSE` and `package.json`. Currently it is `UNLICENSED`, not licensed open source.
-2. Sign into the npm account that will own the package. Confirm that the name `code-anime` is available; a registry 404 is not a reservation or a guarantee. If using a scoped name, update the package name, test install path and all configuration examples together.
+1. The project uses the MIT license. Confirm the release contains `LICENSE`.
+2. Sign into the npm account that will own the package. The package is `@empirerider/code-anime`; sign in as `empirerider` and confirm you own that npm scope.
 3. For a new package, bootstrap the first version from your authenticated workstation: `npm ci`, `npm run check`, `npm run package:check`, `npm login`, then `npm publish --access public`. Complete npm's required authentication/2FA. Do not create the automated tag for this same version afterward: npm versions cannot be republished.
 4. In the npm package settings, add a GitHub Actions trusted publisher with owner `EmpRider`, repository `code-anime`, workflow filename `release.yml`, and environment `npm`. Allow direct `npm publish`. Follow npm's current setup instructions if it supports a different new-package bootstrap path.
 5. In GitHub, create the `npm` environment. Configure any required reviewers or release-tag restrictions to match your team's policy. No `NPM_TOKEN` secret is used by this workflow.
@@ -36,8 +36,8 @@ git push origin v0.1.1
 
 Use the actual new package version as the tag; `v0.1.1` is only an example. The workflow refuses mismatched tags and prerelease versions. Do not move an existing published release tag. If a workflow fails before publishing, investigate and rerun the unchanged tag when appropriate. If npm already accepted the version, release fixes under a new version.
 
-After publication, verify `npm view code-anime version` and configure an MCP host with `npx -y code-anime@<version>`. The CLI stays running on stdio; it is not a help command. Test through an MCP client rather than waiting for ordinary command-line output.
+After publication, verify `npm view @empirerider/code-anime version` and configure an MCP host with `npx -y @empirerider/code-anime@<version>`. The CLI stays running on stdio; it is not a help command. Test through an MCP client rather than waiting for ordinary command-line output.
 
 ## Boundaries
 
-The workflow is prepared, but npm account ownership, first publication, trusted-publisher settings and license selection are not configured by committing YAML. GitHub CI/release results must be inspected after they run. Supporting stdio MCP does not guarantee compatibility with every AI host or automatically make localhost accessible from remote hosts.
+The workflow is prepared, but npm account ownership, first publication, trusted-publisher settings are not configured by committing YAML. GitHub CI/release results must be inspected after they run. Supporting stdio MCP does not guarantee compatibility with every AI host or automatically make localhost accessible from remote hosts.

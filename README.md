@@ -21,20 +21,20 @@ Open the URL printed in the terminal. The demo uses `examples/login-flow.json` a
 
 ## Install through npx (after the first npm release)
 
-The planned public package name is `code-anime`. It is not published yet. Once released, an MCP host that uses a `servers` configuration can run it directly:
+The planned public package name is `@empirerider/code-anime`. It is not published yet. Once released, an MCP host that uses a `servers` configuration can run it directly:
 
 ```json
 {
   "servers": {
     "code-anime": {
       "command": "npx",
-      "args": ["-y", "code-anime"]
+      "args": ["-y", "@empirerider/code-anime"]
     }
   }
 }
 ```
 
-Some hosts use `mcpServers` or another configuration format. Use the same command and arguments in your host's supported format. Node.js 22+ is required. Pin `code-anime@0.1.0` for a reproducible version after that version is published. Installing the MCP does not install an agent skill or add source analysis.
+Some hosts use `mcpServers` or another configuration format. Use the same command and arguments in your host's supported format. Node.js 22+ is required. Pin `@empirerider/code-anime@0.1.0` for a reproducible version after that version is published. Installing the MCP does not install an agent skill or add source analysis.
 
 ## Connect an AI agent
 
@@ -124,6 +124,6 @@ CI runs the same checks on Node 22/24 and Linux/Windows. See [CONTRIBUTING.md](C
 
 The next milestone moves repetitive analysis into the server: provider adapters, evidence-backed trace events, deterministic mock scenarios, and a portable agent skill. See [the roadmap](docs/roadmap.md). Contributions to accessibility, tests, and player usability are welcome now.
 
-## License status
+## License
 
-An open-source license has not yet been chosen. Package metadata currently says `UNLICENSED`; removing the publish block does not grant an open-source license. The maintainer should select a license before the public release. See [release instructions](docs/releasing.md).
+[MIT](LICENSE) © 2026 empirerider. See [release instructions](docs/releasing.md) for npm publishing.
