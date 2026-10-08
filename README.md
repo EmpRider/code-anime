@@ -58,7 +58,7 @@ Configure a stdio MCP server in your host. A common configuration shape is:
 
 Use an absolute path; escape Windows backslashes in JSON. Host configuration formats differ: translate this command and arguments into the format your agent supports. This project has not yet verified every host.
 
-Ask your agent to call `visualizer_capabilities`, then `visualize_code_flow` with the real `projectRoot` and a function/endpoint `target`. Poll `get_visualization_status` for the player URL. Set `CODE_ANIME_PROJECT_ROOT` in your host configuration if its working directory differs from your repository.
+Ask your agent to call `visualizer_capabilities`, then `visualize_code_flow` with the real `projectRoot` and a function/endpoint `target`. Poll `get_visualization_status` for the player URL. No project-specific environment variable is required: the agent supplies the project path in each tool call. Optionally set `CODE_ANIME_PROJECT_ROOT` to restrict access to one directory.
 
 | Tool                           | Purpose                                      |
 | ------------------------------ | -------------------------------------------- |
@@ -106,13 +106,13 @@ Fields are required. Up to 2,000 steps and 10 MiB per session are accepted. Name
 
 ## Configuration
 
-| Variable                      | Default                   | Purpose                                    |
-| ----------------------------- | ------------------------- | ------------------------------------------ |
-| `CODE_ANIME_PORT`             | `0`                       | Player port; `0` chooses a free port       |
-| `CODE_ANIME_TEMP_DIR`         | OS temp directory         | Parent for an isolated process directory   |
-| `CODE_ANIME_PROJECT_ROOT`     | Process working directory | Allowed source repository root             |
-| `CODE_ANIME_CODEGRAPH_CONFIG` | Unset                     | Optional normalized provider bridge config |
-| `CODE_ANIME_TTL_MS`           | `3600000`                 | Session lifetime from creation             |
+| Variable                      | Default                  | Purpose                                    |
+| ----------------------------- | ------------------------ | ------------------------------------------ |
+| `CODE_ANIME_PORT`             | `0`                      | Player port; `0` chooses a free port       |
+| `CODE_ANIME_TEMP_DIR`         | OS temp directory        | Parent for an isolated process directory   |
+| `CODE_ANIME_PROJECT_ROOT`     | Unrestricted per request | Optional allowed source repository root    |
+| `CODE_ANIME_CODEGRAPH_CONFIG` | Unset                    | Optional normalized provider bridge config |
+| `CODE_ANIME_TTL_MS`           | `3600000`                | Session lifetime from creation             |
 
 The server accepts local connections at `127.0.0.1`. It creates at most 100 sessions per process. Expired sessions are removed when accessed or when a new session is created. Graceful shutdown deletes this process's directory. Force-kill and power loss can leave temporary files; automatic orphan recovery is planned. No production authentication or remote hosting is provided. A remote/container AI host needs its own supported port-forwarding setup.
 

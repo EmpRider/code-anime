@@ -41,11 +41,12 @@ export class VisualizationService {
   constructor(
     private readonly store: SessionStore,
     private readonly baseUrl: string,
-    private readonly allowedRoot: string,
+    private readonly allowedRoot?: string,
   ) {}
   private async root(requested: string) {
-    const allowed = await realpath(resolve(this.allowedRoot));
     const root = await realpath(resolve(requested));
+    if (!this.allowedRoot) return root;
+    const allowed = await realpath(resolve(this.allowedRoot));
     const path = relative(allowed, root);
     if (
       path === '..' ||
@@ -53,16 +54,17 @@ export class VisualizationService {
       isAbsolute(path)
     )
       throw new Error(
-        'projectRoot must be inside configured CODE_ANIME_PROJECT_ROOT (default: server working directory)',
+        'projectRoot must be inside configured CODE_ANIME_PROJECT_ROOT',
       );
     return root;
   }
   capabilities() {
     return {
-      version: '0.2.0',
+      version: '0.2.1',
       languages: ['TypeScript', 'JavaScript'],
       analysis: 'bounded static scenario simulation',
-      projectRoot: resolve(this.allowedRoot),
+      projectRoot: this.allowedRoot ? resolve(this.allowedRoot) : null,
+      projectRootPolicy: this.allowedRoot ? 'restricted' : 'per-request',
       providers: [
         'typescript-ast',
         'normalized-export',

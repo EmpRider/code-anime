@@ -17,7 +17,7 @@ const schema = (
 export function createMcpServer(
   store: SessionStore,
   baseUrl: string,
-  projectRoot = process.env.CODE_ANIME_PROJECT_ROOT ?? process.cwd(),
+  projectRoot = process.env.CODE_ANIME_PROJECT_ROOT,
 ): Server {
   const version = (
     JSON.parse(

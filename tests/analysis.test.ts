@@ -5,7 +5,44 @@ import { SourceAnalyzer, CandidateError } from '../src/analysis/analyzer.js';
 import { VisualizationService } from '../src/services/visualization-service.js';
 import { FileSessionStore } from '../src/storage/file-session-store.js';
 import { tmpdir } from 'node:os';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 const root = fileURLToPath(new URL('./fixtures/analysis/', import.meta.url));
+test('without a configured restriction, analysis accepts a project outside the server directory', async () => {
+  const project = await mkdtemp(join(tmpdir(), 'code-anime-root-'));
+  const store = await FileSessionStore.open(tmpdir(), {
+    ttlMs: 60000,
+    maxSessionBytes: 1000000,
+    maxSessions: 20,
+  });
+  const service = new VisualizationService(store, 'http://127.0.0.1:1234');
+  try {
+    await writeFile(
+      join(project, 'main.ts'),
+      'export function double(value: number) { return value * 2; }',
+    );
+    assert.equal(service.capabilities().projectRootPolicy, 'per-request');
+    const job = await service.start({
+      projectRoot: project,
+      target: 'double',
+      scenario: { value: 3 },
+    });
+    let status = service.status(job.jobId);
+    for (
+      let i = 0;
+      i < 100 && ['queued', 'running'].includes(status.status);
+      i++
+    ) {
+      await new Promise((r) => setTimeout(r, 10));
+      status = service.status(job.jobId);
+    }
+    assert.equal(status.status, 'ready');
+  } finally {
+    service.close();
+    await store.close();
+    await rm(project, { recursive: true, force: true });
+  }
+});
 test('source analysis resolves cross-file method calls and observes scenario branches/mutations', async () => {
   const analyzer = new SourceAnalyzer();
   const flow = await analyzer.analyze({

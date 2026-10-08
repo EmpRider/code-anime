@@ -14,16 +14,15 @@ Event snapshots include symbol IDs, source spans/snippets, call IDs/parents, sta
 
 ## Allowed roots
 
-By default, the MCP process working directory is the allowed root. Set `CODE_ANIME_PROJECT_ROOT` to your repository's absolute path when your host starts servers elsewhere. Requested project roots and imported files must resolve inside it. Path escapes are rejected.
+By default, each analysis request supplies its own `projectRoot`; any local project accessible to the server can be analyzed, regardless of the server working directory. `CODE_ANIME_PROJECT_ROOT` is optional. When set, requested project roots and imported files must resolve inside it; path escapes are rejected.
 
 ```json
 {
   "mcpServers": {
     "code-anime": {
       "command": "npx",
-      "args": ["-y", "@empirerider/code-anime@0.2.0"],
+      "args": ["-y", "@empirerider/code-anime@0.2.1"],
       "env": {
-        "CODE_ANIME_PROJECT_ROOT": "C:\\Users\\Empire Rider\\projects\\my-project",
         "CODE_ANIME_PORT": "0"
       }
     }

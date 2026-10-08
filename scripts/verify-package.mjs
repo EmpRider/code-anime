@@ -70,7 +70,6 @@ try {
     cwd: temporary,
     env: {
       ...process.env,
-      CODE_ANIME_PROJECT_ROOT: project,
       CODE_ANIME_PORT: '0',
       CODE_ANIME_TEMP_DIR: temporary,
     },
