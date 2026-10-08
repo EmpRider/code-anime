@@ -58,7 +58,7 @@ Configure a stdio MCP server in your host. A common configuration shape is:
 
 Use an absolute path; escape Windows backslashes in JSON. Host configuration formats differ: translate this command and arguments into the format your agent supports. This project has not yet verified every host.
 
-Ask your agent to call `visualizer_capabilities`, then `visualize_code_flow` with the real `projectRoot` and a function/endpoint `target`. Poll `get_visualization_status` for the player URL. No project-specific environment variable is required: the agent supplies the project path in each tool call. Optionally set `CODE_ANIME_PROJECT_ROOT` to restrict access to one directory.
+Ask your agent to call `visualizer_capabilities`, then `visualize_code_flow` with the absolute path of the project currently open in the host as `projectRoot` and a function/endpoint `target`. Poll `get_visualization_status` for the player URL. No project-specific environment variable is required: the agent resolves the active workspace from host context or exposed MCP roots and supplies it automatically in each tool call. In a multi-root workspace, use the root containing the requested target; ask only when it is ambiguous. The server cannot infer the active project if the host or agent does not provide its path. Optionally set `CODE_ANIME_PROJECT_ROOT` to restrict access to one directory.
 
 | Tool                           | Purpose                                      |
 | ------------------------------ | -------------------------------------------- |
@@ -73,7 +73,7 @@ Ask your agent to call `visualizer_capabilities`, then `visualize_code_flow` wit
 
 ## Portable agent skill
 
-The npm tarball and repository include `skills/visualize-code-flow/SKILL.md` with a small tool-contract reference. Copy the entire `visualize-code-flow` directory into the skill location supported by your host (for example `.claude/skills/` or `.opencode/skills/`; consult your host's current documentation for Codex/other variants). This is a distributable project skill, not automatically installed in your account. Connect the MCP separately. Skill activation and setup need to be verified on your host; no all-host compatibility guarantee is made.
+The npm tarball and repository include `skills/visualize-code-flow/SKILL.md` with a small tool-contract reference. The skill instructs agents to use the host's active workspace, re-resolve it after project switches, and avoid guessed paths or the MCP process working directory. Copy the entire `visualize-code-flow` directory into the skill location supported by your host (for example `.claude/skills/` or `.opencode/skills/`; consult your host's current documentation for Codex/other variants). This is a distributable project skill, not automatically installed in your account. Connect the MCP separately. Skill activation and setup need to be verified on your host; no all-host compatibility guarantee is made.
 
 ## What works today
 
