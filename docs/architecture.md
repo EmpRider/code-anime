@@ -18,7 +18,7 @@ The prototype's HTML strings, disk operations and protocol handlers were tightly
 
 ## Analysis pipeline
 
-The MCP service requires CodeGraph configuration before creating analysis jobs, validates the active project root, and requests evidence exclusively through a configured normalization bridge. No local source analyzer exists. Provider events are validated and converted into replay steps; the browser presents their evidence, stack and values. Legacy mock payloads are illustrations and cannot substitute for CodeGraph analysis.
+The MCP service validates the active project root and requires a usable CodeGraph installation/index before creating native analysis jobs. It launches the installed CLI automatically or uses an optional normalized bridge. No local source analyzer exists. Provider events are validated and converted into replay steps; the browser presents their evidence, stack and values. Legacy mock payloads are illustrations and cannot substitute for CodeGraph analysis.
 
 ## Current limitations
 

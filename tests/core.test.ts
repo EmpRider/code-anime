@@ -105,6 +105,8 @@ test('HTTP serves flow, redirects latest and safely serves static player', async
   }
 });
 test('MCP handshake and valid/invalid tool calls', async () => {
+  const previousCommand = process.env.CODE_ANIME_CODEGRAPH_COMMAND;
+  process.env.CODE_ANIME_CODEGRAPH_COMMAND = 'codegraph-does-not-exist';
   const previousConfig = process.env.CODE_ANIME_CODEGRAPH_CONFIG;
   delete process.env.CODE_ANIME_CODEGRAPH_CONFIG;
   const store = await FileSessionStore.open(tmpdir(), options);
@@ -123,7 +125,7 @@ test('MCP handshake and valid/invalid tool calls', async () => {
     const blocked = await client.callTool({
       name: 'visualize_code_flow',
       arguments: {
-        projectRoot: '/unavailable-project',
+        projectRoot: tmpdir(),
         target: 'AnyLanguage.run',
       },
     });
@@ -157,6 +159,9 @@ test('MCP handshake and valid/invalid tool calls', async () => {
     await client.close();
     await server.close();
     await store.close();
+    if (previousCommand === undefined)
+      delete process.env.CODE_ANIME_CODEGRAPH_COMMAND;
+    else process.env.CODE_ANIME_CODEGRAPH_COMMAND = previousCommand;
     if (previousConfig === undefined)
       delete process.env.CODE_ANIME_CODEGRAPH_CONFIG;
     else process.env.CODE_ANIME_CODEGRAPH_CONFIG = previousConfig;

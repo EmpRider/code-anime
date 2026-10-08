@@ -1,3 +1,4 @@
+import { analyzeNativeCodeGraph } from './native-codegraph.js';
 import { readFile } from 'node:fs/promises';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -27,14 +28,15 @@ const configSchema = z.discriminatedUnion('transport', [
 // CodeGraph implementations differ. Configure a documented normalization bridge;
 // never infer a vendor's tool name or silently accept an incompatible graph.
 export async function analyzeWithCodeGraph(
-  configPath: string,
+  configPath: string | undefined,
   input: AnalysisInput,
   signal: AbortSignal,
 ) {
+  if (!configPath) return analyzeNativeCodeGraph(input, signal);
   const config = configSchema.parse(
     JSON.parse(await readFile(configPath, 'utf8')),
   );
-  const client = new Client({ name: 'code-anime-provider', version: '0.2.0' });
+  const client = new Client({ name: 'code-anime-provider', version: '0.3.1' });
   const transport =
     config.transport === 'stdio'
       ? new StdioClientTransport({

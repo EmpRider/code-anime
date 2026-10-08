@@ -3,7 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { resolve, relative, isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { traceToFlow, type AnalysisInput } from '../analysis/contract.js';
+import { verifyNativeCodeGraph } from '../analysis/native-codegraph.js';
+import {
+  traceToFlow,
+  type AnalysisInput,
+  CandidateError,
+} from '../analysis/contract.js';
 import { traceSchema, type TraceEvent } from '../domain/trace.js';
 import type { Flow, SessionStore } from '../domain/flow.js';
 
@@ -54,23 +59,28 @@ export class VisualizationService {
   }
   capabilities() {
     return {
-      version: '0.3.0',
+      version: '0.3.1',
       languages: [],
       languageSupport: 'Determined by the configured CodeGraph provider',
       analysis: 'CodeGraph evidence only; no built-in source analysis',
       codeGraphRequired: true,
-      codeGraphConfigured: Boolean(process.env.CODE_ANIME_CODEGRAPH_CONFIG),
+      codeGraphConfigured: true,
+      codeGraphMode: process.env.CODE_ANIME_CODEGRAPH_CONFIG
+        ? 'normalized-bridge'
+        : 'native-cli',
+      codeGraphReady: 'Verified against the active project on submission',
       projectRoot: this.allowedRoot ? resolve(this.allowedRoot) : null,
       projectRootPolicy: this.allowedRoot ? 'restricted' : 'per-request',
       providers: [
         'normalized-export',
+        'codegraph-native',
         ...(process.env.CODE_ANIME_CODEGRAPH_CONFIG
           ? ['codegraph-bridge']
           : []),
       ],
       codeGraph: process.env.CODE_ANIME_CODEGRAPH_CONFIG
         ? 'Configured normalized MCP bridge'
-        : 'CodeGraph is required. Install and initialize it for this project, then configure CODE_ANIME_CODEGRAPH_CONFIG for a compatible bridge.',
+        : 'Launch installed codegraph serve --mcp --path <active project> automatically; no bridge config required.',
       limits: {
         maxDepth: 30,
         providerTimeoutMs: 60000,
@@ -82,14 +92,12 @@ export class VisualizationService {
   }
   async start(raw: unknown) {
     const input = analyzeSchema.parse(raw);
-    if (!process.env.CODE_ANIME_CODEGRAPH_CONFIG)
-      throw new Error(
-        'CodeGraph is required; analysis stopped before creating a job. If absent, install CodeGraph and initialize/index this project. If already installed, configure a compatible bridge through CODE_ANIME_CODEGRAPH_CONFIG. No source-analysis fallback is available.',
-      );
     input.provider = 'codegraph';
     if (Buffer.byteLength(JSON.stringify(input.scenario ?? {})) > 256 * 1024)
       throw new Error('Scenario exceeds 256 KiB');
     input.projectRoot = await this.root(input.projectRoot);
+    if (!process.env.CODE_ANIME_CODEGRAPH_CONFIG)
+      await verifyNativeCodeGraph(input);
     if (this.closed) throw new Error('Service closed');
     for (const [id, job] of this.jobs)
       if (
@@ -128,10 +136,6 @@ export class VisualizationService {
     job.status = 'running';
     try {
       const config = process.env.CODE_ANIME_CODEGRAPH_CONFIG;
-      if (!config)
-        throw new Error(
-          'CodeGraph configuration is unavailable; analysis stopped',
-        );
       job.stage = 'provider';
       const flow = await analyzeWithCodeGraph(
         config,
@@ -151,10 +155,17 @@ export class VisualizationService {
       job.status = 'ready';
       job.stage = 'complete';
     } catch (error) {
-      job.status = job.controller.signal.aborted ? 'cancelled' : 'failed';
+      job.status = job.controller.signal.aborted
+        ? 'cancelled'
+        : error instanceof CandidateError
+          ? 'needs_selection'
+          : 'failed';
       job.result = {
         error:
           error instanceof Error ? error.message : 'CodeGraph analysis failed',
+        ...(error instanceof CandidateError
+          ? { candidates: error.candidates }
+          : {}),
       };
     }
   }

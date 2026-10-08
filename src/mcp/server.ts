@@ -39,7 +39,7 @@ export function createMcpServer(
     {
       name: 'visualize_code_flow',
       description:
-        'Require a configured CodeGraph bridge and request its evidence for the active project. Reject immediately if unconfigured. No built-in source analysis or fallback. Returns jobId; poll get_visualization_status.',
+        'Use installed CodeGraph automatically for the active project, or an optional normalized bridge. Stop if missing/unindexed. No independent source analysis. Returns jobId; poll get_visualization_status.',
       inputSchema: schema(
         {
           provider: { type: 'string', enum: ['codegraph'] },

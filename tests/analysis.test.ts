@@ -9,6 +9,8 @@ import { FileSessionStore } from '../src/storage/file-session-store.js';
 
 test('CodeGraph is required for every language; missing setup creates no job or session', async () => {
   const previous = process.env.CODE_ANIME_CODEGRAPH_CONFIG;
+  const previousCommand = process.env.CODE_ANIME_CODEGRAPH_COMMAND;
+  process.env.CODE_ANIME_CODEGRAPH_COMMAND = 'codegraph-does-not-exist';
   delete process.env.CODE_ANIME_CODEGRAPH_CONFIG;
   const store = await FileSessionStore.open(tmpdir(), {
     ttlMs: 60000,
@@ -25,7 +27,7 @@ test('CodeGraph is required for every language; missing setup creates no job or 
       'typescriptFunction',
     ]) {
       await assert.rejects(
-        service.start({ projectRoot: '/not-even-readable', target }),
+        service.start({ projectRoot: tmpdir(), target }),
         /CodeGraph is required/,
       );
     }
@@ -37,6 +39,9 @@ test('CodeGraph is required for every language; missing setup creates no job or 
   } finally {
     service.close();
     await store.close();
+    if (previousCommand === undefined)
+      delete process.env.CODE_ANIME_CODEGRAPH_COMMAND;
+    else process.env.CODE_ANIME_CODEGRAPH_COMMAND = previousCommand;
     if (previous === undefined) delete process.env.CODE_ANIME_CODEGRAPH_CONFIG;
     else process.env.CODE_ANIME_CODEGRAPH_CONFIG = previous;
   }

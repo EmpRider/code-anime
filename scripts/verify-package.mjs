@@ -72,6 +72,18 @@ try {
       toolName: 'fixture_trace',
     }),
   );
+  const nativeCommand = process.env.CODE_ANIME_TEST_CODEGRAPH;
+  if (nativeCommand) {
+    await writeFile(
+      join(project, 'Generator.kt'),
+      'class Generator {\n fun generate(input: String): String { return normalize(input) }\n fun normalize(input: String): String { return input.trim() }\n}\n',
+    );
+    execFileSync(nativeCommand, ['init', project], {
+      env: { ...process.env, CODEGRAPH_TELEMETRY: '0' },
+      stdio: 'pipe',
+      timeout: 60000,
+    });
+  }
   client = new Client({ name: 'package-smoke', version: '1.0.0' });
   // Exercise the installed npm executable, not a development source file.
   const transport = new StdioClientTransport({
@@ -82,7 +94,12 @@ try {
       ...process.env,
       CODE_ANIME_PORT: '0',
       CODE_ANIME_TEMP_DIR: temporary,
-      CODE_ANIME_CODEGRAPH_CONFIG: config,
+      ...(nativeCommand
+        ? {
+            CODE_ANIME_CODEGRAPH_COMMAND: nativeCommand,
+            CODE_ANIME_CODEGRAPH_CONFIG: '',
+          }
+        : { CODE_ANIME_CODEGRAPH_CONFIG: config }),
     },
     stderr: 'pipe',
   });
@@ -93,27 +110,36 @@ try {
     name: 'visualize_code_flow',
     arguments: {
       projectRoot: project,
-      target: 'double',
+      target: nativeCommand ? 'Generator.generate' : 'double',
       scenario: { value: 3 },
     },
   });
   assert.notEqual(submission.isError, true);
   const job = JSON.parse(submission.content[0].text);
   let ready;
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < 600; i++) {
     const status = await client.callTool({
       name: 'get_visualization_status',
       arguments: { jobId: job.jobId },
     });
     ready = JSON.parse(status.content[0].text);
     if (!['queued', 'running'].includes(ready.status)) break;
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 50));
   }
   assert.equal(ready.status, 'ready');
   const trace = await (
     await fetch(new URL('/api/flow/' + ready.sessionId, ready.url))
   ).json();
-  assert.equal(trace.trace.provider, 'codegraph-bridge: fixture');
+  assert.equal(
+    trace.trace.provider,
+    nativeCommand ? 'codegraph-native' : 'codegraph-bridge: fixture',
+  );
+  if (nativeCommand)
+    assert.ok(
+      trace.trace.events.some(
+        (e) => e.kind === 'call' && e.label === 'normalize',
+      ),
+    );
   assert.ok(
     !paths.some((path) => path.includes('analysis/analyzer')),
     'Source analyzer leaked into package',
