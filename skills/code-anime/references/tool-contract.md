@@ -1,5 +1,9 @@
 # Code Anime 0.2.1 tool contract
 
+## Language setup gate
+
+Check the requested target's language before submitting a job. The built-in `source` provider supports only TypeScript and JavaScript. For Java or other unsupported languages, stop the current workflow and tell the user to install CodeGraph and initialize/index it for the active project. Resume only after a compatible bridge supporting that language is configured and advertised by `visualizer_capabilities`. A sibling MCP connection alone is insufficient. Do not use the legacy mock renderer as a fallback or invent CodeGraph install/init commands.
+
 ## Main request
 
 `visualize_code_flow`:
