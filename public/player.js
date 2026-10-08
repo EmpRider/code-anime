@@ -1,3 +1,4 @@
+import { replayState } from './replay.js';
 const $ = (id) => document.getElementById(id);
 let flow;
 let cursor = 0;
@@ -24,8 +25,21 @@ function render() {
     $('packet-title').textContent = 'Select a step';
     $('route').textContent = '';
     $('fields').textContent = '{}';
+    for (const id of ['stack', 'locals', 'source', 'snippet', 'certainty'])
+      $(id).textContent = '';
     return;
   }
+  const state = replayState(flow.trace?.events ?? [], cursor);
+  $('stack').textContent = JSON.stringify(state.stack, null, 2);
+  $('locals').textContent = JSON.stringify(state.locals, null, 2);
+  const event = state.event;
+  $('certainty').textContent = event
+    ? event.certainty + ' · ' + (event.note ?? '')
+    : 'Agent-authored mock data';
+  $('source').textContent = event?.source
+    ? event.source.file + ':' + event.source.line + '–' + event.source.endLine
+    : '';
+  $('snippet').textContent = event?.snippet ?? '';
   const step = flow.steps[cursor - 1];
   $('packet-title').textContent = step.dtoName;
   $('route').textContent = step.from + ' → ' + step.to;
@@ -96,12 +110,37 @@ async function load() {
     if (!response.ok) throw new Error((await response.json()).error);
     flow = await response.json();
     $('title').textContent = flow.endpoint;
+    $('diagnostics').textContent = flow.trace
+      ? JSON.stringify(
+          {
+            provider: flow.trace.provider,
+            sourceHash: flow.trace.sourceHash,
+            scenario: flow.trace.scenario,
+            filesAnalyzed: flow.trace.filesAnalyzed,
+            cacheHits: flow.trace.cacheHits,
+            truncated: flow.trace.truncated,
+            diagnostics: flow.trace.diagnostics,
+          },
+          null,
+          2,
+        )
+      : 'Legacy agent-authored flow; not verified source analysis';
+    const labels = new Map(
+      flow.trace?.events.map((e) => [e.symbolId, e.label]) ?? [],
+    );
     for (const step of flow.steps)
       for (const name of [step.from, step.to]) {
         if (nodes.has(name)) continue;
         const node = document.createElement('div');
         node.className = 'node';
-        node.textContent = name;
+        node.textContent = labels.get(name) ?? name;
+        node.title = name;
+        if (
+          flow.trace?.events.some(
+            (e) => e.symbolId === name && e.certainty === 'proposed',
+          )
+        )
+          node.classList.add('proposed');
         nodes.set(name, node);
         $('canvas').append(node);
       }

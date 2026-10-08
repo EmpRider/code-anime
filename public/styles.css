@@ -125,3 +125,16 @@ pre {
     padding: 18px;
   }
 }
+
+.trace-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+.proposed {
+  border-style: dashed;
+  border-color: #ffc76b;
+}
+details {
+  margin-bottom: 20px;
+}

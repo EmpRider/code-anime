@@ -1,7 +1,7 @@
 {
   "name": "@empirerider/code-anime",
-  "version": "0.1.0",
-  "description": "An MCP server that turns agent-authored code flows into an interactive local animation.",
+  "version": "0.2.0",
+  "description": "Evidence-backed code flow analysis and replay for AI agents through MCP",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -12,7 +12,8 @@
   "files": [
     "dist",
     "public",
-    "examples"
+    "examples",
+    "skills"
   ],
   "scripts": {
     "dev": "node --watch --import tsx src/index.ts",
@@ -20,7 +21,7 @@
     "start": "node dist/index.js",
     "demo": "node --import tsx scripts/demo.ts",
     "typecheck": "tsc --noEmit -p tsconfig.check.json",
-    "test": "node --import tsx --test tests/*.test.ts",
+    "test": "node --import tsx --test tests/*.test.ts tests/*.test.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "npm run typecheck && npm test && npm run build && npm run format:check",
@@ -30,14 +31,15 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "express": "^5.0.0",
+    "typescript": "^5.0.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
+    "jsdom": "^30.1.2",
     "prettier": "^3.0.0",
-    "tsx": "^4.0.0",
-    "typescript": "^5.0.0"
+    "tsx": "^4.0.0"
   },
   "repository": {
     "type": "git",

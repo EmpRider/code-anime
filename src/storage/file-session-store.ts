@@ -101,6 +101,16 @@ export class FileSessionStore implements SessionStore {
     );
   }
 
+  async list(): Promise<FlowSession[]> {
+    return this.closed ? [] : this.sessions();
+  }
+  async delete(id: string): Promise<boolean> {
+    sessionIdSchema.parse(id);
+    if (!(await this.get(id))) return false;
+    await rm(join(this.directory, id + '.json'), { force: true });
+    return true;
+  }
+
   async latest(): Promise<FlowSession | undefined> {
     if (this.closed) return undefined;
     const sessions = await this.sessions();

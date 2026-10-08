@@ -16,10 +16,14 @@ Storage serializes writes to enforce concurrent quotas. Each process owns a uniq
 
 The prototype's HTML strings, disk operations and protocol handlers were tightly coupled. Separating these responsibilities makes the next changes testable without introducing a framework or a monorepo. The browser remains plain JavaScript because the current rendering model is simple.
 
+## Analysis pipeline
+
+The MCP service validates the allowed root, queues jobs and runs either the TypeScript source analyzer or a configured normalization bridge. The analyzer scans/hash-caches sources, resolves symbols, interprets its bounded AST subset and writes v2 events with immutable state snapshots. Ready results return a compact URL and quality summary; the browser fetches events and presents source evidence, stack and locals. Existing agent-authored payloads remain supported.
+
 ## Current limitations
 
-The payload describes transitions, not full execution semantics. Node identity is a display name. Previous/seek redraw a selected step; they do not reconstruct memory mutations. There is no branch interpreter, source index, call stack, CodeGraph connection or portable installed skill yet. A future versioned event model must address these together rather than pretending a longer list of steps is a debugger.
+See [analysis.md](analysis.md) for exact supported syntax and provider contracts. The simulator does not execute the application, infer every data lineage or fully model closure/class-instance/async semantics. The player is a scenario teaching tool. Proposed overlays are not proof of dependency impact. AST work is bounded within the main process; worker isolation and broader language support remain future work.
 
 ## Trust boundary
 
-Source-derived strings and mock values are treated as text. Session IDs are validated before filesystem access. The browser has a restrictive content security policy. The HTTP server is read-only and loopback-bound; remote exposure requires a separate authentication and origin policy design. Temporary sessions may contain agent-provided sensitive information, so use synthetic data. This is a local development tool, not a hardened multi-user service.
+Source-derived names and snippets are text, never HTML or agent instructions. Root/file containment prevents tools from scanning arbitrary paths. Repository code is parsed rather than executed. Provider commands are explicitly configured by the user and must be trusted. Temporary sessions may contain code snippets and supplied scenario data; use synthetic values. This remains a loopback development tool rather than a multi-user remote service.

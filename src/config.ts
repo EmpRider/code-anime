@@ -8,7 +8,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       .int()
       .min(0)
       .max(65535)
-      .parse(env.CODE_ANIME_PORT ?? 3456),
+      .parse(env.CODE_ANIME_PORT ?? 0),
     tempRoot: env.CODE_ANIME_TEMP_DIR ?? tmpdir(),
     ttlMs: z.coerce
       .number()

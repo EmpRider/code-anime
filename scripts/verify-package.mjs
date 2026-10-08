@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -26,6 +26,9 @@ try {
     'public/index.html',
     'public/player.js',
     'public/styles.css',
+    'public/replay.js',
+    'skills/visualize-code-flow/SKILL.md',
+    'LICENSE',
   ])
     assert.ok(paths.includes(path), 'Missing package asset: ' + path);
   assert.ok(
@@ -52,6 +55,12 @@ try {
     await readFile(join(installed, 'dist/index.js'), 'utf8'),
     /^#!\/usr\/bin\/env node/,
   );
+  const project = join(temporary, 'project');
+  await mkdir(project);
+  await writeFile(
+    join(project, 'main.ts'),
+    'export function double(value: number) { const result = value * 2; return result; }',
+  );
   client = new Client({ name: 'package-smoke', version: '1.0.0' });
   // Exercise the installed npm executable, not a development source file.
   const transport = new StdioClientTransport({
@@ -60,12 +69,40 @@ try {
     cwd: temporary,
     env: {
       ...process.env,
+      CODE_ANIME_PROJECT_ROOT: project,
       CODE_ANIME_PORT: '0',
       CODE_ANIME_TEMP_DIR: temporary,
     },
     stderr: 'pipe',
   });
   await client.connect(transport);
+  const tools = await client.listTools();
+  assert.equal(tools.tools.length, 8);
+  const submission = await client.callTool({
+    name: 'visualize_code_flow',
+    arguments: {
+      projectRoot: project,
+      target: 'double',
+      scenario: { value: 3 },
+    },
+  });
+  assert.notEqual(submission.isError, true);
+  const job = JSON.parse(submission.content[0].text);
+  let ready;
+  for (let i = 0; i < 100; i++) {
+    const status = await client.callTool({
+      name: 'get_visualization_status',
+      arguments: { jobId: job.jobId },
+    });
+    ready = JSON.parse(status.content[0].text);
+    if (!['queued', 'running'].includes(ready.status)) break;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  assert.equal(ready.status, 'ready');
+  const trace = await (
+    await fetch(new URL('/api/flow/' + ready.sessionId, ready.url))
+  ).json();
+  assert.equal(trace.trace.events.at(-1).values.result, 6);
   const flow = JSON.parse(
     await readFile(resolve('examples/login-flow.json'), 'utf8'),
   );

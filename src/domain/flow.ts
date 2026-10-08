@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import { traceSchema } from './trace.js';
 
 // Keep the legacy tool payload stable; all external inputs cross this boundary.
 export const flowSchema = z
   .object({
+    trace: traceSchema.optional(),
     endpoint: z.string().trim().min(1).max(200),
     steps: z
       .array(
@@ -29,6 +31,8 @@ export interface FlowSession {
 export interface SessionStore {
   create(flow: Flow): Promise<FlowSession>;
   get(id: string): Promise<FlowSession | undefined>;
+  list?(): Promise<FlowSession[]>;
+  delete?(id: string): Promise<boolean>;
   latest(): Promise<FlowSession | undefined>;
   close(): Promise<void>;
 }

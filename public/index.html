@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Code Anime · Flow player</title>
     <link rel="stylesheet" href="/styles.css" />
-    <script src="/player.js" defer></script>
+    <script type="module" src="/player.js"></script>
   </head>
   <body>
     <main>
@@ -13,7 +13,7 @@
         <p class="eyebrow">CODE ANIME / LOCAL FLOW PLAYER</p>
         <h1 id="title">Loading flow…</h1>
         <p>
-          Explore an agent-authored simulation. Values are mock data, not a live
+          Explore code-backed scenario events. Values are simulated, not a live
           execution trace.
         </p>
       </header>
@@ -33,11 +33,31 @@
         ><output id="progress">0 / 0</output>
       </section>
       <p id="status" role="status" aria-live="polite"></p>
+      <details>
+        <summary>Analysis details and limitations</summary>
+        <pre id="diagnostics"></pre>
+      </details>
       <section id="canvas" aria-label="Flow modules"></section>
       <section class="inspector">
         <h2 id="packet-title">Select a step</h2>
         <p id="route"></p>
+        <p id="certainty"></p>
         <pre id="fields">{}</pre>
+        <div class="trace-grid">
+          <section>
+            <h3>Call stack</h3>
+            <pre id="stack">[]</pre>
+          </section>
+          <section>
+            <h3>Local scenario state</h3>
+            <pre id="locals">{}</pre>
+          </section>
+          <section>
+            <h3>Source evidence</h3>
+            <p id="source"></p>
+            <pre id="snippet"></pre>
+          </section>
+        </div>
       </section>
     </main>
   </body>

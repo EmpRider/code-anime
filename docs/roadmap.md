@@ -1,35 +1,19 @@
 # Roadmap
 
-This roadmap describes planned capabilities, not features already available.
+## Implemented in 0.2.0
 
-## Milestone 1 — Contributor foundation (this project)
+- Eight MCP tools, source-analysis jobs, scenario refinement and session controls.
+- TS/JS cross-file call resolution with source spans, bounded loops, assignments and mocks.
+- Evidence/uncertainty labels and stack/local snapshots in the player.
+- Proposed-change overlays, normalized provider bridge/export imports and portable skill bundle.
+- Legacy compatibility, package tests and npm release workflow.
 
-- Modular TypeScript MCP/HTTP server and bounded temporary sessions.
-- Legacy tool compatibility and interactive mock-flow player.
-- Documentation, demo, regression tests and cross-platform CI.
+## Next work
 
-## Milestone 2 — Evidence-backed trace contract
+- Broader expression/control-flow semantics, complete instance/closure modeling and async correlation.
+- Detailed data-lineage tracking, automated dependency-impact calculation and multilingual UI labels.
+- Worker isolation, stale-session recovery, lazy expansion and measured large-project performance.
+- Vendor-specific adapters verified against actual CodeGraph products and additional programming languages.
+- Browser automation and host-specific skill activation smoke tests.
 
-- Stable symbol IDs and source spans.
-- Call/return, branch, loop, mutation and unresolved events.
-- Static facts, mock values and assumptions explicitly distinguished.
-- Replay state reducer and checkpoints for correct reverse/seek behavior.
-
-## Milestone 3 — Server-owned analysis
-
-- Verify the actual CodeGraph implementation and supported interface.
-- Configure a direct provider adapter; do not assume sibling MCP tools are visible to this server.
-- TypeScript/JavaScript source fallback and incremental hash cache.
-- Bounded recursion, lazy expansion, deterministic mock generators and job cancellation.
-- Measure tool calls, token use, latency and storage against the initial renderer.
-
-## Milestone 4 — Portable skill and visual planning
-
-- Small Agent Skills-format package with tool contract references.
-- Tested setup for Codex, Claude Code and OpenCode.
-- Current-flow and proposed-change comparison with explicit planned nodes.
-- Scenario selection and domain annotations only when needed.
-
-## Before a public release
-
-Configure npm publishing, verify host compatibility, add browser automation, review dependency updates, design stale-session recovery and document support boundaries. Additional programming languages come through separate analyzer adapters after the first language is verified.
+The current version is an evidence-backed bounded teaching simulation, not a full runtime debugger. See [analysis support](analysis.md).

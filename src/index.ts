@@ -24,7 +24,9 @@ async function main() {
   process.once('SIGTERM', () => {
     void stop();
   });
+  const closeService = mcp.onclose;
   mcp.onclose = () => {
+    closeService?.();
     void stop();
   };
   try {

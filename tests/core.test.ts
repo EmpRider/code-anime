@@ -113,7 +113,9 @@ test('MCP handshake and valid/invalid tool calls', async () => {
     await server.connect(st);
     await client.connect(ct);
     assert.equal(
-      (await client.listTools()).tools[0]?.name,
+      (await client.listTools()).tools.find(
+        (t) => t.name === 'generate_mock_flow_animation',
+      )?.name,
       'generate_mock_flow_animation',
     );
     const result = await client.callTool({
