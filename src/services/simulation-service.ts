@@ -103,18 +103,13 @@ export class SimulationService {
       nextOffset: end < item.text.length ? end : null,
       totalCharacters: item.text.length,
       guidance:
-        'Read all relevant source pages and resolve helpers/DTOs through CodeGraph. Then author a statement-level mock trace. Provider truncation must be resolved with node file offset/limit queries or reported as incomplete.',
+        'Read all relevant source pages and resolve helpers/DTOs through CodeGraph. Send compact steps directly to build_mock_animation; never create/run a script or write a payload file. The MCP server owns trace assembly, snapshots, chunking and persistence. Provider truncation must be resolved with node file offset/limit queries or reported as incomplete.',
     };
   }
-  async submit(raw: unknown) {
-    if (Buffer.byteLength(JSON.stringify(raw)) > 8 * 1024 * 1024)
-      throw new Error(
-        'Trace chunk exceeds 8 MiB; split it into smaller chunks',
-      );
-    const p = simulationSchema.parse(raw);
-    const root = await this.resolveRoot(p.projectRoot);
+  async checkEvidence(projectRoot: string, evidenceIds: string[]) {
+    const root = await this.resolveRoot(projectRoot);
     this.prune();
-    const evidence = p.evidenceIds.map((id) => {
+    const evidence = evidenceIds.map((id) => {
       const item = this.evidence.get(id);
       if (!item || item.projectRoot !== root)
         throw new Error(
@@ -126,6 +121,18 @@ export class SimulationService {
       throw new Error(
         'Retrieve CodeGraph source evidence using node or explore before simulation.',
       );
+    return { root, evidence };
+  }
+  async submit(raw: unknown) {
+    if (Buffer.byteLength(JSON.stringify(raw)) > 8 * 1024 * 1024)
+      throw new Error(
+        'Trace chunk exceeds 8 MiB; split it into smaller chunks',
+      );
+    const p = simulationSchema.parse(raw);
+    const { root, evidence } = await this.checkEvidence(
+      p.projectRoot,
+      p.evidenceIds,
+    );
     const events: TraceEvent[] =
       p.events ??
       p.steps!.map((step, i) => ({

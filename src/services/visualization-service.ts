@@ -59,7 +59,7 @@ export class VisualizationService {
   }
   capabilities() {
     return {
-      version: '0.4.0',
+      version: '0.4.1',
       languages: [],
       languageSupport: 'Determined by the configured CodeGraph provider',
       analysis: 'CodeGraph evidence only; no built-in source analysis',
@@ -87,13 +87,19 @@ export class VisualizationService {
         events: 2000,
         concurrentJobs: 2,
       },
-      tools: 9,
+      tools: 10,
       workflow:
-        'read_codegraph_evidence → host AI mock simulation → generate_mock_flow_animation',
+        'read_codegraph_evidence → build_mock_animation begin/append/finish → localhost URL',
       simulation:
-        'Host AI authors source-backed statement events with mock values; server validates and renders.',
+        'Host AI supplies semantic steps directly via MCP; server owns IDs, call stack, state snapshots, chunking, files and rendering. Never create or execute helper scripts or payload files.',
       continuation:
-        '2000 events per chunk; submit subsequent chunks with continuationOf',
+        'Server automatically splits builds into stored chunks at finish',
+      scriptFilesRequired: false,
+      builderLimits: {
+        operationsPerBatch: 100,
+        eventsPerBuild: 20000,
+        snapshotBytes: 40 * 1024 * 1024,
+      },
     };
   }
   async start(raw: unknown) {

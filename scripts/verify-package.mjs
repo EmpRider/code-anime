@@ -105,7 +105,7 @@ try {
   });
   await client.connect(transport);
   const tools = await client.listTools();
-  assert.equal(tools.tools.length, 9);
+  assert.equal(tools.tools.length, 10);
   const submission = await client.callTool({
     name: 'visualize_code_flow',
     arguments: {
@@ -161,43 +161,68 @@ try {
     );
     const evidence = JSON.parse(evidenceResult.content[0].text);
     assert.match(evidence.text, /input.trim/);
-    const result = await client.callTool({
-      name: 'generate_mock_flow_animation',
-      arguments: {
-        projectRoot: project,
-        endpoint: 'Generator.normalize',
-        evidenceIds: [evidence.evidenceId],
-        scenario: { input: '  ACH  ' },
-        coverage: 'Mock trim call result',
-        events: [
-          {
-            id: 'trim-1',
-            kind: 'transform',
-            symbolId: 'Generator.normalize',
-            label: 'trim input',
-            callId: 'normalize-1',
-            evidenceIds: [evidence.evidenceId],
-            source: { file: 'Generator.kt', line: 3, endLine: 3 },
-            inputs: { receiver: '  ACH  ' },
-            result: 'ACH',
-            before: { result: null },
-            after: { result: 'ACH' },
-            values: {},
-            locals: { input: '  ACH  ' },
-            stack: ['normalize-1'],
-            certainty: 'mock',
-          },
-        ],
-      },
+    const call = async (arguments_) => {
+      const response = await client.callTool({
+        name: 'build_mock_animation',
+        arguments: arguments_,
+      });
+      assert.notEqual(response.isError, true, JSON.stringify(response));
+      return JSON.parse(response.content[0].text);
+    };
+    const build = await call({
+      action: 'begin',
+      projectRoot: project,
+      endpoint: 'Generator.normalize',
+      evidenceIds: [evidence.evidenceId],
+      scenario: { input: '  ACH  ' },
     });
-    assert.notEqual(result.isError, true, JSON.stringify(result));
-    session = JSON.parse(result.content[0].text);
+    await call({
+      action: 'append',
+      buildId: build.buildId,
+      batchId: 'one',
+      expectedEventCount: 0,
+      operations: [
+        {
+          kind: 'enter',
+          symbol: 'Generator.normalize',
+          label: 'Bind input',
+          source: { file: 'Generator.kt', line: 3, endLine: 3 },
+          inputs: { input: '  ACH  ' },
+        },
+        {
+          kind: 'transform',
+          label: 'trim input',
+          line: 3,
+          inputs: { receiver: '  ACH  ' },
+          result: 'ACH',
+        },
+        {
+          kind: 'return',
+          label: 'Return trimmed value',
+          line: 3,
+          result: 'ACH',
+        },
+      ],
+    });
+    session = await call({
+      action: 'finish',
+      buildId: build.buildId,
+      coverage: 'Mock trim call and return',
+      complete: true,
+    });
     const data = await (
       await fetch(new URL('/api/flow/' + session.sessionId, session.url))
     ).json();
-    assert.equal(data.trace.events[0].result, 'ACH');
-    assert.equal(data.steps[0].dtoFields.result, 'ACH');
+    assert.equal(data.trace.events[1].result, 'ACH');
+    assert.equal(data.steps[1].dtoFields.result, 'ACH');
+    assert.deepEqual(data.trace.events[2].stack, []);
+    const { readdir } = await import('node:fs/promises');
+    assert.deepEqual(
+      (await readdir(project)).filter((name) => !name.startsWith('.')).sort(),
+      ['Generator.kt', 'main.ts'],
+    );
   }
+
   const blocked = await client.callTool({
     name: 'generate_mock_flow_animation',
     arguments: {

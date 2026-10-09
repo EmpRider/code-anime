@@ -57,7 +57,7 @@ function selectedTarget(target: string) {
     : { symbol: target };
 }
 async function connect(input: AnalysisInput, signal: AbortSignal) {
-  const client = new Client({ name: 'code-anime', version: '0.4.0' });
+  const client = new Client({ name: 'code-anime', version: '0.4.1' });
   const transport = new StdioClientTransport({
     command: process.env.CODE_ANIME_CODEGRAPH_COMMAND || 'codegraph',
     args: ['serve', '--mcp', '--path', input.projectRoot],

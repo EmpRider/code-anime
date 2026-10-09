@@ -1,6 +1,6 @@
 # CodeGraph evidence and AI simulation
 
-Code Anime 0.4.0 uses CodeGraph for source discovery/retrieval and the host AI for mock execution. No built-in language parser or application executor exists.
+Code Anime 0.4.1 uses CodeGraph for source discovery/retrieval and the host AI for mock execution. No built-in language parser or application executor exists.
 
 ## Native connection
 
@@ -14,9 +14,9 @@ The installed CLI may use its own daemon/proxy lifecycle. Code Anime does not di
 
 The host reads retrieved source and simulates the selected scenario, including library operations like trim/min from evidenced call sites, assignments, helpers, objects, branches and loops. Language-standard operations do not require indexed library internals. Unsupported semantics remain unresolved. This produces simulated execution order and values, not live runtime data.
 
-Each event includes a unique event ID, invocation ID, stack/local snapshots, source reference and receipt IDs. Transforms/assignments/mutations include before/after. Optional inputs, result, objectId and origins show data propagation. Every call iteration is independent even when it reuses a symbol definition.
+The host sends compact operations to the MCP builder. The server creates each event with a unique event ID, invocation ID, stack/local/object snapshots, source reference and receipt IDs. Transforms/assignments/mutations include before/after. Optional inputs, result, objectId and origins show data propagation. Every call iteration is independent even when it reuses a symbol definition.
 
-2,000-event/8-MiB chunks link through continuationOf, keeping scenario inputs and unique IDs. Values are not recomputed by the player or server; changed inputs require the host AI to regenerate the scenario. Proposed full scenarios reference a baseline session for comparison.
+The builder automatically splits completed traces into bounded storage chunks linked through continuationOf, keeping scenario inputs and unique IDs. Agents must not create scripts or JSON files to construct these chunks. Values are not recomputed by the player or server; changed inputs require the host AI to regenerate the scenario. Proposed full scenarios reference a baseline session for comparison.
 
 ## Optional structural jobs and bridge
 

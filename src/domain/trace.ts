@@ -33,6 +33,7 @@ export const eventSchema = z.object({
   after: z.record(z.unknown()).optional(),
   objectId: z.string().optional(),
   origins: z.record(z.string()).optional(),
+  objects: z.record(z.record(z.unknown())).optional(),
   locals: z.record(z.unknown()).optional(),
   snippet: z.string().max(800).optional(),
   stack: z.array(z.string()),

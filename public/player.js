@@ -118,13 +118,21 @@ function render() {
     $('fields').replaceChildren();
     $('operation').textContent = '';
     $('origins').textContent = '';
-    for (const id of ['stack', 'locals', 'source', 'snippet', 'certainty'])
+    for (const id of [
+      'stack',
+      'locals',
+      'source',
+      'snippet',
+      'certainty',
+      'objects',
+    ])
       $(id).textContent = '';
     return;
   }
   const state = replayState(flow.trace?.events ?? [], cursor);
   $('stack').textContent = JSON.stringify(state.stack, null, 2);
   $('locals').textContent = JSON.stringify(state.locals, null, 2);
+  $('objects').textContent = JSON.stringify(state.objects, null, 2);
   const event = state.event;
   $('certainty').textContent = event
     ? event.certainty + ' · ' + (event.note ?? '')

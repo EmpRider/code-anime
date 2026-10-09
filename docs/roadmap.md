@@ -1,5 +1,11 @@
 # Roadmap
 
+## 0.4.1 server-owned animation construction
+
+- Tool-only begin/append/finish workflow; no generated helper scripts or payload files.
+- Server-managed IDs, frames, complete local/object snapshots and automatic chunking.
+- Atomic, retryable batches; finalization rollback and one localhost URL.
+
 ## 0.4.0 MVP restoration
 
 - CodeGraph-first source retrieval with paging and project-scoped evidence receipts.

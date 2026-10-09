@@ -6,5 +6,6 @@ export function replayState(events, cursor) {
     event,
     stack: [...(event?.stack ?? [])],
     locals: structuredClone(event?.locals ?? {}),
+    objects: structuredClone(event?.objects ?? {}),
   };
 }
