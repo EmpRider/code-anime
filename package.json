@@ -1,6 +1,6 @@
 {
   "name": "@empirerider/code-anime",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "CodeGraph-grounded mock execution and value animation for AI agents through MCP",
   "type": "module",
   "engines": {

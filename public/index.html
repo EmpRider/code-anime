@@ -3,77 +3,340 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Code Anime · Flow player</title>
+    <title>Code Anime · Execution studio</title>
     <link rel="stylesheet" href="/styles.css" />
     <script type="module" src="/player.js"></script>
   </head>
   <body>
+    <header class="app-header">
+      <a class="brand" href="/" aria-label="Code Anime home"
+        ><span class="brand-icon">▸</span>code<span>anime</span
+        ><span class="studio-label">EXECUTION STUDIO</span></a
+      >
+      <div class="header-actions">
+        <span class="local-badge"><i></i> Local session</span
+        ><button
+          id="help"
+          class="icon-button"
+          aria-label="Show keyboard shortcuts"
+          title="Keyboard shortcuts"
+        >
+          ?</button
+        ><button
+          id="export"
+          class="quiet-button"
+          title="Download the current trace as JSON"
+        >
+          ↓ Export trace
+        </button>
+      </div>
+    </header>
     <main>
-      <header>
-        <p class="eyebrow">CODE ANIME / LOCAL FLOW PLAYER</p>
-        <h1 id="title">Loading flow…</h1>
-        <p>
-          Explore code-backed scenario events. Values are simulated, not a live
-          execution trace.
-        </p>
-      </header>
-      <p id="coverage"></p>
-      <nav aria-label="Trace chunks">
-        <a id="previous-chunk" hidden>Previous chunk</a>
-        <a id="next-chunk" hidden>Next chunk</a>
-      </nav>
-      <select id="variant" aria-label="Scenario comparison" hidden>
-        <option value="proposed">Proposed scenario</option>
-        <option value="baseline">Baseline scenario</option>
-      </select>
-      <section class="toolbar" aria-label="Playback controls">
-        <button id="previous">Previous</button><button id="play">Play</button
-        ><button id="next">Next</button><button id="restart">Restart</button
-        ><label
-          >Speed
-          <select id="speed">
-            <option value="1600">Slow</option>
-            <option value="900" selected>Normal</option>
-            <option value="450">Fast</option>
-          </select></label
-        ><label class="timeline"
-          >Step
-          <input id="timeline" type="range" min="0" max="0" value="0" /></label
-        ><output id="progress">0 / 0</output>
-      </section>
-      <p id="status" role="status" aria-live="polite"></p>
-      <details>
-        <summary>Analysis details and limitations</summary>
-        <pre id="diagnostics"></pre>
-      </details>
-      <section id="canvas" aria-label="Flow modules"></section>
-      <section class="inspector">
-        <h2 id="packet-title">Select a step</h2>
-        <p id="route"></p>
-        <p id="certainty"></p>
-        <pre id="operation"></pre>
-        <div id="fields" aria-label="Object fields and changes"></div>
-        <pre id="origins" aria-label="Value origins"></pre>
-        <div class="trace-grid">
-          <section>
-            <h3>Call stack</h3>
-            <pre id="stack">[]</pre>
-          </section>
-          <section>
-            <h3>Local scenario state</h3>
-            <pre id="locals">{}</pre>
-          </section>
-          <section>
-            <h3>Object state</h3>
-            <pre id="objects">{}</pre>
-          </section>
-          <section>
-            <h3>Source evidence</h3>
-            <p id="source"></p>
-            <pre id="snippet"></pre>
-          </section>
+      <section class="session-header">
+        <div class="session-heading">
+          <p class="eyebrow">WORKSPACE / FLOW EXPLORER</p>
+          <h1 id="title">Loading your flow…</h1>
+          <p class="subtitle">
+            Follow the logic. Watch the values change.
+            <span class="mock-badge">Simulated values</span>
+          </p>
+        </div>
+        <div class="session-stats">
+          <div><strong id="stat-events">—</strong><span>STEPS</span></div>
+          <div><strong id="stat-symbols">—</strong><span>SYMBOLS</span></div>
+          <div>
+            <strong id="stat-changes">—</strong><span>STATE CHANGES</span>
+          </div>
         </div>
       </section>
+      <section
+        id="help-panel"
+        hidden
+        class="help-panel"
+        aria-label="Keyboard shortcuts"
+      >
+        <strong>Keyboard shortcuts</strong
+        ><span><kbd>Space</kbd> Play / pause</span
+        ><span><kbd>←</kbd> <kbd>→</kbd> Step</span
+        ><span><kbd>Home</kbd> Restart</span
+        ><span><kbd>End</kbd> Last step</span><span><kbd>/</kbd> Search</span
+        ><span><kbd>B</kbd> Bookmark</span
+        ><button id="close-help" aria-label="Close shortcuts">×</button>
+      </section>
+      <div class="workspace">
+        <aside class="panel trace-panel" aria-label="Execution timeline">
+          <div class="panel-heading">
+            <h2>Execution trace</h2>
+            <span id="trace-count" class="count-badge">0</span>
+          </div>
+          <div class="trace-search">
+            <span aria-hidden="true">⌕</span
+            ><input
+              id="search"
+              type="search"
+              placeholder="Search steps, files, values…"
+              aria-label="Search execution steps"
+              autocomplete="off"
+            /><kbd>/</kbd>
+          </div>
+          <div class="trace-filters">
+            <select id="kind-filter" aria-label="Filter event type">
+              <option value="all">All event types</option>
+              <option value="changes">State changes</option>
+              <option value="calls">Calls &amp; returns</option>
+              <option value="control">Branches &amp; loops</option>
+              <option value="uncertain">
+                Assumptions &amp; unknowns
+              </option></select
+            ><button
+              id="bookmarks-only"
+              class="icon-button"
+              title="Show bookmarked steps"
+              aria-label="Show bookmarked steps"
+              aria-pressed="false"
+            >
+              ☆
+            </button>
+          </div>
+          <div id="event-list" class="event-list"></div>
+          <p id="no-events" hidden class="empty-message">
+            No matching steps. Try a different search or filter.
+          </p>
+          <div class="trace-footer">
+            <span class="tiny-dot"></span>Ordered by simulated execution
+          </div>
+        </aside>
+        <section class="center-column" aria-label="Animation and source">
+          <section class="panel flow-panel">
+            <div class="panel-heading">
+              <div class="heading-with-dot">
+                <span class="tiny-dot violet"></span>
+                <h2>Live flow</h2>
+                <span id="event-kind" class="kind-badge">READY</span>
+              </div>
+              <div class="flow-actions">
+                <select id="view-mode" aria-label="Diagram view">
+                  <option value="focus">Focus view</option>
+                  <option value="map">Full map</option></select
+                ><button
+                  id="center-view"
+                  class="icon-button"
+                  aria-label="Center active flow"
+                  title="Center active flow"
+                >
+                  ⌖
+                </button>
+              </div>
+            </div>
+            <div class="flow-context">
+              <span id="active-path">Your execution, one step at a time</span
+              ><label class="follow-label"
+                ><input id="follow" type="checkbox" checked />Follow</label
+              >
+            </div>
+            <section
+              id="canvas"
+              class="focus"
+              aria-label="Animated flow diagram"
+            ></section>
+            <div class="flow-legend">
+              <span><i class="legend-node"></i>Active symbol</span
+              ><span><i class="legend-change"></i>Changed value</span
+              ><span><i class="legend-assumed"></i>Assumed / unresolved</span>
+            </div>
+          </section>
+          <section class="panel source-panel">
+            <div class="panel-heading">
+              <h2>Source spotlight</h2>
+              <span id="source-line" class="count-badge">—</span>
+            </div>
+            <p id="source" class="source-path">
+              Select a step to inspect its source
+            </p>
+            <pre id="snippet" class="source-code"></pre>
+            <p id="source-empty" class="empty-message">
+              Source excerpts appear here as you step through the flow.
+            </p>
+          </section>
+        </section>
+        <aside class="panel inspector" aria-label="Step inspector">
+          <div class="panel-heading">
+            <h2>Step inspector</h2>
+            <button
+              id="breakpoint"
+              class="icon-button"
+              title="Pause playback at this step"
+              aria-label="Toggle playback breakpoint"
+              aria-pressed="false"
+            >
+              ●</button
+            ><button
+              id="bookmark"
+              class="icon-button"
+              title="Bookmark current step (B)"
+              aria-label="Bookmark current step"
+              aria-pressed="false"
+            >
+              ☆
+            </button>
+          </div>
+          <div class="inspector-summary">
+            <span id="step-number" class="eyebrow">NO STEP SELECTED</span>
+            <h3 id="packet-title">Ready to explore</h3>
+            <p id="route"></p>
+            <p id="certainty"></p>
+          </div>
+          <div class="tabs" role="tablist" aria-label="Inspector views">
+            <button
+              id="tab-values"
+              class="tab active"
+              role="tab"
+              aria-selected="true"
+              aria-controls="panel-values"
+              data-tab="values"
+            >
+              Values</button
+            ><button
+              id="tab-state"
+              class="tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="panel-state"
+              data-tab="state"
+              tabindex="-1"
+            >
+              State</button
+            ><button
+              id="tab-context"
+              class="tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="panel-context"
+              data-tab="context"
+              tabindex="-1"
+            >
+              Context
+            </button>
+          </div>
+          <section
+            id="panel-values"
+            role="tabpanel"
+            aria-labelledby="tab-values"
+            class="inspector-content"
+          >
+            <div class="section-caption">
+              <span>DATA SNAPSHOT</span
+              ><label
+                ><input type="checkbox" id="changes-only" />Changes only</label
+              >
+            </div>
+            <pre id="operation" class="operation"></pre>
+            <div
+              id="fields"
+              class="value-tree"
+              aria-label="Object fields and changes"
+            ></div>
+            <p id="values-empty" class="empty-message">
+              Press Play or select a step to see inputs, outputs and value
+              changes.
+            </p>
+            <div class="section-caption">VALUE ORIGINS</div>
+            <pre id="origins"></pre>
+          </section>
+          <section
+            id="panel-state"
+            hidden
+            role="tabpanel"
+            aria-labelledby="tab-state"
+            class="inspector-content"
+          >
+            <div class="section-caption">CALL STACK</div>
+            <ol id="frame-list" class="frame-list"></ol>
+            <div class="section-caption">LOCAL VARIABLES</div>
+            <div id="local-tree" class="value-tree"></div>
+            <div class="section-caption">SHARED OBJECTS</div>
+            <div id="object-tree" class="value-tree"></div>
+            <details class="raw-state">
+              <summary>Raw state snapshots</summary>
+              <pre id="stack"></pre>
+              <pre id="locals"></pre>
+              <pre id="objects"></pre>
+            </details>
+          </section>
+          <section
+            id="panel-context"
+            hidden
+            role="tabpanel"
+            aria-labelledby="tab-context"
+            class="inspector-content"
+          >
+            <div class="section-caption">SCENARIO COVERAGE</div>
+            <p id="coverage"></p>
+            <select id="variant" aria-label="Scenario comparison" hidden>
+              <option value="proposed">Proposed scenario</option>
+              <option value="baseline">Baseline scenario</option>
+            </select>
+            <details>
+              <summary>Evidence &amp; diagnostics</summary>
+              <pre id="diagnostics"></pre>
+            </details>
+            <nav class="chunk-links" aria-label="Trace chunks">
+              <a id="previous-chunk" hidden>← Previous chunk</a
+              ><a id="next-chunk" hidden>Next chunk →</a>
+            </nav>
+          </section>
+        </aside>
+      </div>
     </main>
+    <footer class="playback-dock">
+      <div class="transport">
+        <button
+          id="restart"
+          class="icon-button"
+          title="Restart (Home)"
+          aria-label="Restart"
+        >
+          ↺</button
+        ><button
+          id="previous"
+          class="icon-button"
+          title="Previous step (←)"
+          aria-label="Previous step"
+        >
+          ▏◂</button
+        ><button id="play" class="play-button">Play</button
+        ><button
+          id="next"
+          class="icon-button"
+          title="Next step (→)"
+          aria-label="Next step"
+        >
+          ▸▕
+        </button>
+      </div>
+      <div class="timeline-block">
+        <div class="timeline-caption">
+          <span id="playback-label">Ready when you are</span
+          ><output id="progress">0 / 0</output>
+        </div>
+        <input
+          id="timeline"
+          type="range"
+          min="0"
+          max="0"
+          value="0"
+          aria-label="Execution step"
+        />
+      </div>
+      <label class="speed-label"
+        >Speed<select id="speed">
+          <option value="1800">0.5×</option>
+          <option value="900" selected>1×</option>
+          <option value="450">2×</option>
+          <option value="225">4×</option>
+        </select></label
+      >
+      <p id="status" role="status" aria-live="polite">Loading session…</p>
+    </footer>
   </body>
 </html>

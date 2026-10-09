@@ -59,7 +59,7 @@ export class VisualizationService {
   }
   capabilities() {
     return {
-      version: '0.4.1',
+      version: '0.5.0',
       languages: [],
       languageSupport: 'Determined by the configured CodeGraph provider',
       analysis: 'CodeGraph evidence only; no built-in source analysis',

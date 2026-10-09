@@ -4,20 +4,20 @@
 
 CodeGraph retrieves the active project's source and relationships. Your AI agent supplies source-grounded mock steps directly through MCP calls. Code Anime assembles the trace, manages frames and snapshots, and animates objects with their fields, before/after changes and source locations in a localhost player.
 
-Version **0.4.1** moves trace construction into the MCP server. No agent-generated Python/JS helper, payload JSON file, custom player, or shell command is part of the visualization workflow. CodeGraph is required for every language; missing installation or index stops the process. Repository code, databases and HTTP effects are not executed. Values are labeled as simulated, assumed, unresolved or proposed.
+Version **0.5.0** adds a modern execution studio to the server-owned animation workflow. No agent-generated Python/JS helper, payload JSON file, custom player, or shell command is part of the visualization workflow. CodeGraph is required for every language; missing installation or index stops the process. Repository code, databases and HTTP effects are not executed. Values are labeled as simulated, assumed, unresolved or proposed.
 
 ## Connect the MCP
 
 Requirements: Node.js 22+, CodeGraph installed and initialized/indexed for the active project, and an AI host that supports MCP and skills.
 
-After version 0.4.1 is published to npm, a typical host configuration is:
+After version 0.5.0 is published to npm, a typical host configuration is:
 
 ```json
 {
   "mcpServers": {
     "code-anime": {
       "command": "npx",
-      "args": ["-y", "@empirerider/code-anime@0.4.1"],
+      "args": ["-y", "@empirerider/code-anime@0.5.0"],
       "env": { "CODE_ANIME_PORT": "0" }
     }
   }
@@ -43,6 +43,21 @@ Transforms such as trim/min, assignments, branch decisions and loop iterations r
 For a visual feature plan, begin with baselineSessionId and append a proposed scenario. Use status/cancel for an unfinished build. Retries with the same batchId/body do not duplicate events. Server limits produce explicit errors, never instructions to create a script.
 
 See the [tool contract](skills/code-anime/references/tool-contract.md) for payloads. The server checks receipt membership, project identity and event structure; it does not independently prove AI calculations correct. Missing source/uncertain semantics must be marked unresolved rather than invented.
+
+## Execution studio
+
+The player keeps a searchable execution timeline, live flow, source spotlight and step inspector together. It takes interaction cues from [VisualJS](https://www.visualjs.in/visualizer) while replaying CodeGraph-grounded mock traces across supported source languages.
+
+- Click a step or scrub the timeline; Previous restores the recorded stack, locals and shared objects.
+- Use Focus view for the current transition or Full map to browse all symbols in this trace chunk.
+- Inspect nested object fields, before/after changes, inputs, return values and value origins. Filter to changes only.
+- Switch between Values, State (call stack, locals, shared objects), and Context (coverage, evidence, comparison and chunk navigation).
+- Search labels, files or values; filter event types and bookmark important steps.
+- Set a playback breakpoint with the red-dot button, or double-click a trace row. Autoplay pauses after displaying that step's recorded state. Press Play to continue. Breakpoints and bookmarks are session-local and reset on scenario switching.
+- Use Space for play/pause, arrow keys to step, Home/End to seek, / to search and B to bookmark when focus is outside an interactive control.
+- Export the current trace as JSON using the player's download button.
+
+Source spotlight displays the recorded excerpt and line range. Shared objects show recorded snapshots; the player does not infer missing heap references, closures or runtime effects. Replay fidelity depends on the submitted source-grounded operations and their stated coverage.
 
 ## Tools
 
