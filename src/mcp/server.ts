@@ -52,7 +52,7 @@ export function createMcpServer(
           projectRoot: string,
           target: string,
           scenario: object,
-          maxDepth: { type: 'integer', minimum: 1, maximum: 30 },
+          maxDepth: { type: 'integer', minimum: 1 },
           maxEvents: { type: 'integer', minimum: 10, maximum: 2000 },
         },
         ['projectRoot', 'target'],
@@ -85,7 +85,7 @@ export function createMcpServer(
         {
           sessionId: string,
           scenario: object,
-          maxDepth: { type: 'integer', minimum: 1, maximum: 30 },
+          maxDepth: { type: 'integer', minimum: 1 },
         },
         ['sessionId', 'scenario'],
       ),
@@ -185,6 +185,7 @@ export function createMcpServer(
                     'loop',
                     'await',
                     'throw',
+                    'catch',
                     'unresolved',
                     'plan',
                   ],
@@ -206,6 +207,10 @@ export function createMcpServer(
                 set: object,
                 unset: { type: 'array', items: string },
                 assignTo: string,
+                unwindTo: {
+                  type: ['string', 'null'],
+                  description: 'For throw only: retain this active callId and unwind its callees; null unwinds all frames. Omit to keep the stack, for example while executing finally blocks. Follow with catch and set to bind the exception in the handler.',
+                },
                 objectId: string,
                 fields: object,
                 unsetFields: { type: 'array', items: string },
@@ -264,6 +269,7 @@ export function createMcpServer(
                     'loop',
                     'await',
                     'throw',
+                    'catch',
                     'unresolved',
                     'plan',
                   ],
@@ -360,7 +366,7 @@ export function createMcpServer(
             .object({
               sessionId: z.string().uuid(),
               scenario: z.record(z.unknown()),
-              maxDepth: z.number().int().min(1).max(30).optional(),
+              maxDepth: z.number().int().min(1).optional(),
             })
             .strict()
             .parse(raw);

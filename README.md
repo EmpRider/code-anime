@@ -28,7 +28,7 @@ A repository push does not publish npm. To use the source build immediately, run
 
 Copy `skills/code-anime/` into your host's supported skill directory. Installing the npm package alone does not install the skill. Ask `/code-anime show ACH generation`, or ask to visualize any function or endpoint. The agent resolves the open workspace and supplies its path automatically.
 
-Code Anime launches `codegraph serve --mcp --path <active-project>` using the installed CLI. No additional bridge config is required. If CodeGraph is already indexed, continue; do not repeat installation/init. Set `CODE_ANIME_CODEGRAPH_COMMAND` only when the executable is not on PATH. The adapter is exercised against CodeGraph 1.6.2 with Kotlin on Linux; Windows has not been directly exercised in this workspace.
+Code Anime launches `codegraph serve --mcp --path <active-project>` using the installed CLI. No additional bridge config is required. If CodeGraph is already indexed, continue; do not repeat installation/init. Set `CODE_ANIME_CODEGRAPH_COMMAND` when the executable is not on PATH. For a bundled Node launcher on Windows, set this to its `node.exe` and set `CODE_ANIME_CODEGRAPH_ARGS` to a JSON array containing `--liftoff-only` and the absolute CodeGraph entry-point path. The adapter has been tested with indexed Kotlin using the installed CodeGraph 0.9.9 Windows bundle. It uses direct mode without detached daemons so provider processes close with each request. Provider versions that merge same-named definitions produce explicitly incomplete coverage rather than attributing another method's callees to the selected method.
 
 ## Default workflow
 
@@ -42,9 +42,19 @@ Transforms such as trim/min, assignments, branch decisions and loop iterations r
 
 For a visual feature plan, begin with baselineSessionId and append a proposed scenario. Use status/cancel for an unfinished build. Retries with the same batchId/body do not duplicate events. Server limits produce explicit errors, never instructions to create a script.
 
+Baseline and proposed executions can each span multiple stored chunks. A baseline ID from a later chunk resolves to the start of that run. The player loads each variant independently and remembers its playback position when switching; fetching prepared chunks does not invoke AI analysis. Mark changed operations as `proposed`, including changes that appear only in later chunks.
+
 See the [tool contract](skills/code-anime/references/tool-contract.md) for payloads. The server checks receipt membership, project identity and event structure; it does not independently prove AI calculations correct. Missing source/uncertain semantics must be marked unresolved rather than invented.
 
 ## Execution studio
+
+Exception paths use explicit semantic operations. A `throw` may supply
+`unwindTo` with an active call ID (from builder status) to retain that handler's
+frame and remove its callees, or `null` for an uncaught exception. Omitting it
+keeps the stack unchanged, allowing intervening `finally` statements to be
+represented. Follow with `catch` and `set` to bind the exception in the handler.
+These operations describe the AI-supplied simulation; they do not execute or
+infer language-specific exception rules.
 
 The player keeps a searchable execution timeline, live flow, source spotlight and step inspector together. It takes interaction cues from [VisualJS](https://www.visualjs.in/visualizer) while replaying CodeGraph-grounded mock traces across supported source languages.
 
@@ -82,14 +92,18 @@ Structural graph jobs remain available but are not the default execution animati
 | ------------------------------ | ---------------------- | --------------------------------------------------- |
 | `CODE_ANIME_PORT`              | `0`                    | Free localhost player port                          |
 | `CODE_ANIME_TEMP_DIR`          | OS temporary directory | Parent for isolated per-process sessions            |
+| `CODE_ANIME_SESSION_DIR`       | Unset                  | Optional restart-durable session directory (see below) |
 | `CODE_ANIME_PROJECT_ROOT`      | Per-request roots      | Optional project access boundary                    |
 | `CODE_ANIME_CODEGRAPH_COMMAND` | `codegraph`            | Optional native executable override                 |
+| `CODE_ANIME_CODEGRAPH_ARGS`    | `[]`                   | JSON array of launcher arguments before CLI arguments |
 | `CODE_ANIME_CODEGRAPH_CONFIG`  | Unset                  | Optional normalized bridge for structural job tools |
 | `CODE_ANIME_TTL_MS`            | `3600000`              | Session lifetime                                    |
 
-The builder accepts up to 100 operations/1 MiB per append, 20,000 events/40 MiB of snapshots per build, and ten retained builds with one-hour expiry. It splits storage chunks automatically. One-shot trace chunks accept 2,000 events and 8 MiB of request data; stored sessions are capped at 10 MiB, with 100 sessions per process. CodeGraph receipts last an hour and are capped at 200. Cached evidence responses are paged; oversized upstream results must be narrowed with file ranges. Report incomplete coverage explicitly and continue in chunks rather than silently truncating.
+The builder accepts up to 100 operations/1 MiB per append, server-disk-backed snapshots without a fixed total event or byte cap, and ten retained builds with one-hour expiry. It splits storage chunks automatically. One-shot trace chunks accept 2,000 events and 8 MiB of request data; stored sessions are capped at 10 MiB, with 100 sessions per process. CodeGraph receipts last an hour and are capped at 200. Cached evidence responses are paged; oversized upstream results must be narrowed with file ranges. Report incomplete coverage explicitly and continue in chunks rather than silently truncating.
 
-The player binds to `127.0.0.1`. Sessions use UUIDs, quotas, expiry and isolated directories; graceful shutdown removes this process's files. Force-kill/power loss may leave temporary directories; automatic orphan recovery remains future reliability work. Remote/container hosts need supported port forwarding.
+The player binds to `127.0.0.1`. Sessions use UUIDs, quotas and expiry. By default each process writes to an isolated temporary directory, removed on clean shutdown. Set `CODE_ANIME_SESSION_DIR` to an absolute, writable, private directory to keep finalized animations and continuation/comparison chains across normal server restarts. `CODE_ANIME_TEMP_DIR` still controls the parent of ephemeral storage when persistence is not configured. For example on PowerShell: `$env:CODE_ANIME_SESSION_DIR = "$HOME\\.code-anime\\sessions"`. Start the server with the same setting after a restart; the browser URL uses the new localhost port (`CODE_ANIME_PORT=0` selects a free port), but the saved session UUID remains valid. Old URLs with the previous port won't work.
+
+On startup, persistent mode reconstructs session indexes, removes incomplete `.json.tmp` writes, deletes sessions older than `CODE_ANIME_TTL_MS` (default one hour), and quarantines corrupt or oversized session files in `.code-anime-corrupt` for manual inspection. Quarantined files are not served and are not automatically deleted. The 10 MiB/session and 100-session limits still apply, including to recovered sessions; when full, delete sessions or wait for expiry. The session directory is exclusive to one running process through `.code-anime.lock`. If a process crashes, verify it has stopped **before** manually removing its stale lock; the server will not guess that another process is dead. Keep the directory private because sessions may contain source snippets and simulated values. Remote/container hosts need supported port forwarding.
 
 ## Development and demo
 
@@ -101,6 +115,8 @@ npm run package:check
 ```
 
 The offline demo renders bundled mock data without analyzing a codebase. For the real CodeGraph integration tests and packed CLI smoke test, set `CODE_ANIME_TEST_CODEGRAPH` to the installed executable path. Tests cover dependency failure, mock transform/state contracts, continuation, comparison, safe object rendering and replay restoration.
+
+Run `npm run test:browser` for browser layout and interaction checks at desktop, tablet, and phone sizes. Windows uses installed Microsoft Edge; other platforms use Playwright Chromium (`npx playwright install chromium`). `CODE_ANIME_BROWSER_CHANNEL` overrides the browser channel. Tests cover viewport overflow, accessible playback controls, mobile panel switching without changing the selected event, state inspection, console scrolling, search, and keyboard help. Screenshots are saved under the ignored `test-results` directory.
 
 ## Structure
 

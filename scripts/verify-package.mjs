@@ -78,11 +78,19 @@ try {
       join(project, 'Generator.kt'),
       'class Generator {\n fun generate(input: String): String { return normalize(input) }\n fun normalize(input: String): String { return input.trim() }\n}\n',
     );
-    execFileSync(nativeCommand, ['init', project], {
-      env: { ...process.env, CODEGRAPH_TELEMETRY: '0' },
-      stdio: 'pipe',
-      timeout: 60000,
-    });
+    execFileSync(
+      nativeCommand,
+      [
+        ...JSON.parse(process.env.CODE_ANIME_CODEGRAPH_ARGS || '[]'),
+        'init',
+        project,
+      ],
+      {
+        env: { ...process.env, CODEGRAPH_TELEMETRY: '0' },
+        stdio: 'pipe',
+        timeout: 60000,
+      },
+    );
   }
   client = new Client({ name: 'package-smoke', version: '1.0.0' });
   // Exercise the installed npm executable, not a development source file.

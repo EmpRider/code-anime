@@ -17,6 +17,8 @@ export const eventSchema = z.object({
     'loop',
     'await',
     'throw',
+    'catch',
+    'console',
     'unresolved',
     'plan',
   ]),
@@ -29,6 +31,7 @@ export const eventSchema = z.object({
   evidenceIds: z.array(z.string().uuid()).optional(),
   inputs: z.record(z.unknown()).optional(),
   result: z.unknown().optional(),
+  output: z.string().optional(),
   before: z.record(z.unknown()).optional(),
   after: z.record(z.unknown()).optional(),
   objectId: z.string().optional(),
@@ -48,6 +51,9 @@ export const traceSchema = z.object({
   target: z.string(),
   scenario: z.record(z.unknown()),
   events: z.array(eventSchema).max(2000),
+  // Exact on-disk source snapshots captured while the session is prepared.
+  // Keys match event.source.file, independent of the source language.
+  sourceFiles: z.record(z.string()).optional(),
   diagnostics: z.array(z.string()),
   truncated: z.boolean(),
   filesAnalyzed: z.number(),

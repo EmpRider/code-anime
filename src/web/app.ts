@@ -43,10 +43,24 @@ export function createWebApp(store: SessionStore) {
       res.status(404).json({ error: 'Session expired or not found' });
       return;
     }
-    const next = (await store.list?.())?.find(
-      (s) => s.flow.trace?.simulation?.previousSessionId === session.id,
-    );
-    res.json({ ...session.flow, ...(next ? { nextSessionId: next.id } : {}) });
+    const next = store.next
+      ? await store.next(session.id)
+      : (await store.list?.())?.find(
+          (s) => s.flow.trace?.simulation?.previousSessionId === session.id,
+        );
+    const baselineId = session.flow.baselineSessionId;
+    const baselineNext = baselineId
+      ? store.next
+        ? await store.next(baselineId)
+        : (await store.list?.())?.find(
+            (s) => s.flow.trace?.simulation?.previousSessionId === baselineId,
+          )
+      : undefined;
+    res.json({
+      ...session.flow,
+      ...(next ? { nextSessionId: next.id } : {}),
+      ...(baselineNext ? { baselineNextSessionId: baselineNext.id } : {}),
+    });
   });
   app.get('/flow/:id', (req, res) => {
     if (!sessionIdSchema.safeParse(req.params.id).success) {

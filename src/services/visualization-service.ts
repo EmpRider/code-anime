@@ -11,6 +11,7 @@ import {
 } from '../analysis/contract.js';
 import { traceSchema, type TraceEvent } from '../domain/trace.js';
 import type { Flow, SessionStore } from '../domain/flow.js';
+import { collectSourceFiles } from './source-catalog.js';
 
 export const analyzeSchema = z
   .object({
@@ -18,7 +19,7 @@ export const analyzeSchema = z
     projectRoot: z.string().min(1),
     target: z.string().min(1).max(200),
     scenario: z.record(z.unknown()).optional(),
-    maxDepth: z.number().int().min(1).max(30).optional(),
+    maxDepth: z.number().int().min(1).optional(),
     maxEvents: z.number().int().min(10).max(2000).optional(),
   })
   .strict();
@@ -82,7 +83,7 @@ export class VisualizationService {
         ? 'Configured normalized MCP bridge'
         : 'Launch installed codegraph serve --mcp --path <active project> automatically; no bridge config required.',
       limits: {
-        maxDepth: 30,
+        maxDepth: 'Unlimited by default; optional caller-configured depth boundary',
         providerTimeoutMs: 60000,
         events: 2000,
         concurrentJobs: 2,
@@ -97,8 +98,8 @@ export class VisualizationService {
       scriptFilesRequired: false,
       builderLimits: {
         operationsPerBatch: 100,
-        eventsPerBuild: 20000,
-        snapshotBytes: 40 * 1024 * 1024,
+        eventsPerBuild: 'No fixed total; batches are persisted on server disk',
+        snapshotBytesPerEvent: 3 * 1024 * 1024,
       },
     };
   }
@@ -158,6 +159,12 @@ export class VisualizationService {
       if (flow.trace!.projectRoot !== job.input.projectRoot)
         throw new Error('CodeGraph returned evidence for a different project');
       if (job.controller.signal.aborted) throw new Error('Analysis cancelled');
+      const sourceCatalog = await collectSourceFiles(
+        flow.trace!.projectRoot,
+        flow.trace!.events,
+      );
+      flow.trace!.sourceFiles = sourceCatalog.files;
+      flow.trace!.diagnostics.push(...sourceCatalog.diagnostics);
       const session = await this.store.create(flow);
       if (job.controller.signal.aborted) {
         await this.store.delete?.(session.id);

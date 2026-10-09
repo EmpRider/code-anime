@@ -27,7 +27,9 @@ function textOf(response: CallToolResult) {
 // Parse documented CodeGraph output only, never project source syntax.
 export function parseNodes(text: string): SymbolInfo[] {
   const results: SymbolInfo[] = [];
-  const sections = [...text.matchAll(/^\*\*(.+?)\*\* \([\w_]+\)\r?\n/gm)];
+  const sections = [
+    ...text.matchAll(/^(?:\*\*(.+?)\*\*|## (.+?)) \([\w_]+\)\r?\n/gm),
+  ];
   for (let i = 0; i < sections.length; i++) {
     const match = sections[i]!;
     const section = text.slice(
@@ -41,7 +43,7 @@ export function parseNodes(text: string): SymbolInfo[] {
       ...section.matchAll(/^- (.+?) \([\w_]+\):(\d+)(?: — .*|\s*)$/gm),
     ].map((m) => ({ name: m[1]!, line: Number(m[2]) }));
     results.push({
-      name: match[1]!,
+      name: (match[1] ?? match[2])!,
       file: location[1]!,
       line: Number(location[2]),
       snippet: snippet.slice(0, 800),
@@ -57,22 +59,34 @@ function selectedTarget(target: string) {
     : { symbol: target };
 }
 async function connect(input: AnalysisInput, signal: AbortSignal) {
+  const prefix: unknown = JSON.parse(
+    process.env.CODE_ANIME_CODEGRAPH_ARGS || '[]',
+  );
+  if (!Array.isArray(prefix) || prefix.some((arg) => typeof arg !== 'string'))
+    throw new Error(
+      'CODE_ANIME_CODEGRAPH_ARGS must be a JSON array of strings',
+    );
   const client = new Client({ name: 'code-anime', version: '0.5.0' });
   const transport = new StdioClientTransport({
     command: process.env.CODE_ANIME_CODEGRAPH_COMMAND || 'codegraph',
-    args: ['serve', '--mcp', '--path', input.projectRoot],
+    args: [...prefix, 'serve', '--mcp', '--path', input.projectRoot],
     cwd: input.projectRoot,
     env: {
       ...process.env,
       CODEGRAPH_MCP_TOOLS: 'status,node,callees,search,explore,files',
       CODEGRAPH_NO_WATCH: '1',
+      CODEGRAPH_NO_DAEMON: '1',
     },
     stderr: 'pipe',
   });
   // Drain provider logs without contaminating MCP stdout or accumulating memory.
   transport.stderr?.on('data', () => {});
+  let closing: Promise<void> | undefined;
+  // connect() can detach the client after a failed handshake; the transport
+  // still owns the spawned process and must always be closed explicitly.
+  const closeClient = () => (closing ??= transport.close());
   const abort = () => {
-    void client.close();
+    void closeClient().catch(() => {});
   };
   signal.addEventListener('abort', abort, { once: true });
   const timer = setTimeout(abort, 60000);
@@ -83,11 +97,9 @@ async function connect(input: AnalysisInput, signal: AbortSignal) {
       signal,
       timeout: 60000,
     });
-    for (const tool of [
-      'codegraph_status',
-      'codegraph_node',
-      'codegraph_callees',
-    ]) {
+    // Some versions hide status/callees for small repositories while still
+    // supporting their documented calls. Verify status by calling it below.
+    for (const tool of ['codegraph_node']) {
       if (!listed.tools.some((t) => t.name === tool))
         throw new Error(
           `CodeGraph tool ${tool} is unavailable. Initialize/index this project or update CodeGraph.`,
@@ -115,6 +127,7 @@ async function connect(input: AnalysisInput, signal: AbortSignal) {
       throw new Error(
         'CodeGraph index needs synchronization or belongs to a different worktree. Run codegraph sync for this project.',
       );
+    clearTimeout(timer); // Startup budget; individual requests retain their own timeout.
     return {
       client,
       call,
@@ -124,13 +137,13 @@ async function connect(input: AnalysisInput, signal: AbortSignal) {
       close: async () => {
         clearTimeout(timer);
         signal.removeEventListener('abort', abort);
-        await client.close();
+        await closeClient();
       },
     };
   } catch (error) {
     clearTimeout(timer);
     signal.removeEventListener('abort', abort);
-    await client.close().catch(() => {});
+    await closeClient().catch(() => {});
     throw new Error(
       `CodeGraph is required; analysis stopped. Verify installation and this project's index. ${error instanceof Error ? error.message : String(error)}`,
     );
@@ -143,8 +156,17 @@ export async function verifyNativeCodeGraph(input: AnalysisInput) {
 export async function analyzeNativeCodeGraph(
   input: AnalysisInput,
   signal: AbortSignal,
+  connectProvider: (
+    input: AnalysisInput,
+    signal: AbortSignal,
+  ) => Promise<
+    Pick<
+      Awaited<ReturnType<typeof connect>>,
+      'call' | 'status' | 'files' | 'close'
+    >
+  > = connect,
 ) {
-  const connection = await connect(input, signal);
+  const connection = await connectProvider(input, signal);
   try {
     const evidence: string[] = [connection.status];
     const getNode = async (target: Record<string, unknown>) => {
@@ -153,7 +175,11 @@ export async function analyzeNativeCodeGraph(
         includeCode: true,
       });
       evidence.push(text);
-      const nodes = parseNodes(text);
+      const nodes = parseNodes(text).filter(
+        (node) =>
+          (target.file === undefined || node.file === target.file) &&
+          (target.line === undefined || node.line === target.line),
+      );
       if (nodes.length > 1)
         throw new CandidateError(
           nodes.map((n) => ({
@@ -173,9 +199,16 @@ export async function analyzeNativeCodeGraph(
     const events: TraceEvent[] = [];
     const expanded = new Set<string>();
     let truncated = false;
+    const boundaries = new Set<string>();
+    const incomplete = (reason: string) => {
+      truncated = true;
+      boundaries.add(reason);
+    };
     let requests = 0;
-    const maxEvents = input.maxEvents ?? 1000;
-    const maxDepth = input.maxDepth ?? 12;
+    const maxEvents = input.maxEvents ?? 2000;
+    // Depth is unlimited by default. Any boundary must be caller-specified;
+    // the event budget and provider timeout remain resource safeguards.
+    const maxDepth = input.maxDepth ?? Infinity;
     const emit = (
       node: SymbolInfo,
       kind: 'enter' | 'call' | 'unresolved',
@@ -184,7 +217,7 @@ export async function analyzeNativeCodeGraph(
       note: string,
     ) => {
       if (events.length >= maxEvents) {
-        truncated = true;
+        incomplete(`Event budget ${maxEvents} reached before ${idOf(node)}.`);
         return;
       }
       events.push({
@@ -204,12 +237,10 @@ export async function analyzeNativeCodeGraph(
     const walk = async (node: SymbolInfo, stack: string[]) => {
       if (signal.aborted) throw new Error('Analysis cancelled');
       if (expanded.has(idOf(node))) return;
-      if (
-        stack.length >= maxDepth ||
-        events.length >= maxEvents ||
-        requests >= 100
-      ) {
-        truncated = true;
+      if (stack.length >= maxDepth || events.length >= maxEvents) {
+        incomplete(
+          `Traversal boundary at ${idOf(node)}: depth ${stack.length}/${maxDepth}, events ${events.length}/${maxEvents}.`,
+        );
         return;
       }
       expanded.add(idOf(node));
@@ -228,6 +259,10 @@ export async function analyzeNativeCodeGraph(
         limit: 100,
       });
       evidence.push(text);
+      if (/Aggregated results across \d+ symbols/i.test(text))
+        throw new Error(
+          'CodeGraph merged callees from different definitions; this provider cannot isolate the requested method',
+        );
       if (/no definition.*matches file/i.test(text))
         throw new Error('CodeGraph ignored the requested definition file');
       if (/distinct definitions/i.test(text)) {
@@ -266,7 +301,18 @@ export async function analyzeNativeCodeGraph(
         throw new Error(
           `Unsupported CodeGraph callee response: ${text.slice(0, 300)}`,
         );
-      if (/Showing \d+ of|… \+|truncated/i.test(text)) truncated = true;
+      const shown = text.match(/Showing (\d+) of (\d+)/i);
+      if (
+        (shown && Number(shown[1]) < Number(shown[2])) ||
+        /… \+|truncated/i.test(text)
+      )
+        incomplete(
+          `CodeGraph returned only part of the callees for ${idOf(node)}.`,
+        );
+      else if (links.length >= 100 && !shown)
+        incomplete(
+          `CodeGraph returned the requested 100-callee limit for ${idOf(node)}; additional relationships may exist.`,
+        );
       const children = [
         ...links,
         ...node.members
@@ -277,8 +323,10 @@ export async function analyzeNativeCodeGraph(
           .map((m) => ({ ...m, file: node.file, relation: 'member' })),
       ];
       for (const child of children) {
-        if (events.length >= maxEvents || requests >= 100) {
-          truncated = true;
+        if (events.length >= maxEvents) {
+          incomplete(
+            `Event budget ${maxEvents} reached while expanding ${idOf(node)}.`,
+          );
           break;
         }
         const stub: SymbolInfo = { ...child, snippet: '', members: [] };
@@ -290,9 +338,13 @@ export async function analyzeNativeCodeGraph(
           'Indexed relationship; order and runtime values are unknown',
         );
         if (path.length >= maxDepth) {
-          truncated = true;
+          incomplete(
+            `Depth budget ${maxDepth} prevented expansion of ${idOf(stub)}.`,
+          );
           continue;
         }
+        // Static graph expansion is per symbol. Recursion and repeated call
+        // relationships are represented, but never called observed execution.
         if (expanded.has(idOf(stub))) continue;
         requests++;
         try {
@@ -306,6 +358,9 @@ export async function analyzeNativeCodeGraph(
           await walk(detail, path);
         } catch (error) {
           if (signal.aborted) throw error;
+          incomplete(
+            `Could not expand ${idOf(stub)}: ${error instanceof Error ? error.message : 'Unresolved provider symbol'}`,
+          );
           emit(
             stub,
             'unresolved',
@@ -318,7 +373,15 @@ export async function analyzeNativeCodeGraph(
         }
       }
     };
-    await walk(root, []);
+    try {
+      await walk(root, []);
+    } catch (error) {
+      if (signal.aborted) throw error;
+      const reason =
+        error instanceof Error ? error.message : 'Provider traversal failed';
+      incomplete(`Could not finish traversal from ${idOf(root)}: ${reason}`);
+      emit(root, 'unresolved', [idOf(root)], {}, reason);
+    }
     const trace: Trace = {
       version: 2,
       provider: 'codegraph-native',
@@ -333,6 +396,7 @@ export async function analyzeNativeCodeGraph(
         'CodeGraph indexed relationship walkthrough, not runtime execution. Event order is traversal order; stacks are graph paths.',
         'Scenario inputs are retained for context; native CodeGraph does not simulate them. No runtime values are fabricated.',
         'sourceHash fingerprints provider responses, not independently read project files.',
+        ...boundaries,
       ],
       truncated,
       filesAnalyzed: connection.files,
@@ -340,7 +404,7 @@ export async function analyzeNativeCodeGraph(
     };
     if (truncated)
       trace.diagnostics.push(
-        'Depth, event, provider-output or 100-request budget reached; not a full codebase trace.',
+        'The configured depth, event resource budget, or provider-output boundary was reached; graph coverage is incomplete.',
       );
     return traceToFlow(trace, input.target);
   } finally {
@@ -359,7 +423,10 @@ export async function readNativeEvidence(
   const connection = await connect({ projectRoot, target: 'evidence' }, signal);
   try {
     const name = 'codegraph_' + tool;
-    if (!connection.tools.some((t) => t.name === name))
+    if (
+      !['callees', 'files'].includes(tool) &&
+      !connection.tools.some((t) => t.name === name)
+    )
       throw new Error(
         `Installed CodeGraph does not expose ${name}; use an available evidence tool or update CodeGraph.`,
       );

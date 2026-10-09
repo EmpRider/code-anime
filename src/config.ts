@@ -10,6 +10,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       .max(65535)
       .parse(env.CODE_ANIME_PORT ?? 0),
     tempRoot: env.CODE_ANIME_TEMP_DIR ?? tmpdir(),
+    persistentDirectory: env.CODE_ANIME_SESSION_DIR || undefined,
     ttlMs: z.coerce
       .number()
       .int()

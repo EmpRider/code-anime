@@ -281,3 +281,90 @@ test('studio search, bookmarks, keyboard tabs and breakpoints preserve replay st
     dom.window.close();
   }
 });
+
+test('source-first playback follows nested calls, restores parent locals, and rewinds output', async () => {
+  const [html, source] = await Promise.all([
+    readFile(new URL('../public/index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../public/player.js', import.meta.url), 'utf8'),
+  ]);
+  const aSource = 'class A {\n  method() {\n    new B().method2(10, 20);\n    const result = 30;\n    console.log(result);\n  }\n}';
+  const bSource = 'class B {\n  method2(a, b) {\n    const sum = a + b;\n    return sum;\n  }\n}';
+  const event = (kind, symbolId, callId, stack, file, line, locals, extras = {}) => ({
+    kind, symbolId, callId, stack, source: { file, line, endLine: line },
+    label: kind + ' ' + symbolId, locals, certainty: 'mock', values: {}, ...extras,
+  });
+  const events = [
+    event('enter', 'A.method', 'call-a', ['call-a'], 'A.ts', 2, { 'call-a': { x: 10 } }),
+    event('call', 'A.method', 'call-a', ['call-a'], 'A.ts', 3, { 'call-a': { x: 10 } }),
+    event('enter', 'B.method2', 'call-b', ['call-a', 'call-b'], 'B.ts', 2, { 'call-a': { x: 10 }, 'call-b': { a: 10, b: 20 } }, { parentCallId: 'call-a' }),
+    event('assign', 'B.method2', 'call-b', ['call-a', 'call-b'], 'B.ts', 3, { 'call-a': { x: 10 }, 'call-b': { a: 10, b: 20, sum: 30 } }, { after: { sum: 30 } }),
+    event('return', 'B.method2', 'call-b', ['call-a'], 'B.ts', 4, { 'call-a': { x: 10 } }, { result: 30 }),
+    event('assign', 'A.method', 'call-a', ['call-a'], 'A.ts', 4, { 'call-a': { x: 10, result: 30 } }, { after: { result: 30 } }),
+    event('console', 'A.method', 'call-a', ['call-a'], 'A.ts', 5, { 'call-a': { x: 10, result: 30 } }, { output: '30' }),
+    event('return', 'A.method', 'call-a', [], 'A.ts', 6, {}),
+  ];
+  const flow = {
+    endpoint: 'A.method',
+    trace: { events, sourceFiles: { 'A.ts': aSource, 'B.ts': bSource }, diagnostics: [] },
+    steps: events.map(e => ({ from: e.symbolId, to: e.symbolId, dtoName: e.label, dtoFields: e.after ?? {} })),
+  };
+  const dom = new JSDOM(html, { url: 'http://127.0.0.1/flow/test', runScripts: 'outside-only' });
+  try {
+    const { window } = dom;
+    const get = id => window.document.getElementById(id);
+    window.replayState = replayState;
+    window.fetch = async () => ({ ok: true, json: async () => flow });
+    window.matchMedia = () => ({ matches: true });
+    window.HTMLElement.prototype.scrollIntoView = () => {};
+    window.eval(source.replace(/^import .*;\r?\n/, ''));
+    for (let i = 0; i < 40 && get('progress').textContent !== '0 / 8'; i++)
+      await new Promise(r => setTimeout(r, 5));
+    assert.equal(get('flow-panel').id, 'flow-panel');
+    assert.equal(get('toggle-flow').getAttribute('aria-expanded'), 'false');
+    get('toggle-flow').click();
+    assert.equal(get('toggle-flow').getAttribute('aria-expanded'), 'true');
+    get('toggle-flow').click();
+    get('next').click();
+    assert.equal(get('source').textContent, 'A.ts');
+    assert.equal(get('snippet').querySelector('.executing-line').dataset.line, '2');
+    get('next').click();
+    get('step-over').click();
+    assert.equal(get('progress').textContent, '6 / 8');
+    assert.equal(get('source').textContent, 'A.ts');
+    get('timeline').value = '3';
+    get('timeline').dispatchEvent(new window.Event('input'));
+    assert.equal(get('source').textContent, 'B.ts');
+    assert.equal(get('snippet').querySelector('.executing-line').dataset.line, '2');
+    assert.match(get('local-tree').textContent, /a: 10/);
+    assert.doesNotMatch(get('local-tree').textContent, /x: 10/);
+    get('source-stack').querySelector('button').click();
+    assert.equal(get('source').textContent, 'A.ts');
+    assert.match(get('local-tree').textContent, /x: 10/);
+    assert.doesNotMatch(get('local-tree').textContent, /a: 10/);
+    get('follow').click();
+    assert.equal(get('source').textContent, 'B.ts');
+    get('next').click();
+    assert.equal(get('snippet').querySelector('.executing-line').dataset.line, '3');
+    get('breakpoint').click();
+    assert.equal(get('snippet').querySelector('.executing-line').classList.contains('has-breakpoint'), true);
+    get('next').click();
+    get('next').click();
+    assert.equal(get('source').textContent, 'A.ts');
+    assert.equal(get('snippet').querySelector('.executing-line').dataset.line, '4');
+    assert.match(get('local-tree').textContent, /result: 30/);
+    get('next').click();
+    assert.equal(get('console-output').textContent, '30');
+    get('previous').click();
+    assert.equal(get('console-output').textContent, '');
+    assert.equal(get('source').textContent, 'A.ts');
+    // Re-rendering must retain the source editor with unchanged file and line.
+    get('tab-state').click();
+    assert.equal(get('snippet').querySelectorAll('.code-row').length, aSource.split('\n').length);
+    get('next').click();
+    get('step-out').click();
+    assert.equal(get('progress').textContent, '8 / 8');
+    assert.equal(get('frame-list').children.length, 0);
+  } finally {
+    dom.window.close();
+  }
+});

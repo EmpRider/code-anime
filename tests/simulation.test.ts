@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { SimulationService } from '../src/services/simulation-service.js';
 import { FileSessionStore } from '../src/storage/file-session-store.js';
 import type { TraceEvent } from '../src/domain/trace.js';
@@ -18,6 +20,8 @@ const code = `class Service {
 }`;
 
 test('CodeGraph receipts gate full mock state, continuation and proposed comparison', async () => {
+  const projectRoot = await mkdtemp(join(tmpdir(), 'code-anime-simulation-'));
+  await writeFile(join(projectRoot, 'Service.kt'), code);
   const store = await FileSessionStore.open(tmpdir(), {
     ttlMs: 60000,
     maxSessions: 20,
@@ -35,7 +39,7 @@ test('CodeGraph receipts gate full mock state, continuation and proposed compari
   );
   try {
     const evidence = await service.read({
-      projectRoot: '/project',
+      projectRoot,
       tool: 'node',
       arguments: { symbol: 'Service.run' },
       limit: 100,
@@ -44,7 +48,7 @@ test('CodeGraph receipts gate full mock state, continuation and proposed compari
     let offset = evidence.nextOffset;
     while (offset !== null) {
       const page = await service.read({
-        projectRoot: '/project',
+        projectRoot,
         evidenceId: evidence.evidenceId,
         offset,
         limit: 100,
@@ -157,7 +161,7 @@ test('CodeGraph receipts gate full mock state, continuation and proposed compari
       }),
     ];
     const payload = {
-      projectRoot: '/project',
+      projectRoot,
       endpoint: 'Service.run',
       scenario: { input: '  ALICE  ', count: 2 },
       evidenceIds: [evidence.evidenceId],
@@ -254,6 +258,7 @@ test('CodeGraph receipts gate full mock state, continuation and proposed compari
   } finally {
     service.close();
     await store.close();
+    await rm(projectRoot, { recursive: true, force: true });
   }
 });
 

@@ -69,11 +69,32 @@ test('storage enforces byte limit and expiry', async () => {
     await short.close();
   }
 });
+
+test('quota and latest lookup avoid loading unrelated session payloads', async () => {
+  const store = await FileSessionStore.open(tmpdir(), options);
+  try {
+    await store.create(flow);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const read = store.get.bind(store);
+    const reads: string[] = [];
+    store.get = async (id) => { reads.push(id); return read(id); };
+    const latest = await store.create(flow);
+    assert.deepEqual(reads, [], 'quota check must use metadata only');
+    assert.equal((await store.latest())?.id, latest.id);
+    assert.deepEqual(reads, [latest.id]);
+    await store.delete(latest.id);
+    await store.create(flow);
+    await assert.rejects(store.create(flow), /Session limit/);
+  } finally {
+    await store.close();
+  }
+});
 test('HTTP serves flow, redirects latest and safely serves static player', async () => {
   const runtime = await startRuntime({ ...readConfig({}), port: 0 });
   try {
     assert.match(await (await fetch(runtime.baseUrl)).text(), /No active flow/);
     const session = await runtime.store.create(flow);
+    runtime.store.list = async () => { throw new Error('HTTP must use indexed continuation lookup'); };
     assert.deepEqual(
       await (await fetch(runtime.baseUrl + '/api/flow/' + session.id)).json(),
       flow,

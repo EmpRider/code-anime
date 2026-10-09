@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { eventSchema, sourceSchema, type TraceEvent } from '../domain/trace.js';
 import type { SessionStore } from '../domain/flow.js';
 import { SimulationService } from './simulation-service.js';
+import { EventJournal } from '../storage/event-journal.js';
 
 const record = z.record(z.unknown());
 export const operationSchema = z
@@ -15,9 +16,11 @@ export const operationSchema = z
     evidenceIds: z.array(z.string().uuid()).min(1).max(200).optional(),
     inputs: record.optional(),
     result: z.unknown().optional(),
+    output: z.string().max(16000).optional(),
     set: record.optional(),
     unset: z.array(z.string()).optional(),
     assignTo: z.string().min(1).optional(),
+    unwindTo: z.string().min(1).nullable().optional(),
     objectId: z.string().min(1).max(200).optional(),
     fields: record.optional(),
     unsetFields: z.array(z.string()).optional(),
@@ -82,8 +85,7 @@ interface Build {
   createdAt: number;
   frames: Frame[];
   objects: Record<string, Record<string, unknown>>;
-  events: TraceEvent[];
-  bytes: number;
+  events: EventJournal;
   calls: number;
   batches: Map<string, { hash: string; count: number }>;
   busy: boolean;
@@ -120,7 +122,8 @@ export class AnimationBuilder {
   ) {}
   private get(id: string) {
     const build = this.builds.get(id);
-    if (!build || Date.now() - build.createdAt > 3600000) {
+    if (!build || (!build.busy && Date.now() - build.createdAt > 3600000)) {
+      build?.events.close();
       this.builds.delete(id);
       throw new Error('Build expired or not found; begin a new animation');
     }
@@ -130,7 +133,7 @@ export class AnimationBuilder {
     return {
       buildId: b.id,
       status: b.result ? 'ready' : b.busy ? 'processing' : 'building',
-      eventCount: b.events.length,
+      eventCount: b.events.count,
       stack: b.frames.map((f) => ({ callId: f.id, symbol: f.symbol })),
       nextAction:
         'Send the next operations batch directly through this tool; do not create scripts or payload files.',
@@ -145,8 +148,10 @@ export class AnimationBuilder {
     const p = builderSchema.parse(raw);
     if (p.action === 'begin') {
       for (const [id, b] of this.builds)
-        if (!b.busy && Date.now() - b.createdAt > 3600000)
+        if (!b.busy && Date.now() - b.createdAt > 3600000) {
+          b.events.close();
           this.builds.delete(id);
+        }
       if (this.builds.size >= 10)
         throw new Error(
           'Build limit reached; cancel or finish existing builds',
@@ -162,8 +167,7 @@ export class AnimationBuilder {
         createdAt: Date.now(),
         frames: [],
         objects: {},
-        events: [],
-        bytes: 0,
+        events: new EventJournal(),
         calls: 0,
         batches: new Map(),
         busy: false,
@@ -178,6 +182,7 @@ export class AnimationBuilder {
         'Build is processing a request; retry after checking status',
       );
     if (p.action === 'cancel') {
+      b.events.close();
       this.builds.delete(b.id);
       return { cancelled: true, buildId: b.id };
     }
@@ -194,13 +199,9 @@ export class AnimationBuilder {
         };
       }
       if (b.result) throw new Error('Animation is already finalized');
-      if (p.expectedEventCount !== b.events.length)
+      if (p.expectedEventCount !== b.events.count)
         throw new Error(
-          `Event count changed; expectedEventCount must be ${b.events.length}`,
-        );
-      if (b.events.length + p.operations.length > 20000)
-        throw new Error(
-          'Build exceeds 20000 events; finish with incomplete coverage and begin a narrower scenario',
+          `Event count changed; expectedEventCount must be ${b.events.count}`,
         );
       b.busy = true;
       try {
@@ -219,22 +220,13 @@ export class AnimationBuilder {
           calls: b.calls,
         };
         const events = p.operations.map((op, i) =>
-          this.apply(state, op, b.events.length + i, evidenceIds),
+          this.apply(state, op, b.events.count + i, evidenceIds),
         );
-        const bytes = events.reduce(
-          (n, e) => n + Buffer.byteLength(JSON.stringify(e)),
-          0,
-        );
-        if (b.bytes + bytes > 40 * 1024 * 1024)
-          throw new Error(
-            'Build exceeds 40 MiB of snapshots; use a smaller mock scenario',
-          );
+        await b.events.append(events);
         // Commit only after the whole batch validates. Retried batch IDs are idempotent.
         b.frames = state.frames;
         b.objects = state.objects;
         b.calls = state.calls;
-        b.events.push(...events);
-        b.bytes += bytes;
         b.input.evidenceIds = evidenceIds;
         b.batches.set(p.batchId, { hash: digest, count: events.length });
       } finally {
@@ -247,7 +239,7 @@ export class AnimationBuilder {
         throw new Error('Animation was finalized with different coverage');
       return this.status(b);
     }
-    if (!b.events.length)
+    if (!b.events.count)
       throw new Error('Append execution steps before finishing');
     if (p.complete && b.frames.length)
       throw new Error(
@@ -256,53 +248,49 @@ export class AnimationBuilder {
     b.busy = true;
     const created: string[] = [];
     try {
-      const chunks: TraceEvent[][] = [];
-      let chunk: TraceEvent[] = [];
-      let size = 0;
-      for (const event of b.events) {
-        const bytes = Buffer.byteLength(JSON.stringify(event));
-        if (bytes > 3 * 1024 * 1024)
-          throw new Error('One event snapshot exceeds the session budget');
-        if (
-          chunk.length &&
-          (chunk.length >= 2000 || size + bytes > 3 * 1024 * 1024)
-        ) {
-          chunks.push(chunk);
-          chunk = [];
-          size = 0;
+      if (b.input.baselineSessionId) {
+        let hasProposal = false;
+        for await (const events of b.events.chunks()) {
+          if (events.some((event) => event.certainty === 'proposed')) {
+            hasProposal = true;
+            break;
+          }
         }
-        chunk.push(event);
-        size += bytes;
+        if (!hasProposal)
+          throw new Error('Mark changed plan events as proposed');
       }
-      if (chunk.length) chunks.push(chunk);
-      if (b.input.baselineSessionId && chunks.length > 1)
-        throw new Error(
-          'Plan comparison currently requires a single stored chunk; narrow this proposed scenario',
-        );
       let result: Awaited<ReturnType<SimulationService['submit']>> | undefined;
-      for (const [i, events] of chunks.entries()) {
-        result = await this.simulation.submit({
-          projectRoot: b.input.projectRoot,
-          endpoint: b.input.endpoint,
-          evidenceIds: b.input.evidenceIds,
-          scenario: b.input.scenario,
-          events,
-          coverage: p.coverage,
-          complete: i === chunks.length - 1 && p.complete,
-          ...(result ? { continuationOf: result.sessionId } : {}),
-          ...(b.input.baselineSessionId
-            ? { baselineSessionId: b.input.baselineSessionId }
-            : {}),
-        });
+      let chunks = 0;
+      let processed = 0;
+      for await (const events of b.events.chunks()) {
+        processed += events.length;
+        chunks++;
+        result = await this.simulation.submit(
+          {
+            projectRoot: b.input.projectRoot,
+            endpoint: b.input.endpoint,
+            evidenceIds: b.input.evidenceIds,
+            scenario: b.input.scenario,
+            events,
+            coverage: p.coverage,
+            complete: processed === b.events.count && p.complete,
+            ...(result ? { continuationOf: result.sessionId } : {}),
+            ...(b.input.baselineSessionId && !result
+              ? { baselineSessionId: b.input.baselineSessionId }
+              : {}),
+          },
+          Boolean(b.input.baselineSessionId),
+        );
         created.push(result.sessionId);
       }
       b.result = {
         ...result!,
-        eventCount: b.events.length,
-        chunks: chunks.length,
+        eventCount: b.events.count,
+        chunks,
         status: 'ready',
       };
       b.finishHash = hash(p);
+      b.events.close();
       return this.status(b);
     } catch (error) {
       for (const id of created) await this.store.delete?.(id);
@@ -334,6 +322,16 @@ export class AnimationBuilder {
     }
     const frame = state.frames.at(-1);
     if (!frame) throw new Error('Begin the flow with an enter operation');
+    if (op.unwindTo !== undefined && op.kind !== 'throw')
+      throw new Error('unwindTo is only valid for throw operations');
+    if (
+      op.unwindTo !== undefined &&
+      op.unwindTo !== null &&
+      !state.frames.some((f) => f.id === op.unwindTo)
+    )
+      throw new Error(
+        'unwindTo must identify an active invocation or be null for an uncaught exception',
+      );
     const source =
       op.source ??
       (op.line && frame.source
@@ -351,6 +349,8 @@ export class AnimationBuilder {
     frame.locals = patch(frame.locals, op.set, op.unset);
     if (op.assignTo && !Object.hasOwn(op, 'result'))
       throw new Error('assignTo requires result (null is allowed)');
+    if (op.kind === 'console' && op.output === undefined)
+      throw new Error('Console events need the exact simulated output');
     if (op.assignTo && op.kind !== 'return')
       frame.locals = patch(frame.locals, { [op.assignTo]: op.result });
     if (op.objectId) {
@@ -375,6 +375,13 @@ export class AnimationBuilder {
       after = { ...(op.inputs ?? {}), result: clone(op.result) };
     }
     const parent = state.frames.at(-2);
+    if (op.kind === 'throw' && op.unwindTo !== undefined) {
+      const retained =
+        op.unwindTo === null
+          ? 0
+          : state.frames.findIndex((f) => f.id === op.unwindTo) + 1;
+      state.frames.splice(retained);
+    }
     if (op.kind === 'return') {
       state.frames.pop();
       if (op.assignTo) {
@@ -411,6 +418,7 @@ export class AnimationBuilder {
       certainty: op.certainty,
       ...(op.inputs ? { inputs: clone(op.inputs) } : {}),
       ...(Object.hasOwn(op, 'result') ? { result: clone(op.result) } : {}),
+      ...(op.output !== undefined ? { output: op.output } : {}),
       ...(op.objectId ? { objectId: op.objectId } : {}),
       ...(op.origins ? { origins: op.origins } : {}),
       ...(op.snippet ? { snippet: op.snippet } : {}),
@@ -419,6 +427,7 @@ export class AnimationBuilder {
     return eventSchema.parse(event);
   }
   close() {
+    for (const b of this.builds.values()) b.events.close();
     this.builds.clear();
   }
 }

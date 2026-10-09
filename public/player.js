@@ -5,7 +5,34 @@ let cursor = 0;
 const nodes = new Map();
 const bookmarks = new Set();
 const breakpoints = new Set();
+const sourceBreakpoints = new Set();
+const sourceLocationKey = (source) =>
+  source ? source.file + ':' + source.line : undefined;
+const hasBreakpoint = (index) =>
+  breakpoints.has(index) ||
+  sourceBreakpoints.has(
+    sourceLocationKey(flow?.trace?.events[index - 1]?.source),
+  );
 const rows = [];
+const invocations = new Map();
+const expandedCalls = new Set();
+let shownSource = '';
+let shownFirstLine = 1;
+let pinnedCallId;
+let inspectedSourceEvent;
+let lastConsoleText = '';
+const sourceLines = new Map();
+const consoleEvents = [];
+let navigationVersion = 0;
+const continuationStates = new WeakMap();
+function registerFlow(value, id) {
+  continuationStates.set(value, {
+    tailId: id,
+    loadedIds: new Set(id ? [id] : []),
+    cursor: 0,
+  });
+  return value;
+}
 const text = (tag, value, className) => {
   const element = document.createElement(tag);
   element.textContent = value;
@@ -71,6 +98,8 @@ function fieldRows(parent, after, before, prefix = '') {
   }
 }
 function pause() {
+  // Invalidate playback and any asynchronous navigation started earlier.
+  navigationVersion++;
   clearTimeout(timer);
   timer = undefined;
   $('play').textContent = 'Play';
@@ -88,8 +117,27 @@ function traceSteps(trace) {
     dtoFields: e.after ?? e.values ?? {},
   }));
 }
-function buildNodes() {
+function buildNodes(preserveInspection = false) {
   nodes.clear();
+  invocations.clear();
+  if (!preserveInspection) {
+    expandedCalls.clear();
+    pinnedCallId = undefined;
+    inspectedSourceEvent = undefined;
+    shownSource = '';
+    lastConsoleText = '';
+  }
+  sourceLines.clear();
+  consoleEvents.length = 0;
+  for (const event of flow.trace?.events ?? [])
+    if (event.kind === 'enter') invocations.set(event.callId, event);
+  flow.trace?.events.forEach((event, index) => {
+    if (event.kind === 'console' && event.output !== undefined)
+      consoleEvents.push({ index: index + 1, output: event.output });
+    if (!event.source) return;
+    const key = event.source.file + ':' + event.source.line;
+    if (!sourceLines.has(key)) sourceLines.set(key, index + 1);
+  });
   $('canvas').replaceChildren();
   const proposed = new Set(
     flow.trace?.events
@@ -116,37 +164,58 @@ function buildNodes() {
     flow.trace?.events.filter(changed).length ?? '—';
   buildList();
 }
+const LIST_PAGE_SIZE = 150;
+let listPage = 0;
+let listCursor = -1;
+let listSignature = '';
+function createEventRow(index) {
+  const { event, step } = rows[index];
+  const button = text('button', '', 'event-row');
+  button.dataset.kind = event?.kind ?? 'flow';
+  button.dataset.index = index + 1;
+  button.append(
+    text('span', String(index + 1).padStart(2, '0'), 'event-index'),
+  );
+  const description = text('span', '', 'event-description');
+  const label = text('span', event?.label ?? step.dtoName, 'event-label');
+  if (event?.kind === 'enter') {
+    label.classList.add('expandable');
+    button.setAttribute('aria-expanded', 'false');
+  }
+  description.append(label);
+  const meta = text('span', '', 'event-meta');
+  meta.append(text('span', event?.kind ?? 'flow', 'event-type'));
+  if (event?.source) meta.append(text('span', 'L' + event.source.line));
+  description.append(meta);
+  button.append(description);
+  button.onclick = () => {
+    if (event?.kind === 'enter') {
+      expandedCalls.has(event.callId)
+        ? expandedCalls.delete(event.callId)
+        : expandedCalls.add(event.callId);
+    }
+    seek(index + 1);
+  };
+  button.ondblclick = () => toggleBreakpoint(index + 1);
+  button.title = 'Select step. Double-click to toggle a playback breakpoint.';
+  if (event?.stack?.length)
+    button.style.setProperty(
+      '--call-depth',
+      String(Math.min(5, event.stack.length - 1)),
+    );
+  return button;
+}
 function buildList() {
   rows.length = 0;
-  const fragment = document.createDocumentFragment();
+  listSignature = '';
   flow.steps.forEach((step, index) => {
     const event = flow.trace?.events[index];
-    const button = text('button', '', 'event-row');
-    button.dataset.kind = event?.kind ?? 'flow';
-    button.dataset.index = index + 1;
-    button.append(
-      text('span', String(index + 1).padStart(2, '0'), 'event-index'),
-    );
-    const description = text('span', '', 'event-description');
-    description.append(
-      text('span', event?.label ?? step.dtoName, 'event-label'),
-    );
-    const meta = text('span', '', 'event-meta');
-    meta.append(text('span', event?.kind ?? 'flow', 'event-type'));
-    if (event?.source) meta.append(text('span', 'L' + event.source.line));
-    description.append(meta);
-    button.append(description);
-    button.onclick = () => seek(index + 1);
-    button.ondblclick = () => toggleBreakpoint(index + 1);
-    button.title = 'Select step. Double-click to toggle a playback breakpoint.';
     rows.push({
-      button,
       event,
+      step,
       search: JSON.stringify([event, step]).toLowerCase(),
     });
-    fragment.append(button);
   });
-  $('event-list').replaceChildren(fragment);
   filterList();
 }
 function filterList() {
@@ -156,30 +225,372 @@ function filterList() {
     $('bookmarks-only').getAttribute('aria-pressed') === 'true';
   const groups = {
     changes: ['assign', 'mutate', 'transform'],
-    calls: ['enter', 'call', 'return', 'await', 'throw'],
+    calls: ['enter', 'call', 'return', 'await', 'throw', 'catch'],
     control: ['branch', 'loop'],
   };
-  let count = 0;
-  rows.forEach(({ button, event, search }, i) => {
+  const visible = [];
+  rows.forEach(({ event, search }, i) => {
+    const essential = [
+      'enter',
+      'call',
+      'return',
+      'console',
+      'throw',
+      'catch',
+      'unresolved',
+      'plan',
+    ];
+    const collapsed =
+      event &&
+      !essential.includes(event.kind) &&
+      !expandedCalls.has(event.callId);
     const matches =
       kind === 'all' ||
       (kind === 'changes' && changed(event)) ||
       groups[kind]?.includes(event?.kind) ||
       (kind === 'uncertain' &&
         ['assumed', 'unresolved', 'proposed'].includes(event?.certainty));
-    button.hidden =
-      !matches ||
-      !search.includes(query) ||
-      (onlyBookmarks && !bookmarks.has(i + 1));
-    if (!button.hidden) count++;
-    button.classList.toggle('bookmarked', bookmarks.has(i + 1));
-    button.classList.toggle('breakpoint', breakpoints.has(i + 1));
-    button.classList.toggle('current', cursor === i + 1);
-    if (cursor === i + 1) button.setAttribute('aria-current', 'step');
-    else button.removeAttribute('aria-current');
+    if (
+      matches &&
+      search.includes(query) &&
+      (!onlyBookmarks || bookmarks.has(i + 1)) &&
+      !(collapsed && !query && !onlyBookmarks && cursor !== i + 1)
+    )
+      visible.push(i);
   });
+  if (listCursor !== cursor) {
+    const active = visible.indexOf(cursor - 1);
+    if (active >= 0) listPage = Math.floor(active / LIST_PAGE_SIZE);
+    listCursor = cursor;
+  }
+  const pages = Math.max(1, Math.ceil(visible.length / LIST_PAGE_SIZE));
+  listPage = Math.min(listPage, pages - 1);
+  const page = visible.slice(
+    listPage * LIST_PAGE_SIZE,
+    (listPage + 1) * LIST_PAGE_SIZE,
+  );
+  const signature = [listPage, pages, ...page].join(',');
+  if (signature !== listSignature) {
+    const fragment = document.createDocumentFragment();
+    if (pages > 1) {
+      const navigation = text('nav', '', 'event-pages');
+      navigation.setAttribute('aria-label', 'Execution event pages');
+      for (const [label, delta] of [
+        ['Previous events', -1],
+        ['Next events', 1],
+      ]) {
+        const button = text('button', label);
+        button.disabled = listPage + delta < 0 || listPage + delta >= pages;
+        button.onclick = () => {
+          listPage += delta;
+          filterList();
+        };
+        navigation.append(button);
+      }
+      navigation.append(text('span', `${listPage + 1} / ${pages}`));
+      fragment.append(navigation);
+    }
+    for (const index of page) fragment.append(createEventRow(index));
+    $('event-list').replaceChildren(fragment);
+    listSignature = signature;
+  }
+  for (const button of $('event-list').querySelectorAll('.event-row')) {
+    const index = Number(button.dataset.index);
+    const event = rows[index - 1].event;
+    if (event?.kind === 'enter')
+      button.setAttribute(
+        'aria-expanded',
+        String(expandedCalls.has(event.callId)),
+      );
+    button.classList.toggle('bookmarked', bookmarks.has(index));
+    button.classList.toggle('breakpoint', hasBreakpoint(index));
+    button.classList.toggle('current', cursor === index);
+    if (cursor === index) button.setAttribute('aria-current', 'step');
+    else button.removeAttribute('aria-current');
+  }
+  const count = visible.length;
   $('trace-count').textContent = count + ' / ' + rows.length;
   $('no-events').hidden = count > 0;
+}
+function inspectFrame(callId) {
+  pinnedCallId = callId;
+  $('follow').checked = false;
+  render();
+}
+function activeFrame(state, event) {
+  if (pinnedCallId && state.stack.includes(pinnedCallId)) return pinnedCallId;
+  return state.stack.at(-1) ?? event?.callId;
+}
+function frameLocals(state, event) {
+  const mapped = state.stack.some(
+    (id) =>
+      Object.hasOwn(state.locals, id) &&
+      state.locals[id] !== null &&
+      typeof state.locals[id] === 'object',
+  );
+  return mapped
+    ? (state.locals[activeFrame(state, event)] ?? {})
+    : state.locals;
+}
+// Token spans only decorate literal source text. Source code is never generated.
+function codeText(content) {
+  const container = text('span', '', 'code-text');
+  const token =
+    /\/\/.*|\/\*.*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b(?:class|function|fun|const|let|var|public|private|static|return|if|else|for|while|new|async|await|throw|import|export|void|int|String|number|boolean|true|false|null)\b|\b\d+(?:\.\d+)?\b/g;
+  let start = 0;
+  for (const match of content.matchAll(token)) {
+    if (match.index > start)
+      container.append(
+        document.createTextNode(content.slice(start, match.index)),
+      );
+    const kind = /^(?:\/\/|\/\*)/.test(match[0])
+      ? 'comment'
+      : /^["']/.test(match[0])
+        ? 'string'
+        : /^\d/.test(match[0])
+          ? 'number'
+          : 'keyword';
+    container.append(text('span', match[0], 'token-' + kind));
+    start = match.index + match[0].length;
+  }
+  if (start < content.length)
+    container.append(document.createTextNode(content.slice(start)));
+  return container;
+}
+function renderSource(state, event) {
+  const trace = flow.trace;
+  const events = trace?.events ?? [];
+  if (!$('follow').checked && !pinnedCallId) pinnedCallId = event?.callId;
+  const frameId = pinnedCallId ?? activeFrame(state, event);
+  const selected = pinnedCallId
+    ? events.slice(0, cursor).findLast((e) => e.callId === frameId && e.source)
+    : event;
+  let sourceEvent = selected?.source
+    ? selected
+    : events.slice(0, cursor).findLast((e) => e.callId === frameId && e.source);
+  if (!$('follow').checked && !sourceEvent) sourceEvent = inspectedSourceEvent;
+  if (sourceEvent) inspectedSourceEvent = sourceEvent;
+  const location = sourceEvent?.source;
+  const sourceCode = location ? trace?.sourceFiles?.[location.file] : undefined;
+  $('source').textContent = location?.file ?? 'No source location recorded';
+  $('source-line').textContent = location ? 'L' + location.line : '—';
+  const sourceKey =
+    sourceCode === undefined
+      ? 'excerpt:' + (location?.file ?? '') + ':' + (sourceEvent?.snippet ?? '')
+      : location.file + '\0' + sourceCode;
+  const lines = sourceCode?.split(/\r?\n/) ?? [];
+  // Long files keep only the current source window in the DOM.
+  const firstLine =
+    lines.length > 600
+      ? Math.min(
+          Math.max(1, (location?.line ?? 1) - 150),
+          Math.max(1, lines.length - 300),
+        )
+      : 1;
+  const endLine =
+    lines.length > 600 ? Math.min(lines.length, firstLine + 300) : lines.length;
+  const needsBuild =
+    sourceKey !== shownSource ||
+    shownFirstLine !== firstLine ||
+    !$('snippet').hasChildNodes();
+  if (needsBuild) {
+    shownSource = sourceKey;
+    shownFirstLine = firstLine;
+    if (sourceCode !== undefined) {
+      const fragment = document.createDocumentFragment();
+      for (let i = firstLine; i <= endLine; i++) {
+        const row = text('div', '', 'code-row');
+        row.dataset.line = String(i);
+        const gutter = text('button', String(i), 'code-gutter');
+        const stepIndex = sourceLines.get(location.file + ':' + i);
+        gutter.type = 'button';
+        gutter.title = stepIndex
+          ? 'Toggle breakpoint at line ' + i
+          : 'No execution recorded on this line';
+        gutter.disabled = !stepIndex;
+        row.append(gutter, codeText(lines[i - 1] ?? ''));
+        fragment.append(row);
+      }
+      $('snippet').replaceChildren(fragment);
+    } else $('snippet').textContent = sourceEvent?.snippet ?? '';
+  }
+  $('source-empty').hidden = Boolean(
+    sourceCode !== undefined || sourceEvent?.snippet,
+  );
+  for (const old of $('snippet').querySelectorAll('.executing-line'))
+    old.classList.remove('executing-line');
+  for (const row of $('snippet').querySelectorAll('.code-row')) {
+    const key = location.file + ':' + row.dataset.line;
+    const index = sourceLines.get(key);
+    const gutter = row.querySelector('.code-gutter');
+    gutter.disabled = !index;
+    gutter.title = index
+      ? 'Toggle breakpoint at line ' + row.dataset.line
+      : 'No execution recorded on this line';
+    gutter.onclick = index
+      ? () => {
+          sourceBreakpoints.has(key)
+            ? sourceBreakpoints.delete(key)
+            : sourceBreakpoints.add(key);
+          render();
+        }
+      : null;
+    row.classList.toggle(
+      'has-breakpoint',
+      sourceBreakpoints.has(key) || breakpoints.has(index),
+    );
+    gutter.setAttribute(
+      'aria-pressed',
+      String(sourceBreakpoints.has(key) || breakpoints.has(index)),
+    );
+  }
+  const isExecuting =
+    sourceEvent?.callId === event?.callId &&
+    location?.file === event?.source?.file;
+  const active =
+    isExecuting &&
+    event?.source &&
+    $('snippet').querySelector(`[data-line="${event.source.line}"]`);
+  if (active) {
+    active.classList.add('executing-line');
+    if (
+      $('follow').checked &&
+      (active.offsetTop < $('snippet').scrollTop ||
+        active.offsetTop + active.offsetHeight >
+          $('snippet').scrollTop + $('snippet').clientHeight)
+    )
+      active.scrollIntoView?.({ block: 'nearest' });
+  }
+  $('source-stack').replaceChildren();
+  for (const callId of state.stack) {
+    const frame = invocations.get(callId);
+    const button = text('button', frame?.symbolId ?? callId, 'stack-link');
+    button.title = frame?.source?.file ?? callId;
+    button.classList.toggle(
+      'selected',
+      (pinnedCallId ?? event?.callId) === callId,
+    );
+    button.onclick = () => inspectFrame(callId);
+    $('source-stack').append(button);
+  }
+}
+function renderConsole() {
+  let lo = 0,
+    hi = consoleEvents.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (consoleEvents[mid].index <= cursor) lo = mid + 1;
+    else hi = mid;
+  }
+  const value = consoleEvents
+    .slice(Math.max(0, lo - 300), lo)
+    .map((e) => e.output)
+    .join('\n');
+  if (value !== lastConsoleText) {
+    $('console-output').textContent = value;
+    lastConsoleText = value;
+  }
+  $('console-count').textContent = lo + ' events';
+}
+// Continuation sessions are prepared by the MCP server. Fetching the next
+// stored chunk only extends the replay timeline; it never performs analysis.
+async function loadNextChunk() {
+  const state = continuationStates.get(flow);
+  if (state?.loading) return state.loading;
+  if (!flow?.nextSessionId) return false;
+  const currentFlow = flow;
+  const nextId = currentFlow.nextSessionId;
+  state.loading = (async () => {
+    const response = await fetch('/api/flow/' + nextId);
+    if (!response.ok) throw new Error('Could not load continuation ' + nextId);
+    const next = await response.json();
+    if (
+      !next.trace?.simulation ||
+      next.trace.simulation.previousSessionId !== state.tailId ||
+      next.endpoint !== currentFlow.endpoint ||
+      next.trace.projectRoot !== currentFlow.trace?.projectRoot ||
+      next.trace.sourceHash !== currentFlow.trace?.sourceHash ||
+      next.trace.target !== currentFlow.trace?.target ||
+      JSON.stringify(next.trace.scenario) !==
+        JSON.stringify(currentFlow.trace?.scenario) ||
+      !Array.isArray(next.trace.events) ||
+      next.trace.events.length !== next.steps?.length ||
+      !next.trace.events.length
+    )
+      throw new Error('Continuation does not match the current execution');
+    if (
+      state.loadedIds.has(nextId) ||
+      (next.nextSessionId &&
+        (next.nextSessionId === nextId ||
+          state.loadedIds.has(next.nextSessionId)))
+    )
+      throw new Error('Continuation contains a session cycle');
+    const existingIds = new Set(
+      currentFlow.trace.events.map((event) => event.id),
+    );
+    const newIds = next.trace.events.map((event) => event.id);
+    if (
+      newIds.some((id) => typeof id !== 'string' || existingIds.has(id)) ||
+      new Set(newIds).size !== newIds.length
+    )
+      throw new Error('Continuation contains duplicate execution events');
+    const previous = currentFlow.trace.events.at(-1)?.id;
+    const numbered = /^event-(\d+)$/.exec(previous ?? '');
+    if (
+      numbered &&
+      newIds.some((id, i) => id !== `event-${Number(numbered[1]) + i + 1}`)
+    )
+      throw new Error('Continuation execution sequence is discontinuous');
+    for (const [file, content] of Object.entries(
+      next.trace.sourceFiles ?? {},
+    )) {
+      const current = currentFlow.trace.sourceFiles?.[file];
+      if (current !== undefined && current !== content)
+        throw new Error('Source file changed between prepared chunks: ' + file);
+    }
+    currentFlow.trace.events.push(...next.trace.events);
+    currentFlow.steps.push(...next.steps);
+    currentFlow.trace.sourceFiles = {
+      ...currentFlow.trace.sourceFiles,
+      ...next.trace.sourceFiles,
+    };
+    currentFlow.trace.diagnostics = [
+      ...new Set([
+        ...currentFlow.trace.diagnostics,
+        ...(next.trace.diagnostics ?? []),
+      ]),
+    ];
+    currentFlow.trace.truncated = next.trace.truncated;
+    currentFlow.trace.simulation.complete = next.trace.simulation.complete;
+    currentFlow.nextSessionId = next.nextSessionId;
+    state.tailId = nextId;
+    state.loadedIds.add(nextId);
+    state.error = undefined;
+    if (flow !== currentFlow) return false;
+    $('next-chunk').hidden = !next.nextSessionId;
+    if (next.nextSessionId)
+      $('next-chunk').href = '/flow/' + next.nextSessionId;
+    buildNodes(true);
+    render();
+    return true;
+  })()
+    .catch((error) => {
+      state.error = error instanceof Error ? error.message : String(error);
+      if (flow === currentFlow) {
+        render();
+      }
+      throw error;
+    })
+    .finally(() => {
+      state.loading = undefined;
+    });
+  return state.loading;
+}
+async function extendThrough(index) {
+  while (flow?.nextSessionId && flow.steps.length < index) {
+    if (!(await loadNextChunk())) return false;
+  }
+  return true;
 }
 function drawConnection(from, to) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -213,17 +624,20 @@ function render() {
   $('timeline').value = cursor;
   $('progress').textContent = cursor + ' / ' + flow.steps.length;
   $('previous').disabled = cursor === 0;
-  $('next').disabled = cursor === flow.steps.length;
+  $('next').disabled = cursor === flow.steps.length && !flow.nextSessionId;
   $('play').disabled = !flow.steps.length;
   $('bookmark').disabled = $('breakpoint').disabled = !cursor;
   $('bookmark').setAttribute('aria-pressed', bookmarks.has(cursor));
   $('bookmark').textContent = bookmarks.has(cursor) ? '★' : '☆';
   $('breakpoint').setAttribute('aria-pressed', breakpoints.has(cursor));
-  $('status').textContent =
-    cursor === flow.steps.length && cursor
-      ? flow.trace?.truncated
-        ? 'Chunk complete · flow continues'
-        : 'Replay complete'
+  $('status').textContent = continuationStates.get(flow)?.error
+    ? 'Continuation unavailable · ' + continuationStates.get(flow).error
+    : cursor === flow.steps.length && cursor
+      ? flow.nextSessionId
+        ? 'More prepared steps available'
+        : flow.trace?.truncated
+          ? 'Trace incomplete · see coverage'
+          : 'Replay complete'
       : 'Mock execution · local session';
   $('coverage').textContent =
     flow.trace?.simulation?.coverage ??
@@ -251,19 +665,22 @@ function render() {
     'stack',
     'locals',
     'objects',
-    'source',
-    'snippet',
     'certainty',
     'route',
   ])
     $(id).textContent = '';
   $('values-empty').hidden = Boolean(cursor);
-  $('source-empty').hidden = false;
-  $('source-line').textContent = '—';
+  renderConsole();
   $('step-number').textContent = cursor
     ? 'STEP ' + String(cursor).padStart(2, '0')
     : 'NO STEP SELECTED';
   if (!cursor) {
+    shownSource = '';
+    $('snippet').replaceChildren();
+    $('source-stack').replaceChildren();
+    $('source').textContent = 'Select a step to inspect its source';
+    $('source-line').textContent = '—';
+    $('source-empty').hidden = false;
     $('packet-title').textContent = 'Ready to explore';
     $('event-kind').textContent = 'READY';
     $('playback-label').textContent = 'Ready when you are';
@@ -287,27 +704,21 @@ function render() {
     const row = text('li', '', 'frame-item');
     row.append(
       text('span', String(i + 1), 'frame-depth'),
-      text('span', typeof frame === 'string' ? frame : valueText(frame)),
+      text(
+        'button',
+        invocations.get(frame)?.symbolId ?? String(frame),
+        'stack-link',
+      ),
     );
+    row.querySelector('button').onclick = () => inspectFrame(frame);
     $('frame-list').append(row);
   });
-  fieldRows($('local-tree'), state.locals);
+  fieldRows($('local-tree'), frameLocals(state, event));
   fieldRows($('object-tree'), state.objects);
   $('certainty').textContent = event
     ? [event.certainty, event.note].filter(Boolean).join(' · ')
     : 'Agent-authored mock data';
-  $('source').textContent = event?.source
-    ? event.source.file
-    : 'No source location recorded';
-  $('source-line').textContent = event?.source
-    ? 'L' +
-      event.source.line +
-      (event.source.endLine > event.source.line
-        ? '–' + event.source.endLine
-        : '')
-    : '—';
-  $('snippet').textContent = event?.snippet ?? '';
-  $('source-empty').hidden = Boolean(event?.snippet);
+  renderSource(state, event);
   $('packet-title').textContent = event?.label ?? step.dtoName;
   $('route').textContent = step.from + ' → ' + step.to;
   $('active-path').textContent = step.to;
@@ -393,18 +804,54 @@ function render() {
 function seek(index) {
   if (!flow) return;
   pause();
+  const version = navigationVersion;
+  const requestedFlow = flow;
+  if (index > flow.steps.length && flow.nextSessionId) {
+    void extendThrough(index)
+      .then((ready) => {
+        if (ready && version === navigationVersion && flow === requestedFlow)
+          seek(index);
+      })
+      .catch(() => {}); // loadNextChunk reports the error in the player.
+    return;
+  }
   cursor = Math.max(0, Math.min(flow.steps.length, index));
   render();
 }
-function tick() {
+function tick(version) {
+  if (version !== navigationVersion) return;
+  if (cursor === flow.steps.length && flow.nextSessionId) {
+    void extendThrough(cursor + 1)
+      .then((ready) => {
+        if (version !== navigationVersion) return;
+        if (ready && timer !== undefined)
+          timer = setTimeout(() => tick(version), Number($('speed').value));
+        else pause();
+      })
+      .catch(() => {
+        if (version === navigationVersion) pause();
+      });
+    return;
+  }
   cursor = Math.min(cursor + 1, flow.steps.length);
   render();
-  if (breakpoints.has(cursor)) {
+  if (hasBreakpoint(cursor)) {
     pause();
     $('status').textContent = 'Breakpoint · step ' + cursor;
   } else if (cursor < flow.steps.length)
-    timer = setTimeout(tick, Number($('speed').value));
-  else pause();
+    timer = setTimeout(() => tick(version), Number($('speed').value));
+  else if (flow.nextSessionId) {
+    void extendThrough(cursor + 1)
+      .then((ready) => {
+        if (version !== navigationVersion) return;
+        if (ready && timer !== undefined)
+          timer = setTimeout(() => tick(version), Number($('speed').value));
+        else pause();
+      })
+      .catch(() => {
+        if (version === navigationVersion) pause();
+      });
+  } else pause();
 }
 function toggleBookmark() {
   if (!cursor) return;
@@ -419,15 +866,80 @@ function toggleBreakpoint(index = cursor) {
 $('play').onclick = () => {
   if (!flow?.steps.length) return;
   if (timer !== undefined) return pause();
-  if (cursor === flow.steps.length) cursor = 0;
+  if (cursor === flow.steps.length && !flow.nextSessionId) cursor = 0;
   $('play').textContent = 'Pause';
   $('play').dataset.playing = 'true';
-  timer = setTimeout(tick, 0);
+  const version = ++navigationVersion;
+  timer = setTimeout(() => tick(version), 0);
 };
 $('next').onclick = () => seek(cursor + 1);
 $('previous').onclick = () => seek(cursor - 1);
 $('restart').onclick = () => seek(0);
+// Stepping is computed from the preprocessed invocation snapshots only.
+$('step-over').onclick = () => {
+  pause();
+  const version = navigationVersion;
+  const requestedFlow = flow;
+  const events = flow?.trace?.events;
+  if (!events || !cursor) return seek(cursor + 1);
+  const current = events[cursor - 1];
+  const callId = current?.stack?.at(-1) ?? current.callId;
+  void (async () => {
+    let i = cursor;
+    while (true) {
+      for (; i < events.length; i++) {
+        if (events[i].callId === callId || !events[i].stack?.includes(callId)) {
+          if (version === navigationVersion && flow === requestedFlow)
+            seek(i + 1);
+          return;
+        }
+      }
+      if (version !== navigationVersion || flow !== requestedFlow) return;
+      if (!flow.nextSessionId || !(await extendThrough(events.length + 1)))
+        return version === navigationVersion && flow === requestedFlow
+          ? seek(events.length)
+          : undefined;
+    }
+  })().catch(() => {});
+};
+$('step-out').onclick = () => {
+  pause();
+  const version = navigationVersion;
+  const requestedFlow = flow;
+  const events = flow?.trace?.events;
+  const current = events?.[cursor - 1];
+  if (!current) return;
+  const callId = current.stack?.at(-1);
+  if (!callId) return;
+  void (async () => {
+    let i = cursor;
+    while (true) {
+      for (; i < events.length; i++)
+        if (!events[i].stack?.includes(callId)) {
+          if (version === navigationVersion && flow === requestedFlow)
+            seek(i + 1);
+          return;
+        }
+      if (version !== navigationVersion || flow !== requestedFlow) return;
+      if (!flow.nextSessionId || !(await extendThrough(events.length + 1)))
+        return version === navigationVersion && flow === requestedFlow
+          ? seek(events.length)
+          : undefined;
+    }
+  })().catch(() => {});
+};
 $('timeline').oninput = () => seek(Number($('timeline').value));
+for (const button of document.querySelectorAll('.mobile-views button')) {
+  button.onclick = () => {
+    document.querySelector('main').dataset.mobileView =
+      button.dataset.mobileView;
+    for (const item of document.querySelectorAll('.mobile-views button'))
+      item.setAttribute('aria-pressed', String(item === button));
+    if (button.dataset.mobileView === 'console') $('console-panel').open = true;
+    if (button.dataset.mobileView === 'state')
+      activateTab(document.querySelector('[data-tab="state"]'));
+  };
+}
 $('search').oninput = filterList;
 $('kind-filter').onchange = filterList;
 $('bookmark').onclick = toggleBookmark;
@@ -440,6 +952,21 @@ $('bookmarks-only').onclick = () => {
   filterList();
 };
 $('view-mode').onchange = render;
+$('toggle-flow').onclick = () => {
+  const visible = document
+    .querySelector('.center-column')
+    .classList.toggle('show-flow');
+  $('toggle-flow').setAttribute('aria-expanded', String(visible));
+  $('toggle-flow').textContent = visible ? 'Hide diagram' : 'Show diagram';
+  render();
+};
+$('follow').onchange = () => {
+  if ($('follow').checked) {
+    pinnedCallId = undefined;
+    inspectedSourceEvent = undefined;
+  } else pinnedCallId = inspectedSourceEvent?.callId;
+  render();
+};
 $('center-view').onclick = () => {
   if (cursor) {
     const node = nodes.get(flow.steps[cursor - 1].to);
@@ -485,6 +1012,11 @@ tabs.forEach((tab, i) => {
   };
 });
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('help-panel').hidden) {
+    e.preventDefault();
+    $('close-help').click();
+    return;
+  }
   if (
     !flow ||
     e.ctrlKey ||
@@ -501,7 +1033,11 @@ document.addEventListener('keydown', (e) => {
     ArrowRight: () => seek(cursor + 1),
     Home: () => seek(0),
     End: () => seek(flow.steps.length),
-    '/': () => $('search').focus(),
+    '/': () => {
+      if (window.matchMedia('(max-width: 650px)').matches)
+        document.querySelector('button[data-mobile-view="trace"]').click();
+      $('search').focus();
+    },
     b: toggleBookmark,
   };
   const action = actions[e.key];
@@ -532,22 +1068,32 @@ async function load() {
     if (!response.ok) throw new Error((await response.json()).error);
     flow = await response.json();
     originalFlow = flow;
+    registerFlow(flow, location.pathname.split('/').at(-1));
+    const baselineFlow = flow.baselineTrace
+      ? registerFlow(
+          {
+            endpoint: flow.baselineTrace.target ?? flow.endpoint,
+            nextSessionId: flow.baselineNextSessionId,
+            trace: flow.baselineTrace,
+            steps: traceSteps(flow.baselineTrace),
+          },
+          flow.baselineSessionId ?? flow.trace?.simulation?.baselineSessionId,
+        )
+      : undefined;
     $('title').textContent = flow.endpoint;
     $('title').title = flow.endpoint;
     $('variant').hidden = !flow.baselineTrace;
     $('variant').onchange = () => {
       pause();
-      cursor = 0;
+      continuationStates.get(flow).cursor = cursor;
       bookmarks.clear();
       breakpoints.clear();
-      flow =
-        $('variant').value === 'baseline'
-          ? {
-              ...originalFlow,
-              trace: originalFlow.baselineTrace,
-              steps: traceSteps(originalFlow.baselineTrace),
-            }
-          : originalFlow;
+      sourceBreakpoints.clear();
+      flow = $('variant').value === 'baseline' ? baselineFlow : originalFlow;
+      cursor = continuationStates.get(flow).cursor;
+      $('next-chunk').hidden = !flow.nextSessionId;
+      if (flow.nextSessionId)
+        $('next-chunk').href = '/flow/' + flow.nextSessionId;
       buildNodes();
       render();
     };
