@@ -360,6 +360,29 @@ function frameLocals(state, event) {
     ? (state.locals[activeFrame(state, event)] ?? {})
     : state.locals;
 }
+// Compare recorded snapshots of the same invocation. A newly entered frame
+// has no preceding state; switching frames must not look like a mutation.
+function precedingFrameLocals(state, event, previousEvent) {
+  if (!previousEvent?.locals || !event?.locals) return undefined;
+  const frame = activeFrame(state, event);
+  if (
+    frame &&
+    Object.hasOwn(event.locals, frame) &&
+    Object.hasOwn(previousEvent.locals, frame)
+  )
+    return previousEvent.locals[frame];
+  // Older agent traces store one flat locals object per event.
+  if (
+    state.stack.length &&
+    previousEvent.callId === event.callId &&
+    !state.stack.some((id) => Object.hasOwn(event.locals, id)) &&
+    !(previousEvent.stack ?? []).some((id) =>
+      Object.hasOwn(previousEvent.locals, id),
+    )
+  )
+    return previousEvent.locals;
+  return undefined;
+}
 // Token spans only decorate literal source text. Source code is never generated.
 function codeText(content) {
   const container = text('span', '', 'code-text');
@@ -767,7 +790,11 @@ function render() {
     row.querySelector('button').onclick = () => inspectFrame(frame);
     $('frame-list').append(row);
   });
-  fieldRows($('local-tree'), frameLocals(state, event));
+  fieldRows(
+    $('local-tree'),
+    frameLocals(state, event),
+    precedingFrameLocals(state, event, flow.trace?.events[cursor - 2]),
+  );
   fieldRows($('object-tree'), state.objects);
   $('certainty').textContent = event
     ? [event.certainty, event.note].filter(Boolean).join(' · ')

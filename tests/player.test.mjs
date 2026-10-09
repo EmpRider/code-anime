@@ -435,6 +435,11 @@ test('source-first playback follows nested calls, restores parent locals, and re
       get('snippet').querySelector('.executing-line').dataset.line,
       '3',
     );
+    assert.match(
+      get('local-tree').querySelector('.field.changed').textContent,
+      /sum: ∅ → 30/,
+      'callee assignment changes should be visible in its own frame',
+    );
     get('breakpoint').click();
     assert.equal(
       get('snippet')
@@ -449,12 +454,24 @@ test('source-first playback follows nested calls, restores parent locals, and re
       get('snippet').querySelector('.executing-line').dataset.line,
       '4',
     );
-    assert.match(get('local-tree').textContent, /result: 30/);
+    assert.match(get('local-tree').textContent, /result: .*30/);
+    assert.match(
+      get('local-tree').querySelector('.field.changed').textContent,
+      /result: ∅ → 30/,
+      'return assignment should compare parent state across the callee exit',
+    );
     get('next').click();
     assert.equal(get('console-output').textContent, '30');
     get('previous').click();
     assert.equal(get('console-output').textContent, '');
     assert.equal(get('source').textContent, 'A.ts');
+    assert.match(
+      get('local-tree').querySelector('.field.changed').textContent,
+      /result: ∅ → 30/,
+    );
+    get('previous').click();
+    assert.equal(get('local-tree').querySelector('.field.changed'), null);
+    get('next').click();
     // Re-rendering must retain the source editor with unchanged file and line.
     get('tab-state').click();
     assert.equal(

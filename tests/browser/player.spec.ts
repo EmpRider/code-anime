@@ -180,6 +180,8 @@ test('actual Python recording replays across chunks with exact output and revers
       '6',
     );
     await expect(page.locator('#local-tree')).toContainText('83845');
+    await page.locator('#toggle-inspector').click();
+    await page.locator('#tab-state').click();
     await expect(page.locator('#certainty')).toContainText(
       'before this source line',
     );
@@ -188,6 +190,41 @@ test('actual Python recording replays across chunks with exact output and revers
       'data-line',
       '4',
     );
+    const events: TraceEvent[] = [];
+    let chunk = await runtime.store.get(status.sessionId!);
+    while (chunk) {
+      events.push(...chunk.flow.trace!.events);
+      chunk = await runtime.store.next(chunk.id);
+    }
+    const totalFor = (event: TraceEvent | undefined, callId?: string) => {
+      const locals = callId ? event?.locals?.[callId] : undefined;
+      return locals &&
+        typeof locals === 'object' &&
+        'total' in locals &&
+        typeof locals.total === 'number'
+        ? locals.total
+        : undefined;
+    };
+    const mutation = events.findIndex((event, index) => {
+      const callId = event.stack.at(-1);
+      const before = totalFor(events[index - 1], callId);
+      const after = totalFor(event, callId);
+      return (
+        typeof before === 'number' &&
+        typeof after === 'number' &&
+        before !== after
+      );
+    });
+    expect(mutation).toBeGreaterThan(0);
+    const frame = events[mutation]!.stack.at(-1);
+    const before = totalFor(events[mutation - 1], frame);
+    const after = totalFor(events[mutation], frame);
+    await page.locator('#timeline').fill(String(mutation + 1));
+    await expect(page.locator('#local-tree .field.changed')).toContainText(
+      `total: ${before} → ${after}`,
+    );
+    await page.locator('#previous').click();
+    await expect(page.locator('#local-tree')).toContainText(String(before));
     expect(errors).toEqual([]);
   } finally {
     recorder.close();
