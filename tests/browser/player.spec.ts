@@ -51,6 +51,26 @@ test.afterAll(async () => {
   await runtime?.close();
 });
 
+test('keyboard disclosure preserves playback and uses only prepared data', async ({ page }) => {
+  await page.goto(url);
+  await expect(page.locator('#progress')).toHaveText('0 / 100');
+  await page.locator('#timeline').fill('70');
+  const requests: string[] = [];
+  page.on('request', request => requests.push(request.url()));
+  const disclosure = page.locator('.call-disclosure').first();
+  await disclosure.focus();
+  await page.keyboard.press('Enter');
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+  await expect(disclosure).toBeFocused();
+  await expect(page.locator('#progress')).toHaveText('70 / 100');
+  await expect(page.locator('#console-output')).toContainText('output 69');
+  await page.keyboard.press('Space');
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#progress')).toHaveText('70 / 100');
+  await expect(page.locator('#play')).toHaveAttribute('data-playing', 'false');
+  expect(requests).toEqual([]);
+});
+
 for (const viewport of [
   { width: 1440, height: 900 },
   { width: 820, height: 1180 },

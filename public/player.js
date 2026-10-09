@@ -170,6 +170,7 @@ let listCursor = -1;
 let listSignature = '';
 function createEventRow(index) {
   const { event, step } = rows[index];
+  const container = text('div', '', 'event-item');
   const button = text('button', '', 'event-row');
   button.dataset.kind = event?.kind ?? 'flow';
   button.dataset.index = index + 1;
@@ -179,8 +180,20 @@ function createEventRow(index) {
   const description = text('span', '', 'event-description');
   const label = text('span', event?.label ?? step.dtoName, 'event-label');
   if (event?.kind === 'enter') {
-    label.classList.add('expandable');
-    button.setAttribute('aria-expanded', 'false');
+    const disclosure = text('button', '▸', 'call-disclosure');
+    disclosure.dataset.callId = event.callId;
+    disclosure.setAttribute('aria-expanded', 'false');
+    disclosure.setAttribute('aria-label', 'Expand ' + (event.label ?? event.symbolId));
+    disclosure.onclick = () => {
+      expandedCalls.has(event.callId)
+        ? expandedCalls.delete(event.callId)
+        : expandedCalls.add(event.callId);
+      filterList();
+      // Filtering can replace this page. Keep keyboard focus on its disclosure.
+      for (const control of $('event-list').querySelectorAll('.call-disclosure'))
+        if (control.dataset.callId === event.callId) control.focus({ preventScroll: true });
+    };
+    container.append(disclosure);
   }
   description.append(label);
   const meta = text('span', '', 'event-meta');
@@ -188,14 +201,7 @@ function createEventRow(index) {
   if (event?.source) meta.append(text('span', 'L' + event.source.line));
   description.append(meta);
   button.append(description);
-  button.onclick = () => {
-    if (event?.kind === 'enter') {
-      expandedCalls.has(event.callId)
-        ? expandedCalls.delete(event.callId)
-        : expandedCalls.add(event.callId);
-    }
-    seek(index + 1);
-  };
+  button.onclick = () => seek(index + 1);
   button.ondblclick = () => toggleBreakpoint(index + 1);
   button.title = 'Select step. Double-click to toggle a playback breakpoint.';
   if (event?.stack?.length)
@@ -203,7 +209,8 @@ function createEventRow(index) {
       '--call-depth',
       String(Math.min(5, event.stack.length - 1)),
     );
-  return button;
+  container.append(button);
+  return container;
 }
 function buildList() {
   rows.length = 0;
@@ -243,7 +250,10 @@ function filterList() {
     const collapsed =
       event &&
       !essential.includes(event.kind) &&
-      !expandedCalls.has(event.callId);
+      (!expandedCalls.has(event.callId) ||
+        (invocations.get(event.callId)?.stack ?? []).some(
+          (callId) => invocations.has(callId) && !expandedCalls.has(callId),
+        ));
     const matches =
       kind === 'all' ||
       (kind === 'changes' && changed(event)) ||
@@ -254,7 +264,7 @@ function filterList() {
       matches &&
       search.includes(query) &&
       (!onlyBookmarks || bookmarks.has(i + 1)) &&
-      !(collapsed && !query && !onlyBookmarks && cursor !== i + 1)
+      !(collapsed && kind === 'all' && !query && !onlyBookmarks && cursor !== i + 1)
     )
       visible.push(i);
   });
@@ -296,17 +306,19 @@ function filterList() {
   }
   for (const button of $('event-list').querySelectorAll('.event-row')) {
     const index = Number(button.dataset.index);
-    const event = rows[index - 1].event;
-    if (event?.kind === 'enter')
-      button.setAttribute(
-        'aria-expanded',
-        String(expandedCalls.has(event.callId)),
-      );
     button.classList.toggle('bookmarked', bookmarks.has(index));
     button.classList.toggle('breakpoint', hasBreakpoint(index));
     button.classList.toggle('current', cursor === index);
     if (cursor === index) button.setAttribute('aria-current', 'step');
     else button.removeAttribute('aria-current');
+  }
+  for (const disclosure of $('event-list').querySelectorAll('.call-disclosure')) {
+    const event = invocations.get(disclosure.dataset.callId);
+    const expanded = expandedCalls.has(disclosure.dataset.callId);
+    disclosure.textContent = expanded ? '▾' : '▸';
+    disclosure.setAttribute('aria-expanded', String(expanded));
+    disclosure.setAttribute('aria-label',
+      (expanded ? 'Collapse ' : 'Expand ') + (event.label ?? event.symbolId));
   }
   const count = visible.length;
   $('trace-count').textContent = count + ' / ' + rows.length;

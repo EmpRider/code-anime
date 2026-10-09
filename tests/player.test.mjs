@@ -193,7 +193,7 @@ test('studio search, bookmarks, keyboard tabs and breakpoints preserve replay st
     for (let i = 0; i < 20 && get('progress').textContent !== '0 / 3'; i++)
       await new Promise((r) => setTimeout(r, 5));
     const visibleRows = () =>
-      [...get('event-list').children].filter((e) => !e.hidden);
+      [...get('event-list').querySelectorAll('.event-row')];
     get('search').value = 'trim';
     get('search').dispatchEvent(new window.Event('input'));
     assert.equal(visibleRows().length, 1);
@@ -364,6 +364,45 @@ test('source-first playback follows nested calls, restores parent locals, and re
     get('step-out').click();
     assert.equal(get('progress').textContent, '8 / 8');
     assert.equal(get('frame-list').children.length, 0);
+    // Disclosure changes the view, never the shared replay cursor or timer.
+    get('timeline').value = '7';
+    get('timeline').dispatchEvent(new window.Event('input'));
+    const disclosure = callId => get('event-list').querySelector(`[data-call-id="${callId}"]`);
+    const hasRow = index => !!get('event-list').querySelector(`.event-row[data-index="${index}"]`);
+    const pending = new Map();
+    let serial = 0;
+    window.setTimeout = callback => { pending.set(++serial, callback); return serial; };
+    window.clearTimeout = id => pending.delete(id);
+    get('play').click();
+    assert.equal(pending.size, 1);
+    disclosure('call-a').click();
+    disclosure('call-b').click();
+    assert.equal(hasRow(4), true);
+    assert.equal(hasRow(6), true);
+    disclosure('call-b').click();
+    assert.equal(hasRow(4), false);
+    assert.equal(hasRow(6), true, 'collapsing child retains parent details');
+    disclosure('call-b').click();
+    disclosure('call-a').click();
+    assert.equal(hasRow(4), false, 'collapsed ancestor hides nested details');
+    disclosure('call-a').click();
+    assert.equal(hasRow(4), true, 'nested expansion preferences are retained');
+    assert.equal(window.document.activeElement, disclosure('call-a'));
+    assert.equal(get('progress').textContent, '7 / 8');
+    assert.equal(get('console-output').textContent, '30');
+    assert.equal(get('play').dataset.playing, 'true');
+    assert.equal(pending.size, 1);
+    get('play').click();
+    disclosure('call-a').click();
+    get('kind-filter').value = 'changes';
+    get('kind-filter').dispatchEvent(new window.Event('change'));
+    assert.equal(hasRow(4), true, 'explicit filters reveal collapsed matches');
+    assert.equal(hasRow(6), true);
+    get('kind-filter').value = 'all';
+    get('kind-filter').dispatchEvent(new window.Event('change'));
+    get('event-list').querySelector('.event-row[data-index="3"]').click();
+    assert.equal(get('progress').textContent, '3 / 8');
+    assert.equal(disclosure('call-b').getAttribute('aria-expanded'), 'true', 'selection does not toggle expansion');
   } finally {
     dom.window.close();
   }

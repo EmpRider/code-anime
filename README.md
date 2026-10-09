@@ -59,6 +59,7 @@ infer language-specific exception rules.
 The player keeps a searchable execution timeline, live flow, source spotlight and step inspector together. It takes interaction cues from [VisualJS](https://www.visualjs.in/visualizer) while replaying CodeGraph-grounded mock traces across supported source languages.
 
 - Click a step or scrub the timeline; Previous restores the recorded stack, locals and shared objects.
+- Use the disclosure arrow beside a method entry to expand or collapse prepared details without seeking or pausing playback. Nested expansion preferences survive collapsing their parent. Selecting the step itself navigates the timeline; search and filters can reveal details inside collapsed methods.
 - Use Focus view for the current transition or Full map to browse all symbols in this trace chunk.
 - Inspect nested object fields, before/after changes, inputs, return values and value origins. Filter to changes only.
 - Switch between Values, State (call stack, locals, shared objects), and Context (coverage, evidence, comparison and chunk navigation).

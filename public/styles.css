@@ -1172,8 +1172,10 @@ main { padding: 10px 14px; }
 .event-pages button { font-size: 11px; padding: 4px 6px; }
 .event-pages span { font-size: 11px; }
 .event-row { padding: 7px 5px 7px calc(5px + var(--call-depth, 0) * 8px); }
-.event-label.expandable::before { content: '▸'; display: inline-block; margin-right: 6px; color: var(--accent); }
-.event-row[aria-expanded='true'] .event-label.expandable::before { content: '▾'; }
+.event-item { display: flex; align-items: center; }
+.event-item .event-row { flex: 1; min-width: 0; }
+.call-disclosure { flex: 0 0 28px; min-height: 32px; padding: 0; color: var(--accent); background: transparent; border: 0; }
+.call-disclosure:hover { background: #1d2230; }
 .center-column {
   grid-template-rows: minmax(0, 1fr) minmax(72px, 100px);
   gap: 10px;
