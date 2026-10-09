@@ -14,6 +14,14 @@
         ><span class="studio-label">EXECUTION STUDIO</span></a
       >
       <div class="header-actions">
+        <button
+          id="toggle-inspector"
+          class="quiet-button"
+          aria-expanded="false"
+          aria-controls="step-inspector"
+        >
+          Inspector
+        </button>
         <span class="local-badge"><i></i> Local session</span
         ><button
           id="help"
@@ -69,7 +77,7 @@
         ><span><kbd>B</kbd> Bookmark</span
         ><button id="close-help" aria-label="Close shortcuts">×</button>
       </section>
-      <div class="workspace">
+      <div class="workspace inspector-collapsed">
         <aside class="panel trace-panel" aria-label="Execution timeline">
           <div class="panel-heading">
             <h2>Execution trace</h2>
@@ -113,6 +121,16 @@
             ><span id="trace-order">Prepared event order</span>
           </div>
         </aside>
+        <div
+          id="workspace-divider"
+          role="separator"
+          tabindex="0"
+          aria-label="Resize execution timeline"
+          aria-orientation="vertical"
+          aria-valuemin="170"
+          aria-valuemax="480"
+          aria-valuenow="220"
+        ></div>
         <section class="center-column" aria-label="Animation and source">
           <section id="flow-panel" class="panel flow-panel">
             <div class="panel-heading">
@@ -156,6 +174,14 @@
             <div class="panel-heading">
               <h2>Source execution</h2>
               <button
+                id="maximize-source"
+                class="quiet-button"
+                aria-pressed="false"
+                title="Focus source workspace"
+              >
+                Focus
+              </button>
+              <button
                 id="toggle-flow"
                 class="quiet-button"
                 type="button"
@@ -180,7 +206,7 @@
             </p>
           </section>
           <section class="panel console-panel" aria-label="Console output">
-            <details id="console-panel" open>
+            <details id="console-panel">
               <summary>
                 Console
                 <span id="console-count" class="count-badge">0 lines</span>
@@ -189,7 +215,11 @@
             </details>
           </section>
         </section>
-        <aside class="panel inspector" aria-label="Step inspector">
+        <aside
+          id="step-inspector"
+          class="panel inspector"
+          aria-label="Step inspector"
+        >
           <div class="panel-heading">
             <h2>Step inspector</h2>
             <button

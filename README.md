@@ -60,6 +60,8 @@ See the [tool contract](skills/code-anime/references/tool-contract.md) for paylo
 
 ## Execution studio
 
+The desktop inspector and console start collapsed to leave more room for source and execution. Open the inspector from the header, or expand the console when needed. On desktop and tablet widths, drag the divider beside the execution timeline to resize it; focused divider keys Left/Right adjust by 20 pixels and Home/End select its limits. Focus/Restore temporarily maximizes the source workspace. Timeline width, inspector visibility and console preferences are saved in browser storage when available. Layout changes preserve the selected event and playback state; mobile continues to use its dedicated view tabs.
+
 Exception paths use explicit semantic operations. A `throw` may supply
 `unwindTo` with an active call ID (from builder status) to retain that handler's
 frame and remove its callees, or `null` for an uncaught exception. Omitting it

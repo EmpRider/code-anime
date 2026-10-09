@@ -54,6 +54,77 @@ test.afterAll(async () => {
   await runtime?.close();
 });
 
+test('desktop layout resizes, focuses and remembers preferences without moving playback', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(url);
+  await expect(page.locator('#progress')).toHaveText('0 / 100');
+  await page.locator('#timeline').fill('70');
+  await expect(page.locator('.inspector')).toBeHidden();
+  await expect(page.locator('#console-panel')).not.toHaveAttribute('open', '');
+  const divider = page.getByRole('separator', {
+    name: 'Resize execution timeline',
+  });
+  await divider.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(divider).toHaveAttribute('aria-valuenow', '240');
+  await expect(page.locator('#progress')).toHaveText('70 / 100');
+  const bounds = (await divider.boundingBox())!;
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + 60);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 84, bounds.y + 60);
+  await page.mouse.up();
+  const width = Number(await divider.getAttribute('aria-valuenow'));
+  expect(width).toBeGreaterThan(300);
+  await page.locator('#toggle-inspector').click();
+  await expect(page.locator('.inspector')).toBeVisible();
+  await page.locator('#maximize-source').click();
+  await expect(page.locator('.inspector')).toBeHidden();
+  await expect(page.locator('.trace-panel')).toBeHidden();
+  expect(
+    (await page.locator('.center-column').boundingBox())!.width,
+  ).toBeGreaterThan(1200);
+  await page.locator('#maximize-source').click();
+  await expect(page.locator('.trace-panel')).toBeVisible();
+  await expect(page.locator('.inspector')).toBeVisible();
+  await page.locator('#console-panel summary').click();
+  await expect(page.locator('#console-output')).toBeVisible();
+  await expect(page.locator('#progress')).toHaveText('70 / 100');
+  await page.reload();
+  await expect(page.locator('#progress')).toHaveText('0 / 100');
+  await expect(page.locator('.inspector')).toBeVisible();
+  await expect(page.locator('#console-output')).toBeVisible();
+  await expect(divider).toHaveAttribute('aria-valuenow', String(width));
+});
+
+test('tablet layout keeps timeline resizable and source focus available', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 690, height: 950 });
+  await page.goto(url);
+  await page.locator('#timeline').fill('70');
+  const divider = page.getByRole('separator', {
+    name: 'Resize execution timeline',
+  });
+  await expect(divider).toBeVisible();
+  await divider.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(divider).toHaveAttribute('aria-valuenow', '240');
+  await page.locator('#toggle-inspector').click();
+  await expect(page.locator('.inspector')).toBeVisible();
+  await page.locator('#maximize-source').click();
+  await expect(page.locator('.trace-panel')).toBeHidden();
+  await expect(page.locator('.inspector')).toBeHidden();
+  await expect(page.locator('.source-panel')).toBeVisible();
+  await expect(page.locator('#progress')).toHaveText('70 / 100');
+  await page.locator('#maximize-source').click();
+  await expect(page.locator('.trace-panel')).toBeVisible();
+  await expect(page.locator('.inspector')).toBeVisible();
+  const width = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(width).toBeLessThanOrEqual(690);
+});
+
 test('actual Python recording replays across chunks with exact output and reversible source state', async ({
   page,
 }) => {

@@ -983,6 +983,98 @@ $('step-out').onclick = () => {
   })().catch(() => {});
 };
 $('timeline').oninput = () => seek(Number($('timeline').value));
+const workspace = document.querySelector('.workspace');
+const divider = $('workspace-divider');
+let layout = { inspector: false, traceWidth: 220, console: false };
+try {
+  const saved = JSON.parse(localStorage.getItem('code-anime-layout') ?? '{}');
+  if (typeof saved.inspector === 'boolean') layout.inspector = saved.inspector;
+  if (typeof saved.console === 'boolean') layout.console = saved.console;
+  if (Number.isFinite(saved.traceWidth)) layout.traceWidth = saved.traceWidth;
+} catch {
+  /* Storage can be disabled by the browser. */
+}
+function saveLayout() {
+  try {
+    localStorage.setItem('code-anime-layout', JSON.stringify(layout));
+  } catch {
+    /* Optional preference persistence. */
+  }
+}
+function resizeTimeline(width) {
+  const max = Math.max(
+    170,
+    Math.min(480, (workspace.clientWidth || innerWidth) * 0.45),
+  );
+  const bounded = Math.round(Math.max(170, Math.min(max, width)));
+  workspace.style.setProperty('--trace-width', bounded + 'px');
+  divider.setAttribute('aria-valuemax', String(Math.floor(max)));
+  divider.setAttribute('aria-valuenow', String(bounded));
+  return bounded;
+}
+function applyLayout() {
+  workspace.classList.toggle('inspector-collapsed', !layout.inspector);
+  $('toggle-inspector').setAttribute('aria-expanded', String(layout.inspector));
+  resizeTimeline(layout.traceWidth);
+}
+$('toggle-inspector').onclick = () => {
+  layout.inspector = !layout.inspector;
+  if (layout.inspector) {
+    workspace.classList.remove('source-focused');
+    $('maximize-source').setAttribute('aria-pressed', 'false');
+    $('maximize-source').textContent = 'Focus';
+  }
+  applyLayout();
+  saveLayout();
+  render();
+};
+$('maximize-source').onclick = () => {
+  const focused = workspace.classList.toggle('source-focused');
+  $('maximize-source').setAttribute('aria-pressed', String(focused));
+  $('maximize-source').textContent = focused ? 'Restore' : 'Focus';
+  render();
+};
+divider.onpointerdown = (event) => {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  divider.focus();
+  divider.setPointerCapture(event.pointerId);
+};
+divider.onpointermove = (event) => {
+  if (!divider.hasPointerCapture(event.pointerId)) return;
+  layout.traceWidth = resizeTimeline(
+    event.clientX - workspace.getBoundingClientRect().left,
+  );
+};
+divider.onpointerup = (event) => {
+  if (divider.hasPointerCapture(event.pointerId))
+    divider.releasePointerCapture(event.pointerId);
+  saveLayout();
+  render();
+};
+divider.onkeydown = (event) => {
+  const width = Number(divider.getAttribute('aria-valuenow'));
+  const next = {
+    ArrowLeft: width - 20,
+    ArrowRight: width + 20,
+    Home: 170,
+    End: 480,
+  }[event.key];
+  if (next === undefined) return;
+  event.preventDefault();
+  event.stopPropagation();
+  layout.traceWidth = resizeTimeline(next);
+  saveLayout();
+  render();
+};
+$('console-panel').open = layout.console;
+$('console-panel').addEventListener('toggle', () => {
+  if (window.innerWidth <= 650) return;
+  layout.console = $('console-panel').open;
+  saveLayout();
+});
+window.addEventListener('resize', applyLayout);
+applyLayout();
 for (const button of document.querySelectorAll('.mobile-views button')) {
   button.onclick = () => {
     document.querySelector('main').dataset.mobileView =
