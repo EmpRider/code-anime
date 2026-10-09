@@ -278,8 +278,16 @@ test('recorded interleaved asyncio tasks preserve per-invocation mutations in br
         event.kind === 'resume' &&
         stateValue(event) === 1,
     );
+    const awaiting = events.findIndex(
+      (event) => event.callId === workerB!.callId && event.kind === 'await',
+    );
+    const returned = events.findIndex(
+      (event) => event.callId === workerB!.callId && event.kind === 'return',
+    );
     expect(prior).toBeGreaterThanOrEqual(0);
+    expect(awaiting).toBeGreaterThan(prior);
     expect(resume).toBeGreaterThan(prior + 1);
+    expect(returned).toBeGreaterThan(resume);
     expect(events[resume]!.values.task).toEqual(workerB!.values.task);
 
     const errors: string[] = [];
@@ -289,6 +297,16 @@ test('recorded interleaved asyncio tasks preserve per-invocation mutations in br
     await expect(page.locator('#source')).toHaveText('async.py');
     await expect(page.locator('#local-tree .field.changed')).toContainText(
       'state.value: 0 → 1',
+    );
+    await page.locator('#timeline').fill(String(awaiting + 1));
+    await page.locator('#step-over').click();
+    await expect(page.locator('#progress')).toHaveText(
+      `${resume + 1} / ${events.length}`,
+    );
+    await page.locator('#timeline').fill(String(awaiting + 1));
+    await page.locator('#step-out').click();
+    await expect(page.locator('#progress')).toHaveText(
+      `${returned + 1} / ${events.length}`,
     );
     await page.locator('#timeline').fill(String(prior + 1));
     await expect(page.locator('#local-tree')).toContainText('state.value: 0');

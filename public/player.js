@@ -995,11 +995,16 @@ $('step-over').onclick = () => {
   const events = flow?.trace?.events;
   if (!events || !cursor) return seek(cursor + 1);
   const current = events[cursor - 1];
-  const callId = current?.stack?.at(-1) ?? current.callId;
+  const suspended = ['await', 'yield'].includes(current?.kind);
+  const callId = suspended
+    ? current.callId
+    : (current?.stack?.at(-1) ?? current.callId);
+  const task = current?.values?.task;
   void (async () => {
     let i = cursor;
     while (true) {
       for (; i < events.length; i++) {
+        if (task !== undefined && events[i].values?.task !== task) continue;
         if (events[i].callId === callId || !events[i].stack?.includes(callId)) {
           if (version === navigationVersion && flow === requestedFlow)
             seek(i + 1);
@@ -1021,17 +1026,25 @@ $('step-out').onclick = () => {
   const events = flow?.trace?.events;
   const current = events?.[cursor - 1];
   if (!current) return;
-  const callId = current.stack?.at(-1);
+  const suspended = ['await', 'yield'].includes(current.kind);
+  const callId = suspended ? current.callId : current.stack?.at(-1);
+  const task = current.values?.task;
   if (!callId) return;
   void (async () => {
     let i = cursor;
     while (true) {
-      for (; i < events.length; i++)
-        if (!events[i].stack?.includes(callId)) {
+      for (; i < events.length; i++) {
+        const next = events[i];
+        if (task !== undefined && next.values?.task !== task) continue;
+        if (
+          !next.stack?.includes(callId) &&
+          !(['await', 'yield'].includes(next.kind) && next.callId === callId)
+        ) {
           if (version === navigationVersion && flow === requestedFlow)
             seek(i + 1);
           return;
         }
+      }
       if (version !== navigationVersion || flow !== requestedFlow) return;
       if (!flow.nextSessionId || !(await extendThrough(events.length + 1)))
         return version === navigationVersion && flow === requestedFlow
