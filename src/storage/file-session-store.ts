@@ -133,8 +133,8 @@ export class FileSessionStore implements SessionStore {
         const session = await this.readSession(id);
         this.index.set(id, {
           createdAt: session.createdAt,
-          ...(session.flow.trace?.simulation?.previousSessionId
-            ? { previousSessionId: session.flow.trace.simulation.previousSessionId } : {}),
+          ...((session.flow.trace?.recording ?? session.flow.trace?.simulation)?.previousSessionId
+            ? { previousSessionId: (session.flow.trace?.recording ?? session.flow.trace?.simulation)!.previousSessionId! } : {}),
         });
       } catch (error) {
         // Keep damaged files available for inspection without blocking valid
@@ -188,7 +188,7 @@ export class FileSessionStore implements SessionStore {
         flag: 'wx',
       });
       await rename(temporary, target);
-      const previousSessionId = flow.trace?.simulation?.previousSessionId;
+      const previousSessionId = (flow.trace?.recording ?? flow.trace?.simulation)?.previousSessionId;
       this.index.set(session.id, {
         createdAt: session.createdAt,
         ...(previousSessionId ? { previousSessionId } : {}),

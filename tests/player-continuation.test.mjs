@@ -610,3 +610,29 @@ test('invalid continuation links and repeated event IDs are reported without cor
     });
   }
 });
+
+test('runtime continuation rejects a different recording or simulated evidence', async (t) => {
+  for (const mismatch of ['run', 'mode']) {
+    await t.test(mismatch, async () => {
+      const first = initial();
+      const next = continuation();
+      const asRecording = flow => {
+        flow.trace.recording = { ...flow.trace.simulation, mode: 'runtime', language: 'python', runId: 'one-run' };
+        delete flow.trace.simulation;
+      };
+      asRecording(first);
+      if (mismatch === 'run') {
+        asRecording(next);
+        next.trace.recording.runId = 'another-run';
+      }
+      const { dom, window, get } = await createPlayer(async () => next, first);
+      try {
+        moveTo(window, get, 4);
+        get('next').click();
+        await waitFor(() => get('status').textContent.includes('Continuation unavailable'));
+        assert.equal(get('progress').textContent, '4 / 4');
+        assert.equal(get('evidence-mode').textContent, 'Recorded execution');
+      } finally { dom.window.close(); }
+    });
+  }
+});

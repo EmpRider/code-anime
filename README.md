@@ -4,7 +4,19 @@
 
 CodeGraph retrieves the active project's source and relationships. Your AI agent supplies source-grounded mock steps directly through MCP calls. Code Anime assembles the trace, manages frames and snapshots, and animates objects with their fields, before/after changes and source locations in a localhost player.
 
-Version **0.5.0** adds a modern execution studio to the server-owned animation workflow. No agent-generated Python/JS helper, payload JSON file, custom player, or shell command is part of the visualization workflow. CodeGraph is required for every language; missing installation or index stops the process. Repository code, databases and HTTP effects are not executed. Values are labeled as simulated, assumed, unresolved or proposed.
+Version **0.5.0** adds a modern execution studio to the server-owned animation workflow. No agent-generated Python/JS helper, payload JSON file, custom player, or shell command is part of the visualization workflow. The default simulation workflow requires CodeGraph and does not execute repository code, databases or HTTP effects. Values are labeled as simulated, assumed, unresolved or proposed. Explicit runtime recording is available for synchronous Python programs as described below.
+
+## Record actual Python execution
+
+Use `record_execution` when the user requests running a trusted Python entry file. Unlike simulation, this executes the application with local permissions and real side effects; it is not a sandbox. Python must be installed (`python` on Windows, `python3` elsewhere), or set `CODE_ANIME_PYTHON_COMMAND` to its executable path. CodeGraph is not required for this recorder. Other languages retain their existing structural and simulated workflows; runtime support for them is not yet implemented.
+
+Send `action: "start"`, `language: "python"`, `projectRoot`, `entry` (a `.py` file inside that root), and optional string `args`. Poll `action: "status"` with the returned `jobId` for event/byte counts and the final player URL. `action: "cancel"` stops a running job and saves any events already captured. A built-in recorder collects the events; the AI does not generate or infer their values. Playback and inspection only use these stored snapshots.
+
+The recorder captures real invocations across user files, repeated source-line visits, bounded local/argument snapshots, returns, exceptions and text writes to stdout/stderr. Each line event is the state **before** that line executes; the next event reflects its effects. Runtime console writes are concatenated exactly as captured. Events are marked `observed`, with a unique recording identity shared across automatic continuation chunks. A completed trace covers the recorded input and synchronous main-thread user-code scope, not all possible branches or the entire application.
+
+Defaults are 15 seconds, 10,000 events and 16 MiB of protocol data. Set `timeoutMs`, `maxEvents` and `maxTraceBytes` explicitly to adjust resource budgets (up to 300 seconds, 100,000 events and 64 MiB). These are resource budgets, not call-depth limits. Timeouts, cancellation and exhausted budgets preserve valid partial events and display their reason. Existing session quotas still apply when saving chunks.
+
+Limits: generators/coroutines and detected concurrent threads stop with an explicit boundary. Other processes, native/dependency internals, binary stream writes and custom object internals are outside capture scope. Strings, collections, locals and nesting are bounded and omissions are marked in the snapshots; no custom `repr` or property getters run for inspection. Ordinary Python recursion limits still apply. Exceptions that escape the program are reported as incomplete runs. The recorder is not suitable for adversarial programs that replace instrumentation, write to its protocol stream or deliberately evade process supervision.
 
 ## Connect the MCP
 

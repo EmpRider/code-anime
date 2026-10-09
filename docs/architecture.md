@@ -11,7 +11,13 @@ The entry point composes a bounded file-backed session store, loopback HTTP play
 5. The MCP animation builder creates IDs, pushes/pops invocation frames, applies local/object field updates and creates full after-event snapshots. Append requests are atomic and retryable. Finish automatically chunks, validates and persists the trace, rolls back partially stored chunks on failure, and returns the localhost URL. The one-shot generate_mock_flow_animation tool remains a compatibility API.
 6. The browser renders fields inside moving packets, highlights changes, and restores complete local/stack snapshots for replay/seek. Linked chunks preserve a long scenario; baseline/proposed scenarios can be selected in one player.
 
-The server does not embed an LLM, execute application code or prove semantic correctness. The skill supplies the AI orchestration. Receipts establish source retrieval and project identity, not correctness of every calculated value. Unknown effects remain explicitly assumed/unresolved.
+The simulation service does not embed an LLM, execute application code or prove semantic correctness. The skill supplies the AI orchestration. Receipts establish source retrieval and project identity, not correctness of every calculated value. Unknown effects remain explicitly assumed/unresolved.
+
+## Runtime recordings
+
+`record_execution` is a separate opt-in entry path through `RecordingService`. Its bundled Python recorder runs a trusted entry file in a child interpreter and streams source snapshots and observed events. Status exposes progress; cancellation, timeout and byte/event budgets stop capture while retaining accepted events. It reuses `EventJournal`, `traceToFlow` and the session store rather than introducing a second player or state model. Recording metadata carries scope, completion, a run UUID and continuation ancestry. Continuations must keep that run UUID and evidence mode; runtime and simulation chunks cannot mix.
+
+Only synchronous main-thread Python tracing is implemented. The recorder documents before-line snapshot semantics, bounded values and unsupported effects in each trace. It does not infer missing values or promote mock events. Execution is not sandboxed and requires a user request to run trusted code. Its Python asset is included in the compiled npm package. Default mock workflows continue to require CodeGraph and do not execute the target application.
 
 ## Structural tools
 

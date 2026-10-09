@@ -497,7 +497,7 @@ function renderConsole() {
   const value = consoleEvents
     .slice(Math.max(0, lo - 300), lo)
     .map((e) => e.output)
-    .join('\n');
+    .join(flow.trace?.recording ? '' : '\n');
   if (value !== lastConsoleText) {
     $('console-output').textContent = value;
     lastConsoleText = value;
@@ -516,9 +516,13 @@ async function loadNextChunk() {
     const response = await fetch('/api/flow/' + nextId);
     if (!response.ok) throw new Error('Could not load continuation ' + nextId);
     const next = await response.json();
+    const currentEvidence = currentFlow.trace?.recording ?? currentFlow.trace?.simulation;
+    const nextEvidence = next.trace?.recording ?? next.trace?.simulation;
     if (
-      !next.trace?.simulation ||
-      next.trace.simulation.previousSessionId !== state.tailId ||
+      !nextEvidence ||
+      nextEvidence.mode !== currentEvidence?.mode ||
+      nextEvidence.runId !== currentEvidence?.runId ||
+      nextEvidence.previousSessionId !== state.tailId ||
       next.endpoint !== currentFlow.endpoint ||
       next.trace.projectRoot !== currentFlow.trace?.projectRoot ||
       next.trace.sourceHash !== currentFlow.trace?.sourceHash ||
@@ -573,7 +577,7 @@ async function loadNextChunk() {
       ]),
     ];
     currentFlow.trace.truncated = next.trace.truncated;
-    currentFlow.trace.simulation.complete = next.trace.simulation.complete;
+    currentEvidence.complete = nextEvidence.complete;
     currentFlow.nextSessionId = next.nextSessionId;
     state.tailId = nextId;
     state.loadedIds.add(nextId);
@@ -626,6 +630,10 @@ function drawConnection(from, to) {
 }
 function render() {
   if (!flow) return;
+  const recording = flow.trace?.recording;
+  const isMock = flow.trace?.simulation || flow.trace?.events.some(e => ['mock', 'assumed', 'proposed'].includes(e.certainty));
+  $('evidence-mode').textContent = recording ? 'Recorded execution' : isMock ? 'Simulated values' : 'Static / unverified evidence';
+  $('trace-order').textContent = recording ? 'Recorded runtime order' : isMock ? 'Ordered by simulated execution' : 'Graph traversal / supplied order';
   animation?.cancel();
   $('canvas')
     .querySelectorAll('.packet,.connections,.canvas-empty')
@@ -650,9 +658,9 @@ function render() {
         : flow.trace?.truncated
           ? 'Trace incomplete · see coverage'
           : 'Replay complete'
-      : 'Mock execution · local session';
+      : recording ? 'Recorded execution · local session' : isMock ? 'Mock execution · local session' : 'Structural / unverified flow';
   $('coverage').textContent =
-    flow.trace?.simulation?.coverage ??
+    recording?.coverage ?? flow.trace?.simulation?.coverage ??
     'Structural/legacy flow: execution completeness is not established.';
   $('diagnostics').textContent = JSON.stringify(
     flow.trace
@@ -1109,7 +1117,7 @@ async function load() {
       buildNodes();
       render();
     };
-    const previous = flow.trace?.simulation?.previousSessionId;
+    const previous = (flow.trace?.recording ?? flow.trace?.simulation)?.previousSessionId;
     if (previous) {
       $('previous-chunk').hidden = false;
       $('previous-chunk').href = '/flow/' + previous;

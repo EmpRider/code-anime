@@ -3,6 +3,9 @@ import { startRuntime } from '../../src/runtime.js';
 import { readConfig } from '../../src/config.js';
 import type { TraceEvent } from '../../src/domain/trace.js';
 import { traceToFlow } from '../../src/analysis/contract.js';
+import { RecordingService } from '../../src/services/recording-service.js';
+import { realpath } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
 let runtime: Awaited<ReturnType<typeof startRuntime>>;
 let url: string;
@@ -49,6 +52,45 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => {
   await runtime?.close();
+});
+
+test('actual Python recording replays across chunks with exact output and reversible source state', async ({ page }) => {
+  const recorder = new RecordingService(runtime.store, runtime.baseUrl, realpath);
+  try {
+    const started = await recorder.run({ action: 'start', language: 'python',
+      projectRoot: fileURLToPath(new URL('../fixtures/runtime/', import.meta.url)), entry: 'main.py' });
+    let status = started;
+    await expect.poll(async () => {
+      status = await recorder.run({ action: 'status', jobId: started.jobId });
+      return status.status;
+    }).toBe('ready');
+    expect(status.complete).toBe(true);
+    expect(status.chunks).toBeGreaterThan(1);
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(status.url!);
+    await expect(page.locator('#evidence-mode')).toHaveText('Recorded execution');
+    let maximum = Number(await page.locator('#timeline').getAttribute('max'));
+    while (maximum < status.eventCount) {
+      await page.locator('#timeline').fill(String(maximum));
+      await page.locator('#next').click();
+      await expect.poll(async () => Number(await page.locator('#timeline').getAttribute('max'))).toBeGreaterThan(maximum);
+      maximum = Number(await page.locator('#timeline').getAttribute('max'));
+    }
+    await page.locator('#timeline').fill(String(maximum));
+    await expect(page.locator('#console-output')).toHaveText('83845\n');
+    await expect(page.locator('#status')).toHaveText('Replay complete');
+    // Last event is module return, preceded by newline and text console writes.
+    await page.locator('#timeline').fill(String(maximum - 3));
+    await expect(page.locator('#console-output')).toHaveText('');
+    await expect(page.locator('#source')).toHaveText('main.py');
+    await expect(page.locator('.executing-line')).toHaveAttribute('data-line', '6');
+    await expect(page.locator('#local-tree')).toContainText('83845');
+    await expect(page.locator('#certainty')).toContainText('before this source line');
+    await page.locator('#previous').click();
+    await expect(page.locator('.executing-line')).toHaveAttribute('data-line', '4');
+    expect(errors).toEqual([]);
+  } finally { recorder.close(); }
 });
 
 test('keyboard disclosure preserves playback and uses only prepared data', async ({ page }) => {

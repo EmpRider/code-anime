@@ -46,14 +46,14 @@ export function createWebApp(store: SessionStore) {
     const next = store.next
       ? await store.next(session.id)
       : (await store.list?.())?.find(
-          (s) => s.flow.trace?.simulation?.previousSessionId === session.id,
+          (s) => (s.flow.trace?.recording ?? s.flow.trace?.simulation)?.previousSessionId === session.id,
         );
     const baselineId = session.flow.baselineSessionId;
     const baselineNext = baselineId
       ? store.next
         ? await store.next(baselineId)
         : (await store.list?.())?.find(
-            (s) => s.flow.trace?.simulation?.previousSessionId === baselineId,
+            (s) => (s.flow.trace?.recording ?? s.flow.trace?.simulation)?.previousSessionId === baselineId,
           )
       : undefined;
     res.json({
