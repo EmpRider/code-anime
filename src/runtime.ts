@@ -18,14 +18,21 @@ export async function startRuntime(config: Config = readConfig()) {
         });
       });
       const address = server.address();
-      if (address && typeof address !== 'string' && !browserBlocksPort(address.port)) {
+      if (
+        address &&
+        typeof address !== 'string' &&
+        !browserBlocksPort(address.port)
+      ) {
         bound = true;
         break;
       }
-      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
       if (config.port !== 0) break;
     }
-    if (!bound) throw new Error('Could not acquire a browser-allowed localhost port');
+    if (!bound)
+      throw new Error('Could not acquire a browser-allowed localhost port');
   } catch (error) {
     await store.close();
     throw error;

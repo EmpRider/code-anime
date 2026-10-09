@@ -616,8 +616,13 @@ test('runtime continuation rejects a different recording or simulated evidence',
     await t.test(mismatch, async () => {
       const first = initial();
       const next = continuation();
-      const asRecording = flow => {
-        flow.trace.recording = { ...flow.trace.simulation, mode: 'runtime', language: 'python', runId: 'one-run' };
+      const asRecording = (flow) => {
+        flow.trace.recording = {
+          ...flow.trace.simulation,
+          mode: 'runtime',
+          language: 'python',
+          runId: 'one-run',
+        };
         delete flow.trace.simulation;
       };
       asRecording(first);
@@ -629,10 +634,14 @@ test('runtime continuation rejects a different recording or simulated evidence',
       try {
         moveTo(window, get, 4);
         get('next').click();
-        await waitFor(() => get('status').textContent.includes('Continuation unavailable'));
+        await waitFor(() =>
+          get('status').textContent.includes('Continuation unavailable'),
+        );
         assert.equal(get('progress').textContent, '4 / 4');
         assert.equal(get('evidence-mode').textContent, 'Recorded execution');
-      } finally { dom.window.close(); }
+      } finally {
+        dom.window.close();
+      }
     });
   }
 });

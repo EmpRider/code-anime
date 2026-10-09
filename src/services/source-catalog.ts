@@ -5,20 +5,35 @@ import type { TraceEvent } from '../domain/trace.js';
 // Capture source once, during preprocessing, so the player never rereads or
 // reanalyzes changing project files. Only source paths referenced by the trace
 // and located inside the indexed project may be included.
-export async function collectSourceFiles(projectRoot: string, events: TraceEvent[]) {
+export async function collectSourceFiles(
+  projectRoot: string,
+  events: TraceEvent[],
+) {
   const files: Record<string, string> = {};
   const diagnostics: string[] = [];
   const root = await realpath(projectRoot);
-  const paths = [...new Set(events.flatMap((e) => e.source ? [e.source.file] : []))];
+  const paths = [
+    ...new Set(events.flatMap((e) => (e.source ? [e.source.file] : []))),
+  ];
   let total = 0;
   for (const sourcePath of paths) {
     try {
-      const candidate = isAbsolute(sourcePath) ? sourcePath : resolve(root, sourcePath);
+      const candidate = isAbsolute(sourcePath)
+        ? sourcePath
+        : resolve(root, sourcePath);
       const actual = await realpath(candidate);
       const inside = relative(root, actual);
-      if (inside === '..' || inside.startsWith('..' + sep) || isAbsolute(inside))
+      if (
+        inside === '..' ||
+        inside.startsWith('..' + sep) ||
+        isAbsolute(inside)
+      )
         throw new Error('source is outside the indexed project');
-      if (inside.split(sep).some((part) => ['node_modules', '.git'].includes(part)))
+      if (
+        inside
+          .split(sep)
+          .some((part) => ['node_modules', '.git'].includes(part))
+      )
         throw new Error('dependency or metadata source excluded');
       const info = await stat(actual);
       if (!info.isFile() || info.size > 512 * 1024)

@@ -101,16 +101,16 @@ Structural graph jobs remain available but are not the default execution animati
 
 ## Configuration and bounds
 
-| Variable                       | Default                | Purpose                                             |
-| ------------------------------ | ---------------------- | --------------------------------------------------- |
-| `CODE_ANIME_PORT`              | `0`                    | Free localhost player port                          |
-| `CODE_ANIME_TEMP_DIR`          | OS temporary directory | Parent for isolated per-process sessions            |
+| Variable                       | Default                | Purpose                                                |
+| ------------------------------ | ---------------------- | ------------------------------------------------------ |
+| `CODE_ANIME_PORT`              | `0`                    | Free localhost player port                             |
+| `CODE_ANIME_TEMP_DIR`          | OS temporary directory | Parent for isolated per-process sessions               |
 | `CODE_ANIME_SESSION_DIR`       | Unset                  | Optional restart-durable session directory (see below) |
-| `CODE_ANIME_PROJECT_ROOT`      | Per-request roots      | Optional project access boundary                    |
-| `CODE_ANIME_CODEGRAPH_COMMAND` | `codegraph`            | Optional native executable override                 |
-| `CODE_ANIME_CODEGRAPH_ARGS`    | `[]`                   | JSON array of launcher arguments before CLI arguments |
-| `CODE_ANIME_CODEGRAPH_CONFIG`  | Unset                  | Optional normalized bridge for structural job tools |
-| `CODE_ANIME_TTL_MS`            | `3600000`              | Session lifetime                                    |
+| `CODE_ANIME_PROJECT_ROOT`      | Per-request roots      | Optional project access boundary                       |
+| `CODE_ANIME_CODEGRAPH_COMMAND` | `codegraph`            | Optional native executable override                    |
+| `CODE_ANIME_CODEGRAPH_ARGS`    | `[]`                   | JSON array of launcher arguments before CLI arguments  |
+| `CODE_ANIME_CODEGRAPH_CONFIG`  | Unset                  | Optional normalized bridge for structural job tools    |
+| `CODE_ANIME_TTL_MS`            | `3600000`              | Session lifetime                                       |
 
 The builder accepts up to 100 operations/1 MiB per append, server-disk-backed snapshots without a fixed total event or byte cap, and ten retained builds with one-hour expiry. It splits storage chunks automatically. One-shot trace chunks accept 2,000 events and 8 MiB of request data; stored sessions are capped at 10 MiB, with 100 sessions per process. CodeGraph receipts last an hour and are capped at 200. Cached evidence responses are paged; oversized upstream results must be narrowed with file ranges. Report incomplete coverage explicitly and continue in chunks rather than silently truncating.
 

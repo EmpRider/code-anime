@@ -7,4 +7,7 @@ execFileSync(
   { stdio: 'inherit' },
 );
 mkdirSync('dist/recording', { recursive: true });
-copyFileSync('src/recording/python-recorder.py', 'dist/recording/python-recorder.py');
+copyFileSync(
+  'src/recording/python-recorder.py',
+  'dist/recording/python-recorder.py',
+);

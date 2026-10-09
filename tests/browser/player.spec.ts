@@ -54,27 +54,47 @@ test.afterAll(async () => {
   await runtime?.close();
 });
 
-test('actual Python recording replays across chunks with exact output and reversible source state', async ({ page }) => {
-  const recorder = new RecordingService(runtime.store, runtime.baseUrl, realpath);
+test('actual Python recording replays across chunks with exact output and reversible source state', async ({
+  page,
+}) => {
+  const recorder = new RecordingService(
+    runtime.store,
+    runtime.baseUrl,
+    realpath,
+  );
   try {
-    const started = await recorder.run({ action: 'start', language: 'python',
-      projectRoot: fileURLToPath(new URL('../fixtures/runtime/', import.meta.url)), entry: 'main.py' });
+    const started = await recorder.run({
+      action: 'start',
+      language: 'python',
+      projectRoot: fileURLToPath(
+        new URL('../fixtures/runtime/', import.meta.url),
+      ),
+      entry: 'main.py',
+    });
     let status = started;
-    await expect.poll(async () => {
-      status = await recorder.run({ action: 'status', jobId: started.jobId });
-      return status.status;
-    }).toBe('ready');
+    await expect
+      .poll(async () => {
+        status = await recorder.run({ action: 'status', jobId: started.jobId });
+        return status.status;
+      })
+      .toBe('ready');
     expect(status.complete).toBe(true);
     expect(status.chunks).toBeGreaterThan(1);
     const errors: string[] = [];
-    page.on('pageerror', error => errors.push(error.message));
+    page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(status.url!);
-    await expect(page.locator('#evidence-mode')).toHaveText('Recorded execution');
+    await expect(page.locator('#evidence-mode')).toHaveText(
+      'Recorded execution',
+    );
     let maximum = Number(await page.locator('#timeline').getAttribute('max'));
     while (maximum < status.eventCount) {
       await page.locator('#timeline').fill(String(maximum));
       await page.locator('#next').click();
-      await expect.poll(async () => Number(await page.locator('#timeline').getAttribute('max'))).toBeGreaterThan(maximum);
+      await expect
+        .poll(async () =>
+          Number(await page.locator('#timeline').getAttribute('max')),
+        )
+        .toBeGreaterThan(maximum);
       maximum = Number(await page.locator('#timeline').getAttribute('max'));
     }
     await page.locator('#timeline').fill(String(maximum));
@@ -84,21 +104,33 @@ test('actual Python recording replays across chunks with exact output and revers
     await page.locator('#timeline').fill(String(maximum - 3));
     await expect(page.locator('#console-output')).toHaveText('');
     await expect(page.locator('#source')).toHaveText('main.py');
-    await expect(page.locator('.executing-line')).toHaveAttribute('data-line', '6');
+    await expect(page.locator('.executing-line')).toHaveAttribute(
+      'data-line',
+      '6',
+    );
     await expect(page.locator('#local-tree')).toContainText('83845');
-    await expect(page.locator('#certainty')).toContainText('before this source line');
+    await expect(page.locator('#certainty')).toContainText(
+      'before this source line',
+    );
     await page.locator('#previous').click();
-    await expect(page.locator('.executing-line')).toHaveAttribute('data-line', '4');
+    await expect(page.locator('.executing-line')).toHaveAttribute(
+      'data-line',
+      '4',
+    );
     expect(errors).toEqual([]);
-  } finally { recorder.close(); }
+  } finally {
+    recorder.close();
+  }
 });
 
-test('keyboard disclosure preserves playback and uses only prepared data', async ({ page }) => {
+test('keyboard disclosure preserves playback and uses only prepared data', async ({
+  page,
+}) => {
   await page.goto(url);
   await expect(page.locator('#progress')).toHaveText('0 / 100');
   await page.locator('#timeline').fill('70');
   const requests: string[] = [];
-  page.on('request', request => requests.push(request.url()));
+  page.on('request', (request) => requests.push(request.url()));
   const disclosure = page.locator('.call-disclosure').first();
   await disclosure.focus();
   await page.keyboard.press('Enter');

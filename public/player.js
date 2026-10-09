@@ -183,15 +183,21 @@ function createEventRow(index) {
     const disclosure = text('button', '▸', 'call-disclosure');
     disclosure.dataset.callId = event.callId;
     disclosure.setAttribute('aria-expanded', 'false');
-    disclosure.setAttribute('aria-label', 'Expand ' + (event.label ?? event.symbolId));
+    disclosure.setAttribute(
+      'aria-label',
+      'Expand ' + (event.label ?? event.symbolId),
+    );
     disclosure.onclick = () => {
       expandedCalls.has(event.callId)
         ? expandedCalls.delete(event.callId)
         : expandedCalls.add(event.callId);
       filterList();
       // Filtering can replace this page. Keep keyboard focus on its disclosure.
-      for (const control of $('event-list').querySelectorAll('.call-disclosure'))
-        if (control.dataset.callId === event.callId) control.focus({ preventScroll: true });
+      for (const control of $('event-list').querySelectorAll(
+        '.call-disclosure',
+      ))
+        if (control.dataset.callId === event.callId)
+          control.focus({ preventScroll: true });
     };
     container.append(disclosure);
   }
@@ -264,7 +270,13 @@ function filterList() {
       matches &&
       search.includes(query) &&
       (!onlyBookmarks || bookmarks.has(i + 1)) &&
-      !(collapsed && kind === 'all' && !query && !onlyBookmarks && cursor !== i + 1)
+      !(
+        collapsed &&
+        kind === 'all' &&
+        !query &&
+        !onlyBookmarks &&
+        cursor !== i + 1
+      )
     )
       visible.push(i);
   });
@@ -312,13 +324,17 @@ function filterList() {
     if (cursor === index) button.setAttribute('aria-current', 'step');
     else button.removeAttribute('aria-current');
   }
-  for (const disclosure of $('event-list').querySelectorAll('.call-disclosure')) {
+  for (const disclosure of $('event-list').querySelectorAll(
+    '.call-disclosure',
+  )) {
     const event = invocations.get(disclosure.dataset.callId);
     const expanded = expandedCalls.has(disclosure.dataset.callId);
     disclosure.textContent = expanded ? '▾' : '▸';
     disclosure.setAttribute('aria-expanded', String(expanded));
-    disclosure.setAttribute('aria-label',
-      (expanded ? 'Collapse ' : 'Expand ') + (event.label ?? event.symbolId));
+    disclosure.setAttribute(
+      'aria-label',
+      (expanded ? 'Collapse ' : 'Expand ') + (event.label ?? event.symbolId),
+    );
   }
   const count = visible.length;
   $('trace-count').textContent = count + ' / ' + rows.length;
@@ -516,7 +532,8 @@ async function loadNextChunk() {
     const response = await fetch('/api/flow/' + nextId);
     if (!response.ok) throw new Error('Could not load continuation ' + nextId);
     const next = await response.json();
-    const currentEvidence = currentFlow.trace?.recording ?? currentFlow.trace?.simulation;
+    const currentEvidence =
+      currentFlow.trace?.recording ?? currentFlow.trace?.simulation;
     const nextEvidence = next.trace?.recording ?? next.trace?.simulation;
     if (
       !nextEvidence ||
@@ -631,9 +648,21 @@ function drawConnection(from, to) {
 function render() {
   if (!flow) return;
   const recording = flow.trace?.recording;
-  const isMock = flow.trace?.simulation || flow.trace?.events.some(e => ['mock', 'assumed', 'proposed'].includes(e.certainty));
-  $('evidence-mode').textContent = recording ? 'Recorded execution' : isMock ? 'Simulated values' : 'Static / unverified evidence';
-  $('trace-order').textContent = recording ? 'Recorded runtime order' : isMock ? 'Ordered by simulated execution' : 'Graph traversal / supplied order';
+  const isMock =
+    flow.trace?.simulation ||
+    flow.trace?.events.some((e) =>
+      ['mock', 'assumed', 'proposed'].includes(e.certainty),
+    );
+  $('evidence-mode').textContent = recording
+    ? 'Recorded execution'
+    : isMock
+      ? 'Simulated values'
+      : 'Static / unverified evidence';
+  $('trace-order').textContent = recording
+    ? 'Recorded runtime order'
+    : isMock
+      ? 'Ordered by simulated execution'
+      : 'Graph traversal / supplied order';
   animation?.cancel();
   $('canvas')
     .querySelectorAll('.packet,.connections,.canvas-empty')
@@ -658,9 +687,14 @@ function render() {
         : flow.trace?.truncated
           ? 'Trace incomplete · see coverage'
           : 'Replay complete'
-      : recording ? 'Recorded execution · local session' : isMock ? 'Mock execution · local session' : 'Structural / unverified flow';
+      : recording
+        ? 'Recorded execution · local session'
+        : isMock
+          ? 'Mock execution · local session'
+          : 'Structural / unverified flow';
   $('coverage').textContent =
-    recording?.coverage ?? flow.trace?.simulation?.coverage ??
+    recording?.coverage ??
+    flow.trace?.simulation?.coverage ??
     'Structural/legacy flow: execution completeness is not established.';
   $('diagnostics').textContent = JSON.stringify(
     flow.trace
@@ -1117,7 +1151,8 @@ async function load() {
       buildNodes();
       render();
     };
-    const previous = (flow.trace?.recording ?? flow.trace?.simulation)?.previousSessionId;
+    const previous = (flow.trace?.recording ?? flow.trace?.simulation)
+      ?.previousSessionId;
     if (previous) {
       $('previous-chunk').hidden = false;
       $('previous-chunk').href = '/flow/' + previous;

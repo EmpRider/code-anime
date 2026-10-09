@@ -77,7 +77,10 @@ test('quota and latest lookup avoid loading unrelated session payloads', async (
     await new Promise((resolve) => setTimeout(resolve, 5));
     const read = store.get.bind(store);
     const reads: string[] = [];
-    store.get = async (id) => { reads.push(id); return read(id); };
+    store.get = async (id) => {
+      reads.push(id);
+      return read(id);
+    };
     const latest = await store.create(flow);
     assert.deepEqual(reads, [], 'quota check must use metadata only');
     assert.equal((await store.latest())?.id, latest.id);
@@ -94,7 +97,9 @@ test('HTTP serves flow, redirects latest and safely serves static player', async
   try {
     assert.match(await (await fetch(runtime.baseUrl)).text(), /No active flow/);
     const session = await runtime.store.create(flow);
-    runtime.store.list = async () => { throw new Error('HTTP must use indexed continuation lookup'); };
+    runtime.store.list = async () => {
+      throw new Error('HTTP must use indexed continuation lookup');
+    };
     assert.deepEqual(
       await (await fetch(runtime.baseUrl + '/api/flow/' + session.id)).json(),
       flow,

@@ -30,7 +30,10 @@ export class FileSessionStore implements SessionStore {
   private closed = false;
   private queue: Promise<unknown> = Promise.resolve();
   private shutdown?: Promise<void>;
-  private readonly index = new Map<string, { createdAt: string; previousSessionId?: string }>();
+  private readonly index = new Map<
+    string,
+    { createdAt: string; previousSessionId?: string }
+  >();
   private lockOwner: string | undefined;
   private constructor(
     private readonly directory: string,
@@ -42,20 +45,30 @@ export class FileSessionStore implements SessionStore {
       const directory = resolve(options.persistentDirectory);
       await mkdir(directory, { recursive: true, mode: 0o700 });
       if (!(await lstat(directory)).isDirectory())
-        throw new Error('Persistent session directory must be a real directory, not a symbolic link');
+        throw new Error(
+          'Persistent session directory must be a real directory, not a symbolic link',
+        );
       const lockPath = join(directory, '.code-anime.lock');
       let lock;
       try {
         lock = await open(lockPath, 'wx', 0o600);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'EEXIST')
-          throw new Error(`Session directory is locked: ${lockPath}. Close its Code Anime process first. After a crash, remove this lock only after confirming that process has stopped.`);
+          throw new Error(
+            `Session directory is locked: ${lockPath}. Close its Code Anime process first. After a crash, remove this lock only after confirming that process has stopped.`,
+          );
         throw error;
       }
       const store = new FileSessionStore(directory, options);
       store.lockOwner = randomUUID();
       try {
-        await lock.writeFile(JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString(), owner: store.lockOwner }));
+        await lock.writeFile(
+          JSON.stringify({
+            pid: process.pid,
+            startedAt: new Date().toISOString(),
+            owner: store.lockOwner,
+          }),
+        );
         await lock.close();
         await store.recover();
         return store;
@@ -77,7 +90,10 @@ export class FileSessionStore implements SessionStore {
       throw new Error(`Invalid or oversized stored session: ${id}`);
     // O_NOFOLLOW prevents a replaced session path from redirecting reads on
     // POSIX. On Windows it is unavailable, so also check file identity below.
-    const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    const handle = await open(
+      path,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+    );
     let contents: string;
     try {
       const opened = await handle.stat();
@@ -95,7 +111,11 @@ export class FileSessionStore implements SessionStore {
     if (Buffer.byteLength(contents) > this.options.maxSessionBytes)
       throw new Error(`Oversized stored session: ${id}`);
     const raw = JSON.parse(contents) as FlowSession;
-    if (raw.id !== id || typeof raw.createdAt !== 'string' || !Number.isFinite(Date.parse(raw.createdAt)))
+    if (
+      raw.id !== id ||
+      typeof raw.createdAt !== 'string' ||
+      !Number.isFinite(Date.parse(raw.createdAt))
+    )
       throw new Error(`Invalid stored session metadata: ${id}`);
     return { id, createdAt: raw.createdAt, flow: flowSchema.parse(raw.flow) };
   }
@@ -120,7 +140,9 @@ export class FileSessionStore implements SessionStore {
   }
 
   private async recover() {
-    for (const entry of await readdir(this.directory, { withFileTypes: true })) {
+    for (const entry of await readdir(this.directory, {
+      withFileTypes: true,
+    })) {
       if (!entry.isFile()) continue;
       const id = entry.name.replace(/\.json(?:\.tmp)?$/, '');
       if (!sessionIdSchema.safeParse(id).success) continue;
@@ -133,8 +155,13 @@ export class FileSessionStore implements SessionStore {
         const session = await this.readSession(id);
         this.index.set(id, {
           createdAt: session.createdAt,
-          ...((session.flow.trace?.recording ?? session.flow.trace?.simulation)?.previousSessionId
-            ? { previousSessionId: (session.flow.trace?.recording ?? session.flow.trace?.simulation)!.previousSessionId! } : {}),
+          ...((session.flow.trace?.recording ?? session.flow.trace?.simulation)
+            ?.previousSessionId
+            ? {
+                previousSessionId: (session.flow.trace?.recording ??
+                  session.flow.trace?.simulation)!.previousSessionId!,
+              }
+            : {}),
         });
       } catch (error) {
         // Keep damaged files available for inspection without blocking valid
@@ -149,9 +176,10 @@ export class FileSessionStore implements SessionStore {
     if (!this.lockOwner) return;
     const lockPath = join(this.directory, '.code-anime.lock');
     try {
-      const current = JSON.parse(await readFile(lockPath, 'utf8')) as { owner?: string };
-      if (current.owner === this.lockOwner)
-        await rm(lockPath);
+      const current = JSON.parse(await readFile(lockPath, 'utf8')) as {
+        owner?: string;
+      };
+      if (current.owner === this.lockOwner) await rm(lockPath);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
@@ -178,7 +206,9 @@ export class FileSessionStore implements SessionStore {
       throw new Error('Flow exceeds session size limit');
     await this.pruneExpired();
     if (this.index.size >= this.options.maxSessions)
-      throw new Error('Session limit reached; delete saved sessions or wait for expiry');
+      throw new Error(
+        'Session limit reached; delete saved sessions or wait for expiry',
+      );
     const target = join(this.directory, session.id + '.json');
     const temporary = target + '.tmp';
     try {
@@ -188,7 +218,9 @@ export class FileSessionStore implements SessionStore {
         flag: 'wx',
       });
       await rename(temporary, target);
-      const previousSessionId = (flow.trace?.recording ?? flow.trace?.simulation)?.previousSessionId;
+      const previousSessionId = (
+        flow.trace?.recording ?? flow.trace?.simulation
+      )?.previousSessionId;
       this.index.set(session.id, {
         createdAt: session.createdAt,
         ...(previousSessionId ? { previousSessionId } : {}),
@@ -265,7 +297,9 @@ export class FileSessionStore implements SessionStore {
 
   async latest(): Promise<FlowSession | undefined> {
     if (this.closed) return undefined;
-    const candidates = [...this.index].sort((a, b) => b[1].createdAt.localeCompare(a[1].createdAt));
+    const candidates = [...this.index].sort((a, b) =>
+      b[1].createdAt.localeCompare(a[1].createdAt),
+    );
     for (const [id] of candidates) {
       const session = await this.get(id);
       if (session) return session;
@@ -275,12 +309,11 @@ export class FileSessionStore implements SessionStore {
 
   close(): Promise<void> {
     this.closed = true;
-    return this.shutdown ??= (async () => {
+    return (this.shutdown ??= (async () => {
       await this.queue;
-      if (this.options.persistentDirectory)
-        await this.releaseLock();
+      if (this.options.persistentDirectory) await this.releaseLock();
       else await rm(this.directory, { recursive: true, force: true });
       this.index.clear();
-    })();
+    })());
   }
 }

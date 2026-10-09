@@ -109,7 +109,8 @@
             No matching steps. Try a different search or filter.
           </p>
           <div class="trace-footer">
-            <span class="tiny-dot"></span><span id="trace-order">Prepared event order</span>
+            <span class="tiny-dot"></span
+            ><span id="trace-order">Prepared event order</span>
           </div>
         </aside>
         <section class="center-column" aria-label="Animation and source">
@@ -154,13 +155,25 @@
           <section class="panel source-panel">
             <div class="panel-heading">
               <h2>Source execution</h2>
-              <button id="toggle-flow" class="quiet-button" type="button" aria-expanded="false" aria-controls="flow-panel">Show diagram</button>
+              <button
+                id="toggle-flow"
+                class="quiet-button"
+                type="button"
+                aria-expanded="false"
+                aria-controls="flow-panel"
+              >
+                Show diagram
+              </button>
               <span id="source-line" class="count-badge">—</span>
             </div>
             <p id="source" class="source-path">
               Select a step to inspect its source
             </p>
-            <nav id="source-stack" class="source-stack" aria-label="Active call stack"></nav>
+            <nav
+              id="source-stack"
+              class="source-stack"
+              aria-label="Active call stack"
+            ></nav>
             <pre id="snippet" class="source-code"></pre>
             <p id="source-empty" class="empty-message">
               Source is unavailable for this step. Inspect its evidence excerpt.
@@ -168,7 +181,10 @@
           </section>
           <section class="panel console-panel" aria-label="Console output">
             <details id="console-panel" open>
-              <summary>Console <span id="console-count" class="count-badge">0 lines</span></summary>
+              <summary>
+                Console
+                <span id="console-count" class="count-badge">0 lines</span>
+              </summary>
               <pre id="console-output" role="log" aria-live="off"></pre>
             </details>
           </section>
@@ -327,8 +343,22 @@
         >
           ▸▕
         </button>
-        <button id="step-over" class="icon-button" title="Step over method" aria-label="Step over method">↷</button>
-        <button id="step-out" class="icon-button" title="Step out of method" aria-label="Step out of method">⇡</button>
+        <button
+          id="step-over"
+          class="icon-button"
+          title="Step over method"
+          aria-label="Step over method"
+        >
+          ↷
+        </button>
+        <button
+          id="step-out"
+          class="icon-button"
+          title="Step out of method"
+          aria-label="Step out of method"
+        >
+          ⇡
+        </button>
       </div>
       <div class="timeline-block">
         <div class="timeline-caption">

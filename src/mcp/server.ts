@@ -32,7 +32,9 @@ export function createMcpServer(
     service.root(root),
   );
   const builder = new AnimationBuilder(simulation, store);
-  const recorder = new RecordingService(store, baseUrl, root => service.root(root));
+  const recorder = new RecordingService(store, baseUrl, (root) =>
+    service.root(root),
+  );
   const server = new Server(
     { name: 'code-anime', version },
     { capabilities: { tools: {} } },
@@ -40,15 +42,22 @@ export function createMcpServer(
   const tools = [
     {
       name: 'record_execution',
-      description: 'Execute a trusted Python entry file and record actual synchronous main-thread events. This runs application code with local permissions and real side effects; use only when the user requests execution. No CodeGraph or AI-generated steps required. Returns jobId; use status to get progress and a prepared player URL, cancel to stop and retain partial evidence. Supports Python calls, source lines (pre-execution state), bounded locals, returns, exceptions and text output. Generators/coroutines stop with an explicit unsupported boundary. Other languages still use structural/mock workflows.',
-      inputSchema: schema({
-        action: { type: 'string', enum: ['start', 'status', 'cancel'] },
-        language: { type: 'string', enum: ['python'] }, projectRoot: string,
-        entry: string, args: { type: 'array', items: string }, jobId: string,
-        timeoutMs: { type: 'integer', minimum: 100, maximum: 300000 },
-        maxEvents: { type: 'integer', minimum: 10, maximum: 100000 },
-        maxTraceBytes: { type: 'integer', minimum: 4096, maximum: 67108864 },
-      }, ['action']),
+      description:
+        'Execute a trusted Python entry file and record actual synchronous main-thread events. This runs application code with local permissions and real side effects; use only when the user requests execution. No CodeGraph or AI-generated steps required. Returns jobId; use status to get progress and a prepared player URL, cancel to stop and retain partial evidence. Supports Python calls, source lines (pre-execution state), bounded locals, returns, exceptions and text output. Generators/coroutines stop with an explicit unsupported boundary. Other languages still use structural/mock workflows.',
+      inputSchema: schema(
+        {
+          action: { type: 'string', enum: ['start', 'status', 'cancel'] },
+          language: { type: 'string', enum: ['python'] },
+          projectRoot: string,
+          entry: string,
+          args: { type: 'array', items: string },
+          jobId: string,
+          timeoutMs: { type: 'integer', minimum: 100, maximum: 300000 },
+          maxEvents: { type: 'integer', minimum: 10, maximum: 100000 },
+          maxTraceBytes: { type: 'integer', minimum: 4096, maximum: 67108864 },
+        },
+        ['action'],
+      ),
     },
     {
       name: 'visualizer_capabilities',
@@ -223,7 +232,8 @@ export function createMcpServer(
                 assignTo: string,
                 unwindTo: {
                   type: ['string', 'null'],
-                  description: 'For throw only: retain this active callId and unwind its callees; null unwinds all frames. Omit to keep the stack, for example while executing finally blocks. Follow with catch and set to bind the exception in the handler.',
+                  description:
+                    'For throw only: retain this active callId and unwind its callees; null unwinds all frames. Omit to keep the stack, for example while executing finally blocks. Follow with catch and set to bind the exception in the handler.',
                 },
                 objectId: string,
                 fields: object,

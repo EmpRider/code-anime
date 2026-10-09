@@ -535,10 +535,13 @@ test('comparison preserves independently chunked runs with changes only in the f
         await once(server, 'listening');
         if (!browserBlocksPort((server.address() as AddressInfo).port)) break;
         await new Promise<void>((resolve, reject) =>
-          server.close((error) => error ? reject(error) : resolve()),
+          server.close((error) => (error ? reject(error) : resolve())),
         );
       }
-      assert.equal(browserBlocksPort((server.address() as AddressInfo).port), false);
+      assert.equal(
+        browserBlocksPort((server.address() as AddressInfo).port),
+        false,
+      );
       const response = await fetch(
         `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/flow/${proposedRoot}`,
       );

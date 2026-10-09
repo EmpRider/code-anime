@@ -11,11 +11,21 @@ import { FileSessionStore } from '../src/storage/file-session-store.js';
 
 const sample = flowSchema.parse({
   endpoint: 'Application.run',
-  steps: [{ from: 'Application.run', to: 'Service.run', dtoName: 'Args', dtoFields: {} }],
+  steps: [
+    {
+      from: 'Application.run',
+      to: 'Service.run',
+      dtoName: 'Args',
+      dtoFields: {},
+    },
+  ],
 });
 const options = { ttlMs: 60_000, maxSessionBytes: 50_000, maxSessions: 3 };
 
-function continuation(previousSessionId: string, baselineSessionId?: string): Flow {
+function continuation(
+  previousSessionId: string,
+  baselineSessionId?: string,
+): Flow {
   return flowSchema.parse({
     ...sample,
     ...(baselineSessionId ? { baselineSessionId } : {}),
@@ -47,7 +57,12 @@ async function withDirectory(action: (directory: string) => Promise<void>) {
   try {
     await action(directory);
   } finally {
-    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    await rm(directory, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
   }
 }
 
@@ -65,7 +80,10 @@ test('persistent sessions and continuation index survive a normal close and rest
       await firstStore.close();
       await firstStore.close();
     }
-    assert.deepEqual((await readdir(directory)).filter((s) => s.endsWith('.json')).length, 2);
+    assert.deepEqual(
+      (await readdir(directory)).filter((s) => s.endsWith('.json')).length,
+      2,
+    );
     const restored = await FileSessionStore.open(tmpdir(), config);
     try {
       assert.deepEqual((await restored.get(parent))?.flow, sample);
@@ -82,17 +100,26 @@ test('persistent sessions and continuation index survive a normal close and rest
 
 test('saved HTTP flow and independently continued comparison reopen across runtime restarts', async () => {
   await withDirectory(async (directory) => {
-    const config = { ...readConfig({ CODE_ANIME_SESSION_DIR: directory }), port: 0 };
+    const config = {
+      ...readConfig({ CODE_ANIME_SESSION_DIR: directory }),
+      port: 0,
+    };
     const initial = await startRuntime(config);
     let firstId: string;
     let proposedNextId: string;
     let baselineNextId: string;
     try {
       const baseline = await initial.store.create(sample);
-      baselineNextId = (await initial.store.create(continuation(baseline.id))).id;
-      const first = await initial.store.create({ ...sample, baselineSessionId: baseline.id });
+      baselineNextId = (await initial.store.create(continuation(baseline.id)))
+        .id;
+      const first = await initial.store.create({
+        ...sample,
+        baselineSessionId: baseline.id,
+      });
       firstId = first.id;
-      proposedNextId = (await initial.store.create(continuation(first.id, baseline.id))).id;
+      proposedNextId = (
+        await initial.store.create(continuation(first.id, baseline.id))
+      ).id;
     } finally {
       await initial.close();
     }
@@ -103,8 +130,14 @@ test('saved HTTP flow and independently continued comparison reopen across runti
       const data = await response.json();
       assert.equal(data.nextSessionId, proposedNextId);
       assert.equal(data.baselineNextSessionId, baselineNextId);
-      assert.equal((await fetch(restored.baseUrl + '/flow/' + firstId)).status, 200);
-      assert.equal((await fetch(restored.baseUrl + '/api/flow/' + proposedNextId)).status, 200);
+      assert.equal(
+        (await fetch(restored.baseUrl + '/flow/' + firstId)).status,
+        200,
+      );
+      assert.equal(
+        (await fetch(restored.baseUrl + '/api/flow/' + proposedNextId)).status,
+        200,
+      );
     } finally {
       await restored.close();
     }
@@ -121,11 +154,16 @@ test('recovery quarantines corrupt and oversized sessions but keeps valid sessio
     const oversizedId = randomUUID();
     const interruptedId = randomUUID();
     await writeFile(join(directory, corruptId + '.json'), '{unparseable');
-    await writeFile(join(directory, oversizedId + '.json'), 'x'.repeat(options.maxSessionBytes + 1));
+    await writeFile(
+      join(directory, oversizedId + '.json'),
+      'x'.repeat(options.maxSessionBytes + 1),
+    );
     await writeFile(join(directory, interruptedId + '.json.tmp'), 'unfinished');
     const originalWarn = console.warn;
     const warnings: string[] = [];
-    console.warn = (message) => { warnings.push(String(message)); };
+    console.warn = (message) => {
+      warnings.push(String(message));
+    };
     let store: FileSessionStore;
     try {
       store = await FileSessionStore.open(tmpdir(), config);
@@ -137,8 +175,14 @@ test('recovery quarantines corrupt and oversized sessions but keeps valid sessio
       assert.equal((await store.list()).length, 1);
       assert.equal(await store.get(corruptId), undefined);
       assert.equal(await store.get(oversizedId), undefined);
-      assert.equal((await readdir(join(directory, '.code-anime-corrupt'))).length, 2);
-      assert.equal((await readdir(directory)).some((entry) => entry.endsWith('.json.tmp')), false);
+      assert.equal(
+        (await readdir(join(directory, '.code-anime-corrupt'))).length,
+        2,
+      );
+      assert.equal(
+        (await readdir(directory)).some((entry) => entry.endsWith('.json.tmp')),
+        false,
+      );
       assert.equal(warnings.length, 2);
     } finally {
       await store.close();
@@ -157,13 +201,24 @@ test('external changes to recovered session files are quarantined without affect
     const restored = await FileSessionStore.open(tmpdir(), config);
     const originalWarn = console.warn;
     const warnings: string[] = [];
-    console.warn = (message) => { warnings.push(String(message)); };
+    console.warn = (message) => {
+      warnings.push(String(message));
+    };
     try {
-      await writeFile(join(directory, damagedId + '.json'), '{changed outside the server');
+      await writeFile(
+        join(directory, damagedId + '.json'),
+        '{changed outside the server',
+      );
       assert.equal(await restored.get(damagedId), undefined);
       assert.deepEqual((await restored.get(goodId))?.flow, sample);
-      assert.deepEqual((await restored.list()).map((s) => s.id), [goodId]);
-      assert.equal((await readdir(join(directory, '.code-anime-corrupt'))).length, 1);
+      assert.deepEqual(
+        (await restored.list()).map((s) => s.id),
+        [goodId],
+      );
+      assert.equal(
+        (await readdir(join(directory, '.code-anime-corrupt'))).length,
+        1,
+      );
       assert.equal(warnings.length, 1);
       assert.match(warnings[0]!, /Quarantined invalid saved session/);
     } finally {
@@ -175,7 +230,11 @@ test('external changes to recovered session files are quarantined without affect
 
 test('persistent TTL and max session count are enforced after recovery', async () => {
   await withDirectory(async (directory) => {
-    const config = { ...options, persistentDirectory: directory, maxSessions: 2 };
+    const config = {
+      ...options,
+      persistentDirectory: directory,
+      maxSessions: 2,
+    };
     const original = await FileSessionStore.open(tmpdir(), config);
     const one = (await original.create(sample)).id;
     await original.create(sample);
@@ -189,11 +248,17 @@ test('persistent TTL and max session count are enforced after recovery', async (
     } finally {
       await reopened.close();
     }
-    const expired = await FileSessionStore.open(tmpdir(), { ...config, ttlMs: 1 });
+    const expired = await FileSessionStore.open(tmpdir(), {
+      ...config,
+      ttlMs: 1,
+    });
     try {
       assert.equal((await expired.list()).length, 0);
       assert.equal(await expired.latest(), undefined);
-      assert.deepEqual((await readdir(directory)).filter((s) => s.endsWith('.json')), []);
+      assert.deepEqual(
+        (await readdir(directory)).filter((s) => s.endsWith('.json')),
+        [],
+      );
     } finally {
       await expired.close();
     }
@@ -206,7 +271,10 @@ test('persistent directory allows only one owner and releases its own lock', asy
     const owner = await FileSessionStore.open(tmpdir(), config);
     const lockPath = join(directory, '.code-anime.lock');
     try {
-      await assert.rejects(FileSessionStore.open(tmpdir(), config), /directory is locked/);
+      await assert.rejects(
+        FileSessionStore.open(tmpdir(), config),
+        /directory is locked/,
+      );
       const metadata = JSON.parse(await readFile(lockPath, 'utf8'));
       assert.equal(metadata.pid, process.pid);
       assert.equal(typeof metadata.owner, 'string');
@@ -215,8 +283,14 @@ test('persistent directory allows only one owner and releases its own lock', asy
     }
     const reopened = await FileSessionStore.open(tmpdir(), config);
     await reopened.close();
-    await writeFile(lockPath, JSON.stringify({ pid: -1, owner: 'unconfirmed-stale-owner' }));
-    await assert.rejects(FileSessionStore.open(tmpdir(), config), /remove this lock only after confirming/);
+    await writeFile(
+      lockPath,
+      JSON.stringify({ pid: -1, owner: 'unconfirmed-stale-owner' }),
+    );
+    await assert.rejects(
+      FileSessionStore.open(tmpdir(), config),
+      /remove this lock only after confirming/,
+    );
   });
 });
 

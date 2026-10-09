@@ -83,17 +83,29 @@ export class VisualizationService {
         ? 'Configured normalized MCP bridge'
         : 'Launch installed codegraph serve --mcp --path <active project> automatically; no bridge config required.',
       limits: {
-        maxDepth: 'Unlimited by default; optional caller-configured depth boundary',
+        maxDepth:
+          'Unlimited by default; optional caller-configured depth boundary',
         providerTimeoutMs: 60000,
         events: 2000,
         concurrentJobs: 2,
       },
       tools: 11,
       runtimeRecording: {
-        tool: 'record_execution', languages: ['python'],
-        scope: 'Opt-in execution of synchronous main-thread Python user code; real local side effects. No CodeGraph required for runtime recording.',
-        unsupported: ['generators', 'coroutines', 'other threads/processes', 'native internals', 'binary output', 'opaque object internals'],
-        pythonCommand: process.env.CODE_ANIME_PYTHON_COMMAND || (process.platform === 'win32' ? 'python' : 'python3'),
+        tool: 'record_execution',
+        languages: ['python'],
+        scope:
+          'Opt-in execution of synchronous main-thread Python user code; real local side effects. No CodeGraph required for runtime recording.',
+        unsupported: [
+          'generators',
+          'coroutines',
+          'other threads/processes',
+          'native internals',
+          'binary output',
+          'opaque object internals',
+        ],
+        pythonCommand:
+          process.env.CODE_ANIME_PYTHON_COMMAND ||
+          (process.platform === 'win32' ? 'python' : 'python3'),
       },
       workflow:
         'read_codegraph_evidence → build_mock_animation begin/append/finish → localhost URL',
@@ -266,7 +278,9 @@ export class VisualizationService {
       throw new Error('Change plans require an analyzed trace baseline');
     const trace = structuredClone(session.flow.trace);
     if (trace.recording)
-      throw new Error('Runtime recordings cannot include proposed events; prepare a separate simulated change scenario');
+      throw new Error(
+        'Runtime recordings cannot include proposed events; prepare a separate simulated change scenario',
+      );
     if (trace.events.length + changes.length > 2000)
       throw new Error('Plan exceeds event limit');
     for (const [i, change] of changes.entries())
