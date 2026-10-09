@@ -61,6 +61,15 @@ test('desktop layout resizes, focuses and remembers preferences without moving p
   await page.goto(url);
   await expect(page.locator('#progress')).toHaveText('0 / 100');
   await page.locator('#timeline').fill('70');
+  const activeRowIsVisible = await page.evaluate(() => {
+    const row = document.querySelector('.event-row.current');
+    const list = document.getElementById('event-list');
+    if (!row || !list) return false;
+    const selected = row.getBoundingClientRect();
+    const viewport = list.getBoundingClientRect();
+    return selected.top >= viewport.top && selected.bottom <= viewport.bottom;
+  });
+  expect(activeRowIsVisible).toBe(true);
   await expect(page.locator('.inspector')).toBeHidden();
   await expect(page.locator('#console-panel')).not.toHaveAttribute('open', '');
   const divider = page.getByRole('separator', {

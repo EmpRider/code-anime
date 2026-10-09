@@ -557,7 +557,9 @@ test('interleaved tasks compare local changes with the previous snapshot of the 
     ...(kind === 'console' ? { output: 'working\n' } : {}),
     values: { task },
     certainty: 'observed',
-    source: { file: 'main.py', line: index + 1, endLine: index + 1 },
+    ...(kind === 'console'
+      ? {}
+      : { source: { file: 'main.py', line: index + 1, endLine: index + 1 } }),
   }));
   const flow = {
     endpoint: 'main.py',
@@ -596,6 +598,13 @@ test('interleaved tasks compare local changes with the previous snapshot of the 
     };
     seek(2);
     assert.equal(get('local-tree').querySelector('.field.changed'), null);
+    seek(3);
+    assert.equal(get('source-line').textContent, 'L2');
+    assert.equal(
+      get('snippet').querySelector('.executing-line'),
+      null,
+      'a source-less console event must not falsely highlight the previous line',
+    );
     seek(4);
     assert.match(get('local-tree').textContent, /total: 0 → 2/);
     assert.equal(get('source').textContent, 'main.py');

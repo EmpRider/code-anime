@@ -22,8 +22,12 @@ let pinnedCallId;
 let inspectedSourceEvent;
 let lastConsoleText = '';
 const sourceLines = new Map();
+const sourceCache = new Map();
 const consoleEvents = [];
 const frameSnapshots = new Map();
+const frameSources = new Map();
+const objectHistory = new Map();
+let flowHasMock = false;
 let navigationVersion = 0;
 const continuationStates = new WeakMap();
 function registerFlow(value, id) {
@@ -129,11 +133,25 @@ function buildNodes(preserveInspection = false) {
     lastConsoleText = '';
   }
   sourceLines.clear();
+  sourceCache.clear();
   consoleEvents.length = 0;
   frameSnapshots.clear();
+  frameSources.clear();
+  objectHistory.clear();
+  flowHasMock = Boolean(
+    flow.trace?.simulation ||
+    flow.trace?.events.some((e) =>
+      ['mock', 'assumed', 'proposed'].includes(e.certainty),
+    ),
+  );
   for (const event of flow.trace?.events ?? [])
     if (event.kind === 'enter') invocations.set(event.callId, event);
   flow.trace?.events.forEach((event, index) => {
+    if (event.objectId && event.after !== undefined) {
+      if (!objectHistory.has(event.objectId))
+        objectHistory.set(event.objectId, []);
+      objectHistory.get(event.objectId).push(index);
+    }
     // Snapshot locations are indexed once per prepared trace (and rebuilt when
     // a continuation is loaded). Task scheduling can interleave unrelated
     // events, so the previous event is not necessarily this frame's history.
@@ -146,6 +164,8 @@ function buildNodes(preserveInspection = false) {
     if (event.kind === 'console' && event.output !== undefined)
       consoleEvents.push({ index: index + 1, output: event.output });
     if (!event.source) return;
+    if (!frameSources.has(event.callId)) frameSources.set(event.callId, []);
+    frameSources.get(event.callId).push(index);
     const key = event.source.file + ':' + event.source.line;
     if (!sourceLines.has(key)) sourceLines.set(key, index + 1);
   });
@@ -179,6 +199,8 @@ const LIST_PAGE_SIZE = 150;
 let listPage = 0;
 let listCursor = -1;
 let listSignature = '';
+let searchQuery;
+let searchMatches = [];
 function createEventRow(index) {
   const { event, step } = rows[index];
   const container = text('div', '', 'event-item');
@@ -232,18 +254,25 @@ function createEventRow(index) {
 function buildList() {
   rows.length = 0;
   listSignature = '';
+  searchQuery = undefined;
   flow.steps.forEach((step, index) => {
     const event = flow.trace?.events[index];
-    rows.push({
-      event,
-      step,
-      search: JSON.stringify([event, step]).toLowerCase(),
-    });
+    rows.push({ event, step });
   });
   filterList();
 }
 function filterList() {
   const query = $('search').value.trim().toLowerCase();
+  // Snapshot-heavy traces can be large. Materialize searchable text only
+  // when a query is active, then reuse its matches during playback.
+  if (query !== searchQuery) {
+    searchQuery = query;
+    searchMatches = query
+      ? rows.map(({ event, step }) =>
+          JSON.stringify([event, step]).toLowerCase().includes(query),
+        )
+      : [];
+  }
   const kind = $('kind-filter').value;
   const onlyBookmarks =
     $('bookmarks-only').getAttribute('aria-pressed') === 'true';
@@ -262,7 +291,7 @@ function filterList() {
     control: ['branch', 'loop'],
   };
   const visible = [];
-  rows.forEach(({ event, search }, i) => {
+  rows.forEach(({ event }, i) => {
     const essential = [
       'enter',
       'call',
@@ -291,7 +320,7 @@ function filterList() {
         ['assumed', 'unresolved', 'proposed'].includes(event?.certainty));
     if (
       matches &&
-      search.includes(query) &&
+      (!query || searchMatches[i]) &&
       (!onlyBookmarks || bookmarks.has(i + 1)) &&
       !(
         collapsed &&
@@ -439,17 +468,30 @@ function codeText(content) {
     container.append(document.createTextNode(content.slice(start)));
   return container;
 }
+// Indices are built once per loaded trace and stay ordered across continuation
+// chunks. Binary search avoids copying/scanning the whole prefix on each step.
+function precedingIndexedEvent(index, key, before) {
+  const positions = index.get(key);
+  if (!positions?.length) return undefined;
+  let low = 0;
+  let high = positions.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (positions[middle] < before) low = middle + 1;
+    else high = middle;
+  }
+  return low ? flow.trace.events[positions[low - 1]] : undefined;
+}
 function renderSource(state, event) {
   const trace = flow.trace;
-  const events = trace?.events ?? [];
   if (!$('follow').checked && !pinnedCallId) pinnedCallId = event?.callId;
   const frameId = pinnedCallId ?? activeFrame(state, event);
   const selected = pinnedCallId
-    ? events.slice(0, cursor).findLast((e) => e.callId === frameId && e.source)
+    ? precedingIndexedEvent(frameSources, frameId, cursor)
     : event;
   let sourceEvent = selected?.source
     ? selected
-    : events.slice(0, cursor).findLast((e) => e.callId === frameId && e.source);
+    : precedingIndexedEvent(frameSources, frameId, cursor);
   if (!$('follow').checked && !sourceEvent) sourceEvent = inspectedSourceEvent;
   if (sourceEvent) inspectedSourceEvent = sourceEvent;
   const location = sourceEvent?.source;
@@ -460,7 +502,9 @@ function renderSource(state, event) {
     sourceCode === undefined
       ? 'excerpt:' + (location?.file ?? '') + ':' + (sourceEvent?.snippet ?? '')
       : location.file + '\0' + sourceCode;
-  const lines = sourceCode?.split(/\r?\n/) ?? [];
+  if (sourceCode !== undefined && !sourceCache.has(location.file))
+    sourceCache.set(location.file, sourceCode.split(/\r?\n/));
+  const lines = sourceCode === undefined ? [] : sourceCache.get(location.file);
   // Long files keep only the current source window in the DOM.
   const firstLine =
     lines.length > 600
@@ -702,11 +746,7 @@ function drawConnection(from, to) {
 function render() {
   if (!flow) return;
   const recording = flow.trace?.recording;
-  const isMock =
-    flow.trace?.simulation ||
-    flow.trace?.events.some((e) =>
-      ['mock', 'assumed', 'proposed'].includes(e.certainty),
-    );
+  const isMock = flowHasMock;
   $('evidence-mode').textContent = recording
     ? 'Recorded execution'
     : isMock
@@ -841,9 +881,11 @@ function render() {
   const after = event?.after ?? step.dtoFields;
   let before = event?.before;
   if (before === undefined && event?.objectId)
-    before = flow.trace.events
-      .slice(0, cursor - 1)
-      .findLast((e) => e.objectId === event.objectId)?.after;
+    before = precedingIndexedEvent(
+      objectHistory,
+      event.objectId,
+      cursor - 1,
+    )?.after;
   fieldRows($('fields'), after, before);
   $('operation').textContent = event
     ? [
@@ -893,10 +935,15 @@ function render() {
   if ($('follow').checked) {
     if ($('view-mode').value === 'map')
       $('canvas').scrollLeft = Math.max(0, to.offsetLeft - 30);
-    const row = rows[cursor - 1]?.button;
-    if (row && !row.hidden) {
+    const row = $('event-list').querySelector(
+      `.event-row[data-index="${cursor}"]`,
+    );
+    if (row) {
       const list = $('event-list');
-      const top = row.offsetTop;
+      const top =
+        row.getBoundingClientRect().top -
+        list.getBoundingClientRect().top +
+        list.scrollTop;
       if (
         top < list.scrollTop ||
         top + row.offsetHeight > list.scrollTop + list.clientHeight
