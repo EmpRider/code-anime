@@ -534,3 +534,78 @@ test('source-first playback follows nested calls, restores parent locals, and re
     dom.window.close();
   }
 });
+
+test('interleaved tasks compare local changes with the previous snapshot of the same invocation', async () => {
+  const [html, source] = await Promise.all([
+    readFile(new URL('../public/index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../public/player.js', import.meta.url), 'utf8'),
+  ]);
+  const events = [
+    ['enter', 'call-a', ['call-a'], { 'call-a': { total: 0 } }, 'task-1'],
+    ['enter', 'call-b', ['call-b'], { 'call-b': { total: 50 } }, 'task-2'],
+    ['console', 'call-b', ['call-b'], undefined, 'task-2'],
+    ['resume', 'call-a', ['call-a'], { 'call-a': { total: 2 } }, 'task-1'],
+    ['resume', 'call-b', ['call-b'], { 'call-b': { total: 51 } }, 'task-2'],
+  ].map(([kind, callId, stack, locals, task], index) => ({
+    id: `event-${index + 1}`,
+    kind,
+    callId,
+    symbolId: `main.py:${callId}`,
+    label: `${kind} ${callId}`,
+    stack,
+    ...(locals ? { locals } : {}),
+    ...(kind === 'console' ? { output: 'working\n' } : {}),
+    values: { task },
+    certainty: 'observed',
+    source: { file: 'main.py', line: index + 1, endLine: index + 1 },
+  }));
+  const flow = {
+    endpoint: 'main.py',
+    trace: {
+      events,
+      sourceFiles: {
+        'main.py': 'start_a\nstart_b\nprint_b\nresume_a\nresume_b',
+      },
+      diagnostics: [],
+    },
+    steps: events.map((event) => ({
+      from: event.symbolId,
+      to: event.symbolId,
+      dtoName: event.label,
+      dtoFields: {},
+    })),
+  };
+  const dom = new JSDOM(html, {
+    url: 'http://127.0.0.1/flow/test',
+    runScripts: 'outside-only',
+  });
+  try {
+    const { window } = dom;
+    const get = (id) => window.document.getElementById(id);
+    window.replayState = replayState;
+    window.fetch = async () => ({ ok: true, json: async () => flow });
+    window.matchMedia = () => ({ matches: true });
+    window.HTMLElement.prototype.scrollIntoView = () => {};
+    window.eval(source.replace(/^import .*;\r?\n/, ''));
+    for (let i = 0; i < 40 && get('progress').textContent !== '0 / 5'; i++)
+      await new Promise((r) => setTimeout(r, 5));
+
+    const seek = (position) => {
+      get('timeline').value = String(position);
+      get('timeline').dispatchEvent(new window.Event('input'));
+    };
+    seek(2);
+    assert.equal(get('local-tree').querySelector('.field.changed'), null);
+    seek(4);
+    assert.match(get('local-tree').textContent, /total: 0 → 2/);
+    assert.equal(get('source').textContent, 'main.py');
+    seek(5);
+    assert.match(get('local-tree').textContent, /total: 50 → 51/);
+    seek(4);
+    assert.match(get('local-tree').textContent, /total: 0 → 2/);
+    seek(1);
+    assert.equal(get('local-tree').querySelector('.field.changed'), null);
+  } finally {
+    dom.window.close();
+  }
+});

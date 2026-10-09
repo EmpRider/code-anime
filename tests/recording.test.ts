@@ -253,11 +253,12 @@ test('timeout and explicit cancellation stop blocked execution and retain partia
   }
 });
 
-test('caught and unhandled exceptions do not invent normal returns; generators report a boundary', async () => {
+test('caught and unhandled exceptions do not invent normal returns; generators retain invocation identity across yields', async () => {
   const f = await fixture({
     'main.py':
       'def fail():\n    try:\n        raise ValueError("bad")\n    finally:\n        x = 1\ntry:\n    fail()\nexcept ValueError:\n    print("caught")\n',
-    'generator.py': 'def gen():\n    yield 1\nlist(gen())\n',
+    'generator.py':
+      'def gen():\n    yield 1\n    yield 2\n    return "done"\nprint(list(gen()))\n',
     'dynamic.py': 'x = 1\nexec("print(42)")\n',
     'uncaught.py': 'def fail():\n    raise ValueError("bad")\nfail()\n',
   });
@@ -289,9 +290,37 @@ test('caught and unhandled exceptions do not invent normal returns; generators r
       projectRoot: f.root,
       entry: 'generator.py',
     });
-    const unsupported = await wait(f.service, generator.jobId);
-    assert.equal(unsupported.complete, false);
-    assert.match(unsupported.diagnostics!.join(' '), /Generator or coroutine/);
+    const generated = await wait(f.service, generator.jobId);
+    assert.equal(generated.complete, true);
+    const { events: generatorEvents } = await allEvents(
+      f.store,
+      generated.sessionId!,
+    );
+    const entered = generatorEvents.filter(
+      (e) => e.kind === 'enter' && e.symbolId.endsWith(':gen'),
+    );
+    const yielded = generatorEvents.filter(
+      (e) => e.kind === 'yield' && e.symbolId.endsWith(':gen'),
+    );
+    const resumed = generatorEvents.filter(
+      (e) => e.kind === 'resume' && e.symbolId.endsWith(':gen'),
+    );
+    assert.equal(entered.length, 1);
+    assert.deepEqual(
+      yielded.map((e) => e.result),
+      [1, 2],
+    );
+    assert.equal(resumed.length, 2);
+    assert.ok(
+      [...yielded, ...resumed].every((e) => e.callId === entered[0]!.callId),
+    );
+    assert.deepEqual(
+      generatorEvents
+        .filter((e) => e.kind === 'return' && e.symbolId.endsWith(':gen'))
+        .map((e) => e.result),
+      ['done'],
+    );
+    assert.ok(yielded.every((e) => !e.stack.includes(e.callId)));
     for (const [entry, reason] of [
       ['dynamic.py', /Dynamically compiled/],
       ['uncaught.py', /terminated with ValueError/],
@@ -314,6 +343,136 @@ test('caught and unhandled exceptions do not invent normal returns; generators r
         entry: '../outside.py',
       }),
     );
+  } finally {
+    await f.close();
+  }
+});
+
+test('records coroutine suspension and independent asyncio task interleaving without fictitious returns', async () => {
+  const f = await fixture({
+    'main.py': [
+      'import asyncio',
+      'async def worker(name):',
+      '    total = 0',
+      '    for i in range(2):',
+      '        total += 1',
+      '        await asyncio.sleep(0)',
+      '    print(name, total)',
+      '    return total',
+      'async def main():',
+      '    results = await asyncio.gather(worker("A"), worker("B"))',
+      '    print(sum(results))',
+      'asyncio.run(main())',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'python',
+      projectRoot: f.root,
+      entry: 'main.py',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true);
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const workers = events.filter(
+      (e) => e.kind === 'enter' && e.symbolId.endsWith(':worker'),
+    );
+    assert.equal(workers.length, 2);
+    assert.equal(new Set(workers.map((e) => e.values.task)).size, 2);
+    assert.ok(workers.every((e) => e.values.task !== 'main'));
+    for (const worker of workers) {
+      const own = events.filter((e) => e.callId === worker.callId);
+      assert.equal(own.filter((e) => e.kind === 'return').length, 1);
+      assert.ok(own.filter((e) => e.kind === 'await').length >= 2);
+      assert.ok(own.filter((e) => e.kind === 'resume').length >= 2);
+      assert.ok(own.every((e) => e.values.task === worker.values.task));
+      assert.ok(
+        own
+          .filter((e) => e.kind === 'await')
+          .every((e) => !e.stack.includes(e.callId)),
+      );
+    }
+    assert.equal(
+      events.filter(
+        (e) => e.kind === 'return' && e.symbolId.endsWith(':worker'),
+      ).length,
+      2,
+    );
+    assert.equal(
+      events
+        .filter((e) => e.kind === 'console')
+        .map((e) => e.output)
+        .join(''),
+      'A 2\nB 2\n4\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('async cancellation and propagated awaited exceptions never become normal returns', async () => {
+  const f = await fixture({
+    'cancel.py': [
+      'import asyncio',
+      'async def worker():',
+      '    try:',
+      '        await asyncio.sleep(10)',
+      '    finally:',
+      '        print("cleanup")',
+      'async def main():',
+      '    task = asyncio.create_task(worker())',
+      '    await asyncio.sleep(0)',
+      '    task.cancel()',
+      '    try:',
+      '        await task',
+      '    except asyncio.CancelledError:',
+      '        print("cancelled")',
+      'asyncio.run(main())',
+    ].join('\n'),
+    'exception.py': [
+      'import asyncio',
+      'async def worker():',
+      '    await asyncio.sleep(0)',
+      '    raise ValueError("bad")',
+      'async def main():',
+      '    try:',
+      '        await worker()',
+      '    except ValueError:',
+      '        print("caught")',
+      'asyncio.run(main())',
+    ].join('\n'),
+  });
+  try {
+    for (const [entry, expected] of [
+      ['cancel.py', 'cleanup\ncancelled\n'],
+      ['exception.py', 'caught\n'],
+    ] as const) {
+      const job = await f.service.run({
+        action: 'start',
+        language: 'python',
+        projectRoot: f.root,
+        entry,
+      });
+      const result = await wait(f.service, job.jobId);
+      assert.equal(result.complete, true);
+      const { events } = await allEvents(f.store, result.sessionId!);
+      const worker = events.filter((e) => e.symbolId.endsWith(':worker'));
+      const invocation = worker.find((e) => e.kind === 'enter');
+      assert.ok(invocation);
+      assert.ok(worker.some((e) => e.kind === 'await'));
+      assert.ok(worker.some((e) => e.kind === 'resume'));
+      assert.ok(worker.some((e) => e.kind === 'throw'));
+      assert.ok(worker.every((e) => e.callId === invocation.callId));
+      assert.equal(worker.filter((e) => e.kind === 'return').length, 0);
+      assert.equal(
+        events
+          .filter((e) => e.kind === 'console')
+          .map((e) => e.output)
+          .join(''),
+        expected,
+      );
+    }
   } finally {
     await f.close();
   }

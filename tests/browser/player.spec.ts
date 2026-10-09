@@ -231,6 +231,75 @@ test('actual Python recording replays across chunks with exact output and revers
   }
 });
 
+test('recorded interleaved asyncio tasks preserve per-invocation mutations in browser replay', async ({
+  page,
+}) => {
+  const recorder = new RecordingService(
+    runtime.store,
+    runtime.baseUrl,
+    realpath,
+  );
+  try {
+    const started = await recorder.run({
+      action: 'start',
+      language: 'python',
+      projectRoot: fileURLToPath(
+        new URL('../fixtures/runtime/', import.meta.url),
+      ),
+      entry: 'async.py',
+    });
+    let status = started;
+    await expect
+      .poll(async () => {
+        status = await recorder.run({ action: 'status', jobId: started.jobId });
+        return status.status;
+      })
+      .toBe('ready');
+    expect(status.complete).toBe(true);
+    const events = (await runtime.store.get(status.sessionId!))!.flow.trace!
+      .events;
+    const workerB = events.find(
+      (event) => event.kind === 'enter' && event.inputs?.name === 'B',
+    );
+    expect(workerB).toBeDefined();
+    const stateValue = (event: TraceEvent) => {
+      const own = event.locals?.[workerB!.callId];
+      if (!own || typeof own !== 'object' || !('state' in own)) return;
+      const state = own.state;
+      if (!state || typeof state !== 'object' || !('value' in state)) return;
+      return state.value;
+    };
+    const prior = events.findIndex(
+      (event) => event.callId === workerB!.callId && stateValue(event) === 0,
+    );
+    const resume = events.findIndex(
+      (event) =>
+        event.callId === workerB!.callId &&
+        event.kind === 'resume' &&
+        stateValue(event) === 1,
+    );
+    expect(prior).toBeGreaterThanOrEqual(0);
+    expect(resume).toBeGreaterThan(prior + 1);
+    expect(events[resume]!.values.task).toEqual(workerB!.values.task);
+
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(status.url!);
+    await page.locator('#timeline').fill(String(resume + 1));
+    await expect(page.locator('#source')).toHaveText('async.py');
+    await expect(page.locator('#local-tree .field.changed')).toContainText(
+      'state.value: 0 → 1',
+    );
+    await page.locator('#timeline').fill(String(prior + 1));
+    await expect(page.locator('#local-tree')).toContainText('state.value: 0');
+    await page.locator('#timeline').fill(String(events.length));
+    await expect(page.locator('#console-output')).toHaveText('A 1\nB 2\n');
+    expect(errors).toEqual([]);
+  } finally {
+    recorder.close();
+  }
+});
+
 test('keyboard disclosure preserves playback and uses only prepared data', async ({
   page,
 }) => {

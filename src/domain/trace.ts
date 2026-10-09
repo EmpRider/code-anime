@@ -17,6 +17,8 @@ export const eventSchema = z.object({
     'branch',
     'loop',
     'await',
+    'yield',
+    'resume',
     'throw',
     'catch',
     'console',

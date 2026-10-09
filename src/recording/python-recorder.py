@@ -1,4 +1,4 @@
-"""Bundled synchronous Python recorder. Runs only on explicit record_execution.
+"""Bundled Python recorder. Runs only on explicit record_execution.
 
 The protocol is written to the original stdout; application text writes become
 console events. This is instrumentation, not a sandbox for untrusted programs.
@@ -12,6 +12,7 @@ import math
 import threading
 import dis
 import itertools
+import asyncio
 
 root, entry, max_events, max_bytes, *arguments = sys.argv[1:]
 root = os.path.realpath(root)
@@ -19,6 +20,8 @@ entry = os.path.realpath(entry)
 max_events, max_bytes = int(max_events), int(max_bytes)
 protocol = sys.stdout
 frames = {}
+suspended = set()
+tasks = {}
 sources = {}
 paths = {}
 count = 0
@@ -26,7 +29,7 @@ calls = 0
 size = 0
 source_bytes = 0
 active = True
-scope = "Synchronous main-thread Python user code for this input only. Line events show state BEFORE the highlighted line; return events show state after returning. Native/dependency internals, other processes, binary console writes and object internals are not captured. Values are bounded; unavailable fields are explicitly marked."
+scope = "Main-thread Python user code for this input, including generator/coroutine suspension and single-thread asyncio tasks. Line events show state BEFORE the highlighted line; return events show state after returning. Coroutine await/suspend events are scheduler transitions, not awaited results. Async task stacks are observed Python frames, not inferred causal chains. Native/dependency internals, additional threads or processes, binary console writes and object internals are not captured. Values are bounded; unavailable fields are explicitly marked."
 
 
 class Boundary(BaseException):
@@ -124,6 +127,18 @@ def chain(frame):
     return list(reversed(result))
 
 
+def task_identity():
+    try:
+        task = asyncio.current_task()
+    except RuntimeError:
+        return 'main'
+    if task is None:
+        return 'main'
+    if task not in tasks:
+        tasks[task] = 'task-' + str(len(tasks) + 1)
+    return tasks[task]
+
+
 def emit(frame, kind, **extra):
     global count
     if count >= max_events:
@@ -132,7 +147,7 @@ def emit(frame, kind, **extra):
     if not file:
         return
     stack_frames = chain(frame)
-    if kind == 'return' or extra.get('unwinding'):
+    if kind in ('return', 'yield') or extra.get('suspending') or extra.get('unwinding'):
         stack_frames = stack_frames[:-1]
     own = frames[id(frame)]
     count += 1
@@ -141,7 +156,11 @@ def emit(frame, kind, **extra):
         'symbolId': file + ':' + getattr(frame.f_code, 'co_qualname', frame.f_code.co_name),
         'callId': own, 'label': kind + ' ' + frame.f_code.co_name,
         'source': {'file': file, 'line': max(1, frame.f_lineno), 'endLine': max(1, frame.f_lineno)},
-        'values': {'thread': 'main', 'phase': 'before' if kind == 'statement' else 'after'},
+        'values': {
+            'thread': 'main',
+            'task': task_identity(),
+            'phase': 'before' if kind == 'statement' else 'after',
+        },
         'stack': [frames[id(parent)] for parent in stack_frames],
         'locals': {frames[id(parent)]: local_values(parent) for parent in stack_frames},
         'certainty': 'observed',
@@ -150,9 +169,17 @@ def emit(frame, kind, **extra):
     if parent:
         event['parentCallId'] = frames[id(parent[-1])]
     event.update(extra)
+    if 'values' in extra:
+        event['values'] = {
+            'thread': 'main',
+            'task': task_identity(),
+            'phase': 'before' if kind == 'statement' else 'after',
+            **extra['values'],
+        }
     if kind == 'statement':
         event['note'] = 'State before this source line executes'
     event.pop('unwinding', None)
+    event.pop('suspending', None)
     send({'type': 'event', 'event': event})
 
 
@@ -166,23 +193,35 @@ def trace(frame, event, arg):
         return None
     if threading.active_count() > 1:
         raise Boundary('Multiple threads detected; this recorder supports synchronous main-thread execution')
-    if frame.f_code.co_flags & (0x20 | 0x80 | 0x200):
-        raise Boundary('Generator or coroutine execution requires a task-aware recorder')
     if event == 'call':
-        calls += 1
-        frames[id(frame)] = 'call-' + str(calls)
-        emit(frame, 'enter', inputs=local_values(frame))
+        if id(frame) in suspended:
+            suspended.remove(id(frame))
+            emit(frame, 'resume', note='Resuming the same generator or coroutine invocation')
+        else:
+            calls += 1
+            frames[id(frame)] = 'call-' + str(calls)
+            emit(frame, 'enter', inputs=local_values(frame))
     elif id(frame) in frames:
         if event == 'line':
             emit(frame, 'statement')
         elif event == 'exception':
             emit(frame, 'throw', note='Exception observed: ' + arg[0].__name__)
         elif event == 'return':
-            if arg is None and dis.opname[frame.f_code.co_code[frame.f_lasti]] not in ('RETURN_VALUE', 'RETURN_CONST'):
+            opcode = dis.opname[frame.f_code.co_code[frame.f_lasti]]
+            if opcode in ('YIELD_VALUE', 'YIELD_FROM'):
+                suspended.add(id(frame))
+                if frame.f_code.co_flags & (0x80 | 0x200):
+                    emit(frame, 'await', suspending=True,
+                         note='Coroutine suspended; await result not yet available')
+                else:
+                    emit(frame, 'yield', result=value(arg),
+                         note='Generator yielded; invocation remains suspended')
+            elif arg is None and opcode not in ('RETURN_VALUE', 'RETURN_CONST'):
                 emit(frame, 'throw', unwinding=True, note='Exception unwound this frame; no normal return value')
             else:
                 emit(frame, 'return', result=value(arg))
-            del frames[id(frame)]
+            if id(frame) not in suspended:
+                del frames[id(frame)]
     return trace
 
 

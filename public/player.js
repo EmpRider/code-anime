@@ -23,6 +23,7 @@ let inspectedSourceEvent;
 let lastConsoleText = '';
 const sourceLines = new Map();
 const consoleEvents = [];
+const frameSnapshots = new Map();
 let navigationVersion = 0;
 const continuationStates = new WeakMap();
 function registerFlow(value, id) {
@@ -129,9 +130,19 @@ function buildNodes(preserveInspection = false) {
   }
   sourceLines.clear();
   consoleEvents.length = 0;
+  frameSnapshots.clear();
   for (const event of flow.trace?.events ?? [])
     if (event.kind === 'enter') invocations.set(event.callId, event);
   flow.trace?.events.forEach((event, index) => {
+    // Snapshot locations are indexed once per prepared trace (and rebuilt when
+    // a continuation is loaded). Task scheduling can interleave unrelated
+    // events, so the previous event is not necessarily this frame's history.
+    for (const frame of event.stack ?? []) {
+      const snapshot = event.locals?.[frame];
+      if (snapshot === null || typeof snapshot !== 'object') continue;
+      if (!frameSnapshots.has(frame)) frameSnapshots.set(frame, []);
+      frameSnapshots.get(frame).push(index);
+    }
     if (event.kind === 'console' && event.output !== undefined)
       consoleEvents.push({ index: index + 1, output: event.output });
     if (!event.source) return;
@@ -238,7 +249,16 @@ function filterList() {
     $('bookmarks-only').getAttribute('aria-pressed') === 'true';
   const groups = {
     changes: ['assign', 'mutate', 'transform'],
-    calls: ['enter', 'call', 'return', 'await', 'throw', 'catch'],
+    calls: [
+      'enter',
+      'call',
+      'return',
+      'await',
+      'yield',
+      'resume',
+      'throw',
+      'catch',
+    ],
     control: ['branch', 'loop'],
   };
   const visible = [];
@@ -247,6 +267,9 @@ function filterList() {
       'enter',
       'call',
       'return',
+      'await',
+      'yield',
+      'resume',
       'console',
       'throw',
       'catch',
@@ -363,16 +386,24 @@ function frameLocals(state, event) {
 // Compare recorded snapshots of the same invocation. A newly entered frame
 // has no preceding state; switching frames must not look like a mutation.
 function precedingFrameLocals(state, event, previousEvent) {
-  if (!previousEvent?.locals || !event?.locals) return undefined;
+  if (!event?.locals) return undefined;
   const frame = activeFrame(state, event);
-  if (
-    frame &&
-    Object.hasOwn(event.locals, frame) &&
-    Object.hasOwn(previousEvent.locals, frame)
-  )
-    return previousEvent.locals[frame];
+  if (frame && Object.hasOwn(event.locals, frame)) {
+    const snapshots = frameSnapshots.get(frame) ?? [];
+    // Binary search the last earlier snapshot of this exact invocation.
+    let low = 0;
+    let high = snapshots.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (snapshots[middle] < cursor - 1) low = middle + 1;
+      else high = middle;
+    }
+    if (low) return flow.trace.events[snapshots[low - 1]].locals[frame];
+    return undefined;
+  }
   // Older agent traces store one flat locals object per event.
   if (
+    previousEvent?.locals &&
     state.stack.length &&
     previousEvent.callId === event.callId &&
     !state.stack.some((id) => Object.hasOwn(event.locals, id)) &&
