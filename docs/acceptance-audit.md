@@ -170,9 +170,12 @@ about future changes.
     Extend request assertions to all ordinary controls for behavioral acceptance.
 29. **Existing language compatibility — partial.**
     Shared frontend and CodeGraph-backed simulation remain language-independent.
-    Observed recording is Python-only; Kotlin structural integration was tested
-    previously. Do not equate structural coverage with verified runtime semantics.
-    Establish the supported-language inventory and representative evidence.
+    Observed recording is Python-only. The optional real CodeGraph integration
+    test passed against an indexed Kotlin fixture on Windows with the default
+    npm CLI PATH launcher. It verifies structural relationships, ambiguous
+    overload handling, index prerequisites, and refinements. Structural analysis
+    does not establish recorded Kotlin execution semantics. Establish the
+    supported-language inventory and broader representative evidence.
 30. **Single execution state — implemented, bounded verification.**
     `replayState()` and the cursor drive stack, locals, source, console, and flow.
     Continuation tests check historical state and scenario isolation. Recorded
@@ -207,7 +210,7 @@ about future changes.
 
 ## Checkpoint verification
 
-- `npm run check`: typecheck, build, Prettier, and 74 core tests passed; one
+- `npm run check`: typecheck, build, Prettier, and 76 core tests passed; one
   optional live CodeGraph integration test skipped (2026-10-10 candidate).
 - `npm run test:browser`: 24 passed, including the five-session persisted
   continuation-chain fixture. Browser coverage includes recorded nested disclosure,
@@ -216,6 +219,11 @@ about future changes.
   source continuity, real five-iteration loop playback, and mobile layouts.
 - `npm run package:check`: packed CLI installation, MCP handshake, player assets,
   and stored flow API passed for the current candidate.
+- The opt-in real CodeGraph integration test passed against a temporary indexed
+  Kotlin project using npm-installed CodeGraph 0.9.9 on Windows. The test first
+  confirmed rejection without an index, then verified PATH-discovered CLI
+  transport, a provider-only trace, refinement, and ambiguous target selection.
+  This does not establish live runtime tracing for Kotlin.
 - Both JSDOM player suites exercise the module-imported stateful lexer; 26
   player and continuation tests passed after updating the JSDOM import harness.
 - Additional focused lexer regressions cover multiline/nested JavaScript template

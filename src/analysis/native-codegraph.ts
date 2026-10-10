@@ -4,6 +4,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { traceToFlow, type AnalysisInput, CandidateError } from './contract.js';
 import type { Trace, TraceEvent } from '../domain/trace.js';
+import { resolveCodeGraphLaunch } from './codegraph-launcher.js';
 
 interface SymbolInfo {
   name: string;
@@ -67,9 +68,13 @@ async function connect(input: AnalysisInput, signal: AbortSignal) {
       'CODE_ANIME_CODEGRAPH_ARGS must be a JSON array of strings',
     );
   const client = new Client({ name: 'code-anime', version: '0.5.0' });
+  const launcher = resolveCodeGraphLaunch(
+    process.env.CODE_ANIME_CODEGRAPH_COMMAND || 'codegraph',
+    prefix,
+  );
   const transport = new StdioClientTransport({
-    command: process.env.CODE_ANIME_CODEGRAPH_COMMAND || 'codegraph',
-    args: [...prefix, 'serve', '--mcp', '--path', input.projectRoot],
+    command: launcher.command,
+    args: [...launcher.args, 'serve', '--mcp', '--path', input.projectRoot],
     cwd: input.projectRoot,
     env: {
       ...process.env,

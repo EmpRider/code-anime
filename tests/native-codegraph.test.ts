@@ -10,6 +10,7 @@ import {
   parseNodes,
   analyzeNativeCodeGraph,
 } from '../src/analysis/native-codegraph.js';
+import { resolveCodeGraphLaunch } from '../src/analysis/codegraph-launcher.js';
 import { VisualizationService } from '../src/services/visualization-service.js';
 import { FileSessionStore } from '../src/storage/file-session-store.js';
 
@@ -178,6 +179,7 @@ test(
   async () => {
     const previous = process.env.CODE_ANIME_CODEGRAPH_COMMAND;
     const previousConfig = process.env.CODE_ANIME_CODEGRAPH_CONFIG;
+    const previousArgs = process.env.CODE_ANIME_CODEGRAPH_ARGS;
     process.env.CODE_ANIME_CODEGRAPH_COMMAND = executable!;
     delete process.env.CODE_ANIME_CODEGRAPH_CONFIG;
     const directory = await mkdtemp(join(tmpdir(), 'code-anime-kotlin-'));
@@ -201,19 +203,21 @@ test(
         join(directory, 'src', 'Generator.kt'),
         'class Generator {\n fun generate(input: String): String { return normalize(input) }\n fun normalize(input: String): String { return input.trim() }\n}\nclass Other {\n fun normalize(input: String): String { return input }\n}\n',
       );
-      execFileSync(
+      const launcher = resolveCodeGraphLaunch(
         executable!,
-        [
-          ...JSON.parse(process.env.CODE_ANIME_CODEGRAPH_ARGS || '[]'),
-          'init',
-          directory,
-        ],
-        {
-          env: { ...process.env, CODEGRAPH_TELEMETRY: '0' },
-          timeout: 60000,
-          stdio: 'pipe',
-        },
+        JSON.parse(process.env.CODE_ANIME_CODEGRAPH_ARGS || '[]'),
       );
+      execFileSync(launcher.command, [...launcher.args, 'init', directory], {
+        env: { ...process.env, CODEGRAPH_TELEMETRY: '0' },
+        timeout: 60000,
+        stdio: 'pipe',
+      });
+      // On machines with CodeGraph on PATH, optionally exercise native
+      // discovery without any Code Anime command or argument overrides.
+      if (process.env.CODE_ANIME_TEST_DEFAULT_CODEGRAPH === '1') {
+        delete process.env.CODE_ANIME_CODEGRAPH_COMMAND;
+        delete process.env.CODE_ANIME_CODEGRAPH_ARGS;
+      }
       const wait = async (id: string) => {
         for (let i = 0; i < 600; i++) {
           const status = service.status(id);
@@ -278,6 +282,9 @@ test(
       if (previousConfig === undefined)
         delete process.env.CODE_ANIME_CODEGRAPH_CONFIG;
       else process.env.CODE_ANIME_CODEGRAPH_CONFIG = previousConfig;
+      if (previousArgs === undefined)
+        delete process.env.CODE_ANIME_CODEGRAPH_ARGS;
+      else process.env.CODE_ANIME_CODEGRAPH_ARGS = previousArgs;
     }
   },
 );
