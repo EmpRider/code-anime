@@ -168,6 +168,48 @@ test('tablet layout keeps timeline resizable and source focus available', async 
   expect(width).toBeLessThanOrEqual(690);
 });
 
+test('desktop source and flow share the workspace and retain split preferences', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(url);
+  await page.locator('#timeline').fill('70');
+  const source = page.locator('.source-panel');
+  const flow = page.locator('#flow-panel');
+  await expect(flow).toBeVisible();
+  const a = (await source.boundingBox())!;
+  const b = (await flow.boundingBox())!;
+  expect(Math.abs(a.y - b.y)).toBeLessThan(2);
+  expect(a.x + a.width).toBeLessThan(b.x);
+  expect(a.height).toBeGreaterThan(450);
+  expect(b.height).toBeGreaterThan(450);
+  const split = page.getByRole('separator', {
+    name: 'Resize source and execution flow',
+  });
+  await split.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(split).toHaveAttribute('aria-valuenow', '60');
+  expect((await source.boundingBox())!.width).toBeGreaterThan(a.width);
+  await expect(page.locator('#progress')).toHaveText('70 / 100');
+  await page.locator('#maximize-flow').click();
+  await expect(source).toBeHidden();
+  await expect(split).toBeHidden();
+  expect((await flow.boundingBox())!.width).toBeGreaterThan(1200);
+  await page.locator('#maximize-flow').click();
+  await expect(source).toBeVisible();
+  await page.locator('#maximize-source').click();
+  await expect(flow).toBeHidden();
+  expect((await source.boundingBox())!.width).toBeGreaterThan(1200);
+  await page.locator('#maximize-source').click();
+  await expect(flow).toBeVisible();
+  await page.locator('#toggle-flow').click();
+  await page.reload();
+  await expect(flow).toBeHidden();
+  await page.locator('#toggle-flow').click();
+  await expect(split).toHaveAttribute('aria-valuenow', '60');
+  await expect(page.locator('#progress')).toHaveText('0 / 100');
+});
+
 test('actual Python recording replays across chunks with exact output and reversible source state', async ({
   page,
 }) => {

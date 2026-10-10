@@ -1636,3 +1636,76 @@ main {
     max-height: none;
   }
 }
+
+/* Primary panels share the desktop workspace; focus is temporary. */
+#source-flow-divider {
+  display: none;
+}
+@media (min-width: 651px) {
+  .workspace.flow-focused {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace.flow-focused > .trace-panel,
+  .workspace.flow-focused > .inspector,
+  .workspace.flow-focused > #workspace-divider {
+    display: none;
+  }
+  .workspace.source-focused .center-column,
+  .workspace.flow-focused .center-column {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 34px;
+  }
+  .workspace.source-focused #flow-panel,
+  .workspace.flow-focused .source-panel {
+    display: none;
+  }
+}
+@media (min-width: 1101px) {
+  .center-column.show-flow {
+    grid-template-columns: minmax(0, var(--source-share, 55fr)) 8px minmax(
+        0,
+        var(--flow-share, 45fr)
+      );
+    grid-template-rows: minmax(0, 1fr) minmax(72px, 100px);
+    gap: 6px;
+  }
+  .center-column.show-flow:has(#console-panel:not([open])) {
+    grid-template-rows: minmax(0, 1fr) 34px;
+  }
+  .center-column.show-flow > .source-panel {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .center-column.show-flow > .flow-panel {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .center-column.show-flow > .console-panel {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .center-column.show-flow > #source-flow-divider {
+    display: block;
+    grid-column: 2;
+    grid-row: 1;
+    cursor: col-resize;
+    touch-action: none;
+    background: var(--border);
+    border-radius: 4px;
+  }
+  #source-flow-divider:hover,
+  #source-flow-divider:focus-visible {
+    background: var(--accent);
+  }
+  .workspace.source-focused .center-column,
+  .workspace.flow-focused .center-column {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace.source-focused #source-flow-divider,
+  .workspace.flow-focused #source-flow-divider {
+    display: none;
+  }
+  .workspace.flow-focused .center-column > .flow-panel {
+    grid-column: 1;
+  }
+}

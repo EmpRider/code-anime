@@ -184,6 +184,17 @@ about future changes.
 
 ## Next implementation order
 
+### Desktop layout follow-up
+
+The default desktop contradiction in item 18 is now corrected: source and flow
+open side by side, with a keyboard/pointer divider, independent temporary focus
+controls, and persisted split/visibility preferences. A browser geometry test
+checks panel alignment, useful height, resizing, focus, restoration, and reload.
+The 1440x900 render was visually inspected. Existing tablet and mobile scenarios
+passed. The mobile flow experience, compact toolbar, nested visual interactions,
+and other open items above still require work; this closes the desktop layout
+gap only.
+
 1. Correct default desktop source/flow layout, preserve compact mobile switching,
    add panel controls/preferences and acceptance assertions for actual geometry.
 2. Prevent non-navigation updates from restarting packet animations; verify

@@ -401,9 +401,9 @@ test('source-first playback follows nested calls, restores parent locals, and re
     for (let i = 0; i < 40 && get('progress').textContent !== '0 / 8'; i++)
       await new Promise((r) => setTimeout(r, 5));
     assert.equal(get('flow-panel').id, 'flow-panel');
-    assert.equal(get('toggle-flow').getAttribute('aria-expanded'), 'false');
-    get('toggle-flow').click();
     assert.equal(get('toggle-flow').getAttribute('aria-expanded'), 'true');
+    get('toggle-flow').click();
+    assert.equal(get('toggle-flow').getAttribute('aria-expanded'), 'false');
     get('toggle-flow').click();
     get('next').click();
     assert.equal(get('source').textContent, 'A.ts');

@@ -1157,11 +1157,20 @@ $('step-out').onclick = () => {
 $('timeline').oninput = () => seek(Number($('timeline').value));
 const workspace = document.querySelector('.workspace');
 const divider = $('workspace-divider');
-let layout = { inspector: false, traceWidth: 220, console: false };
+let layout = {
+  inspector: false,
+  traceWidth: 220,
+  console: false,
+  diagram: true,
+  sourceShare: 55,
+};
 try {
   const saved = JSON.parse(localStorage.getItem('code-anime-layout') ?? '{}');
   if (typeof saved.inspector === 'boolean') layout.inspector = saved.inspector;
   if (typeof saved.console === 'boolean') layout.console = saved.console;
+  if (typeof saved.diagram === 'boolean') layout.diagram = saved.diagram;
+  if (Number.isFinite(saved.sourceShare))
+    layout.sourceShare = Math.max(25, Math.min(75, saved.sourceShare));
   if (Number.isFinite(saved.traceWidth)) layout.traceWidth = saved.traceWidth;
 } catch {
   /* Storage can be disabled by the browser. */
@@ -1188,11 +1197,36 @@ function applyLayout() {
   workspace.classList.toggle('inspector-collapsed', !layout.inspector);
   $('toggle-inspector').setAttribute('aria-expanded', String(layout.inspector));
   resizeTimeline(layout.traceWidth);
+  const center = document.querySelector('.center-column');
+  center.classList.toggle('show-flow', layout.diagram);
+  center.style.setProperty('--source-share', layout.sourceShare + 'fr');
+  center.style.setProperty('--flow-share', 100 - layout.sourceShare + 'fr');
+  $('source-flow-divider').setAttribute(
+    'aria-valuenow',
+    String(layout.sourceShare),
+  );
+  $('toggle-flow').setAttribute('aria-expanded', String(layout.diagram));
+  $('toggle-flow').textContent = layout.diagram
+    ? 'Hide diagram'
+    : 'Show diagram';
+}
+function focusPanel(panel) {
+  const focused = !workspace.classList.contains(panel + '-focused');
+  workspace.classList.remove('source-focused', 'flow-focused');
+  if (focused) workspace.classList.add(panel + '-focused');
+  for (const name of ['source', 'flow']) {
+    const active = focused && name === panel;
+    $('maximize-' + name).setAttribute('aria-pressed', String(active));
+    $('maximize-' + name).textContent = active ? 'Restore' : 'Focus';
+  }
+  render();
 }
 $('toggle-inspector').onclick = () => {
   layout.inspector = !layout.inspector;
   if (layout.inspector) {
-    workspace.classList.remove('source-focused');
+    workspace.classList.remove('source-focused', 'flow-focused');
+    $('maximize-flow').setAttribute('aria-pressed', 'false');
+    $('maximize-flow').textContent = 'Focus';
     $('maximize-source').setAttribute('aria-pressed', 'false');
     $('maximize-source').textContent = 'Focus';
   }
@@ -1201,9 +1235,48 @@ $('toggle-inspector').onclick = () => {
   render();
 };
 $('maximize-source').onclick = () => {
-  const focused = workspace.classList.toggle('source-focused');
-  $('maximize-source').setAttribute('aria-pressed', String(focused));
-  $('maximize-source').textContent = focused ? 'Restore' : 'Focus';
+  focusPanel('source');
+};
+$('maximize-flow').onclick = () => focusPanel('flow');
+const sourceDivider = $('source-flow-divider');
+sourceDivider.onpointerdown = (event) => {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  sourceDivider.focus();
+  sourceDivider.setPointerCapture(event.pointerId);
+};
+sourceDivider.onpointermove = (event) => {
+  if (!sourceDivider.hasPointerCapture(event.pointerId)) return;
+  const bounds = document
+    .querySelector('.center-column')
+    .getBoundingClientRect();
+  layout.sourceShare = Math.round(
+    Math.max(
+      25,
+      Math.min(75, ((event.clientX - bounds.left) / bounds.width) * 100),
+    ),
+  );
+  applyLayout();
+};
+sourceDivider.onpointerup = (event) => {
+  if (sourceDivider.hasPointerCapture(event.pointerId))
+    sourceDivider.releasePointerCapture(event.pointerId);
+  saveLayout();
+  render();
+};
+sourceDivider.onkeydown = (event) => {
+  const next = {
+    ArrowLeft: layout.sourceShare - 5,
+    ArrowRight: layout.sourceShare + 5,
+    Home: 25,
+    End: 75,
+  }[event.key];
+  if (next === undefined) return;
+  event.preventDefault();
+  event.stopPropagation();
+  layout.sourceShare = Math.max(25, Math.min(75, next));
+  applyLayout();
+  saveLayout();
   render();
 };
 divider.onpointerdown = (event) => {
@@ -1271,11 +1344,9 @@ $('bookmarks-only').onclick = () => {
 };
 $('view-mode').onchange = render;
 $('toggle-flow').onclick = () => {
-  const visible = document
-    .querySelector('.center-column')
-    .classList.toggle('show-flow');
-  $('toggle-flow').setAttribute('aria-expanded', String(visible));
-  $('toggle-flow').textContent = visible ? 'Hide diagram' : 'Show diagram';
+  layout.diagram = !layout.diagram;
+  applyLayout();
+  saveLayout();
   render();
 };
 $('follow').onchange = () => {

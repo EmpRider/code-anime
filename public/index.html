@@ -140,6 +140,14 @@
                 <span id="event-kind" class="kind-badge">READY</span>
               </div>
               <div class="flow-actions">
+                <button
+                  id="maximize-flow"
+                  class="quiet-button"
+                  aria-pressed="false"
+                  title="Focus execution flow"
+                >
+                  Focus
+                </button>
                 <select id="view-mode" aria-label="Diagram view">
                   <option value="focus">Focus view</option>
                   <option value="map">Full map</option></select
@@ -170,6 +178,16 @@
               ><span><i class="legend-assumed"></i>Assumed / unresolved</span>
             </div>
           </section>
+          <div
+            id="source-flow-divider"
+            role="separator"
+            tabindex="0"
+            aria-label="Resize source and execution flow"
+            aria-orientation="vertical"
+            aria-valuemin="25"
+            aria-valuemax="75"
+            aria-valuenow="55"
+          ></div>
           <section class="panel source-panel">
             <div class="panel-heading">
               <h2>Source execution</h2>
