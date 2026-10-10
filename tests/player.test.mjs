@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 import { replayState } from '../public/replay.js';
 import { prepareSourceHighlighting } from '../public/source-highlighter.js';
-import { plainTerminalText } from '../public/terminal-text.js';
+import { preparePlainTerminalOutput } from '../public/terminal-text.js';
 import {
   buildFlowOverview,
   describeFlowTransition,
@@ -83,7 +83,7 @@ test('player renders evidence safely and Previous/seek restore local state', asy
     window.prepareSourceHighlighting = prepareSourceHighlighting;
     window.buildFlowOverview = buildFlowOverview;
     window.describeFlowTransition = describeFlowTransition;
-    window.plainTerminalText = plainTerminalText;
+    window.preparePlainTerminalOutput = preparePlainTerminalOutput;
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
@@ -199,7 +199,7 @@ test('studio search, bookmarks, keyboard tabs and breakpoints preserve replay st
     window.prepareSourceHighlighting = prepareSourceHighlighting;
     window.buildFlowOverview = buildFlowOverview;
     window.describeFlowTransition = describeFlowTransition;
-    window.plainTerminalText = plainTerminalText;
+    window.preparePlainTerminalOutput = preparePlainTerminalOutput;
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
@@ -411,7 +411,7 @@ test('source-first playback follows nested calls, restores parent locals, and re
     window.prepareSourceHighlighting = prepareSourceHighlighting;
     window.buildFlowOverview = buildFlowOverview;
     window.describeFlowTransition = describeFlowTransition;
-    window.plainTerminalText = plainTerminalText;
+    window.preparePlainTerminalOutput = preparePlainTerminalOutput;
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
@@ -638,7 +638,7 @@ test('interleaved tasks compare local changes with the previous snapshot of the 
     window.prepareSourceHighlighting = prepareSourceHighlighting;
     window.buildFlowOverview = buildFlowOverview;
     window.describeFlowTransition = describeFlowTransition;
-    window.plainTerminalText = plainTerminalText;
+    window.preparePlainTerminalOutput = preparePlainTerminalOutput;
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
@@ -741,7 +741,7 @@ test('unattributed process output preserves historical console and frame steppin
     window.prepareSourceHighlighting = prepareSourceHighlighting;
     window.buildFlowOverview = buildFlowOverview;
     window.describeFlowTransition = describeFlowTransition;
-    window.plainTerminalText = plainTerminalText;
+    window.preparePlainTerminalOutput = preparePlainTerminalOutput;
     let requests = 0;
     window.fetch = async () => {
       requests++;
@@ -808,6 +808,11 @@ test('console history exposes every prepared output event with bounded pages and
     values: { task: 'process-output', attribution: 'unresolved' },
     certainty: 'observed',
   }));
+  events[299].output = 'before\x1b[3';
+  events[300].output = '2mafter\x1b[0m\n';
+  const prepared = preparePlainTerminalOutput(events);
+  assert.equal(prepared[299], 'before');
+  assert.equal(prepared[300], 'after\n');
   const flow = {
     endpoint: 'main.js',
     trace: { events, diagnostics: [], recording: { language: 'javascript' } },
@@ -829,7 +834,7 @@ test('console history exposes every prepared output event with bounded pages and
     window.prepareSourceHighlighting = prepareSourceHighlighting;
     window.buildFlowOverview = buildFlowOverview;
     window.describeFlowTransition = describeFlowTransition;
-    window.plainTerminalText = plainTerminalText;
+    window.preparePlainTerminalOutput = preparePlainTerminalOutput;
     let requests = 0;
     window.fetch = async () => {
       requests++;
@@ -852,7 +857,7 @@ test('console history exposes every prepared output event with bounded pages and
       get('console-output').textContent,
       events
         .slice(0, 300)
-        .map((e) => e.output)
+        .map((_, i) => prepared[i])
         .join(''),
     );
     seek(655);
@@ -861,10 +866,7 @@ test('console history exposes every prepared output event with bounded pages and
     assert.equal(get('console-range').textContent, '356–655 of 655 events');
     assert.equal(
       get('console-output').textContent,
-      events
-        .slice(355)
-        .map((e) => e.output)
-        .join(''),
+      prepared.slice(355).join(''),
     );
     assert.equal(get('console-newer').disabled, true);
 
@@ -872,20 +874,16 @@ test('console history exposes every prepared output event with bounded pages and
     assert.equal(get('console-range').textContent, '56–355 of 655 events');
     assert.equal(
       get('console-output').textContent,
-      events
-        .slice(55, 355)
-        .map((e) => e.output)
-        .join(''),
+      prepared.slice(55, 355).join(''),
     );
+    assert.ok(get('console-output').textContent.includes('beforeafter\n'));
+    assert.ok(!get('console-output').textContent.includes('\x1b['));
     get('console-older').click();
     assert.equal(get('console-range').textContent, '1–55 of 655 events');
     assert.equal(get('console-older').disabled, true);
     assert.equal(
       get('console-output').textContent,
-      events
-        .slice(0, 55)
-        .map((e) => e.output)
-        .join(''),
+      prepared.slice(0, 55).join(''),
     );
     get('console-newer').click();
     assert.equal(get('console-range').textContent, '56–355 of 655 events');
@@ -896,10 +894,7 @@ test('console history exposes every prepared output event with bounded pages and
     assert.equal(get('console-range').textContent, '101–400 of 400 events');
     assert.equal(
       get('console-output').textContent,
-      events
-        .slice(100, 400)
-        .map((e) => e.output)
-        .join(''),
+      prepared.slice(100, 400).join(''),
     );
     seek(0);
     assert.equal(get('console-history').hidden, true);

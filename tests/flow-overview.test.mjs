@@ -5,6 +5,40 @@ import {
   describeFlowTransition,
 } from '../public/flow-overview.js';
 
+test('flow output summaries use complete per-stream ANSI decoding and retain raw events', () => {
+  const events = [
+    {
+      kind: 'console',
+      symbolId: 'process:output',
+      callId: 'process-output',
+      output: 'start\x1b[3',
+      values: { stream: 'stdout', attribution: 'unresolved' },
+    },
+    {
+      kind: 'console',
+      symbolId: 'process:output',
+      callId: 'process-output',
+      output: 'stderr',
+      values: { stream: 'stderr', attribution: 'unresolved' },
+    },
+    {
+      kind: 'console',
+      symbolId: 'process:output',
+      callId: 'process-output',
+      output: '1mred\x1b[0m',
+      values: { stream: 'stdout', attribution: 'unresolved' },
+    },
+  ];
+  const transitions = buildFlowOverview(events);
+  assert.deepEqual(transitions.map(describeFlowTransition), [
+    'Process stdout (source unresolved): "start"',
+    'Process stderr (source unresolved): "stderr"',
+    'Process stdout (source unresolved): "red"',
+  ]);
+  assert.equal(transitions[0].output, 'start\x1b[3');
+  assert.equal(transitions[2].output, '1mred\x1b[0m');
+});
+
 test('overview follows invocation identities, real inputs, returns and output', () => {
   const events = [
     {

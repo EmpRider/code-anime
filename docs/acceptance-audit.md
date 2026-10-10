@@ -53,6 +53,15 @@ about future changes.
    continued observation of real user-method entries. The high-level execution
    path now identifies these events as process output with unresolved source
    attribution, verified in the overview and recorded browser playback tests.
+   Prepared terminal display now strips only complete, recognized ANSI CSI/OSC
+   formatting sequences across stdout/stderr events, retaining independent
+   stream ordering and original event output. An incomplete or unsupported
+   sequence stays at its original event rather than disappearing. The overview
+   and console use the same prepared display text; paging, backward seeks, and
+   loaded continuation sessions recompute it from the saved events. Focused
+   tests cover split controls (including OSC ESC-backslash), interleaved
+   streams, raw-output preservation, a 300-event history boundary, and a
+   stored-session split. Cross-stream causality remains unresolved.
    Exact source causality,
    pipe buffering delays, and cross-stream write ordering remain unresolved.
 4. **Preprocess before playback — implemented.**
@@ -301,6 +310,17 @@ about future changes.
 
 ## Checkpoint verification
 
+- 2026-10-10 terminal-output verification: all 30 Playwright browser tests,
+  focused player/continuation/terminal/overview tests, TypeScript checking,
+  build, package verification, formatting, and whitespace checks pass.
+  The complete `npm run check` gate remains **red**: the recorder test
+  `JavaScript process output is preserved without inventing its originating
+  invocation` misses the debugger `enter` event for `main.cjs:second`, even
+  when run alone. Its stdout/stderr preservation assertions pass, but missing
+  that entry prevents declaring full acceptance. A speculative debugger
+  stepping change was reverted after it did not resolve the failure. The
+  previously recorded checkpoint results below predate this verification.
+
 - `npm run check`: typecheck, 115 core tests (114 passed, one optional live
   CodeGraph integration test skipped), build, and Prettier passed.
 - `npm run test:browser`: 30 passed, including bounded console-history paging,
@@ -368,8 +388,11 @@ about future changes.
   This does not establish live runtime tracing for Kotlin.
 - The player, continuation, and value-inspection JSDOM suites pass with the
   terminal-display helper injected into their module import harness.
-  A dedicated helper regression checks ANSI SGR and OSC stripping while
-  preserving the raw recorded output string.
+  Dedicated terminal regressions check ANSI SGR and OSC stripping across
+  separate event writes and retained raw trace strings, including incomplete
+  control sequences and output straddling a history-page boundary. A browser
+  fixture asserts that paging displays the decoded text without escape
+  fragments; comprehensive terminal emulation is outside the current scope.
 - Additional focused lexer regressions cover multiline/nested JavaScript template
   interpolations, escaped interpolation markers, single-line Rust raw strings,
   and empty source windows. Browser coverage checks embedded code tokens and

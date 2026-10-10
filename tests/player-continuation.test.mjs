@@ -5,7 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { JSDOM } from 'jsdom';
 import { replayState } from '../public/replay.js';
 import { prepareSourceHighlighting } from '../public/source-highlighter.js';
-import { plainTerminalText } from '../public/terminal-text.js';
+import { preparePlainTerminalOutput } from '../public/terminal-text.js';
 import {
   buildFlowOverview,
   describeFlowTransition,
@@ -101,7 +101,7 @@ async function createPlayer(loadContinuation, first = initial()) {
   window.prepareSourceHighlighting = prepareSourceHighlighting;
   window.buildFlowOverview = buildFlowOverview;
   window.describeFlowTransition = describeFlowTransition;
-  window.plainTerminalText = plainTerminalText;
+  window.preparePlainTerminalOutput = preparePlainTerminalOutput;
   window.matchMedia = () => ({ matches: true });
   window.HTMLElement.prototype.scrollIntoView = () => {};
   window.fetch = async (url) => {
@@ -125,6 +125,51 @@ function moveTo(window, get, index) {
   get('timeline').value = String(index);
   get('timeline').dispatchEvent(new window.Event('input'));
 }
+
+test('loading a continuation resolves split terminal control bytes without changing trace output', async () => {
+  const firstOutput = event(
+    2,
+    'console',
+    'A.m',
+    'call-a',
+    ['call-a'],
+    'A.ts',
+    5,
+    { output: 'before\x1b[3', values: { stream: 'stdout' } },
+  );
+  const secondOutput = event(
+    3,
+    'console',
+    'A.m',
+    'call-a',
+    ['call-a'],
+    'A.ts',
+    5,
+    { output: '1mred\x1b[0m', values: { stream: 'stdout' } },
+  );
+  const first = chunk([allEvents[0], firstOutput], undefined, 'chunk-two');
+  const second = chunk([secondOutput], 'chunk-one');
+  const { dom, window, get, requests } = await createPlayer(
+    () => second,
+    first,
+  );
+  try {
+    moveTo(window, get, 2);
+    assert.equal(get('console-output').textContent, 'before\x1b[3');
+    get('next').click();
+    await waitFor(() => get('progress').textContent === '3 / 3');
+    assert.equal(get('console-output').textContent, 'before\nred');
+    moveTo(window, get, 2);
+    assert.equal(get('console-output').textContent, 'before');
+    moveTo(window, get, 3);
+    assert.equal(get('console-output').textContent, 'before\nred');
+    assert.equal(requests(), 1);
+    assert.equal(firstOutput.output, 'before\x1b[3');
+    assert.equal(secondOutput.output, '1mred\x1b[0m');
+  } finally {
+    dom.window.close();
+  }
+});
 
 test('source, stepping and console remain synchronized across prepared session boundaries', async () => {
   const { dom, window, get, requests } = await createPlayer();

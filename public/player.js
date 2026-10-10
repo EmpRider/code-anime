@@ -1,7 +1,7 @@
 import { replayState } from './replay.js';
 import { prepareSourceHighlighting } from './source-highlighter.js';
 import { buildFlowOverview, describeFlowTransition } from './flow-overview.js';
-import { plainTerminalText } from './terminal-text.js';
+import { preparePlainTerminalOutput } from './terminal-text.js';
 const $ = (id) => document.getElementById(id);
 let flow, originalFlow, timer, animation;
 let cursor = 0;
@@ -263,6 +263,7 @@ function buildNodes(preserveInspection = false) {
   sourceSyntaxCache.clear();
   sourceBreakpointVersion++;
   consoleEvents.length = 0;
+  const preparedOutput = preparePlainTerminalOutput(flow.trace?.events);
   frameSnapshots.clear();
   frameSources.clear();
   objectHistory.clear();
@@ -272,7 +273,7 @@ function buildNodes(preserveInspection = false) {
       ['mock', 'assumed', 'proposed'].includes(e.certainty),
     ),
   );
-  overviewItems = buildFlowOverview(flow.trace?.events);
+  overviewItems = buildFlowOverview(flow.trace?.events, preparedOutput);
   overviewRenderedPage = -1;
   // Older, agent-authored flows contain diagram steps but no execution events.
   // Keep their original diagram usable rather than displaying an empty path.
@@ -309,8 +310,12 @@ function buildNodes(preserveInspection = false) {
       if (!frameSnapshots.has(frame)) frameSnapshots.set(frame, []);
       frameSnapshots.get(frame).push(index);
     }
-    if (event.kind === 'console' && event.output !== undefined)
-      consoleEvents.push({ index: index + 1, output: event.output });
+    if (event.kind === 'console' && event.output !== undefined) {
+      consoleEvents.push({
+        index: index + 1,
+        display: preparedOutput[index],
+      });
+    }
     if (!event.source) return;
     if (!frameSources.has(event.callId)) frameSources.set(event.callId, []);
     frameSources.get(event.callId).push(index);
@@ -971,10 +976,10 @@ function renderConsole() {
   const start = Math.max(0, end - CONSOLE_PAGE_SIZE);
   const value = consoleEvents
     .slice(start, end)
-    .map((e) => e.output)
+    .map((e) => e.display)
     .join(flow.trace?.recording ? '' : '\n');
   if (value !== lastConsoleText) {
-    $('console-output').textContent = plainTerminalText(value);
+    $('console-output').textContent = value;
     lastConsoleText = value;
   }
   $('console-count').textContent = lo + ' events';

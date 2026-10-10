@@ -72,6 +72,8 @@ test('mobile console history navigates every saved page without changing playbac
     output: `event-${i + 1}\n`,
     certainty: 'observed',
   }));
+  events[299]!.output = 'before\x1b[3';
+  events[300]!.output = '2mafter\x1b[0m\n';
   const session = await runtime.store.create(
     traceToFlow(
       {
@@ -113,6 +115,12 @@ test('mobile console history navigates every saved page without changing playbac
   await expect(page.locator('#console-range')).toHaveText(
     '56–355 of 655 events',
   );
+  expect(
+    await output.evaluate((element) =>
+      element.textContent?.includes('before\nafter'),
+    ),
+  ).toBe(true);
+  expect(await output.textContent()).not.toContain('\x1b[');
   await page.locator('#console-older').click();
   await expect(page.locator('#console-range')).toHaveText('1–55 of 655 events');
   await expect(page.locator('#console-older')).toBeDisabled();

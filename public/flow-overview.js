@@ -1,4 +1,7 @@
-import { plainTerminalText } from './terminal-text.js';
+import {
+  plainTerminalText,
+  preparePlainTerminalOutput,
+} from './terminal-text.js';
 
 // Match a call with its adjacent entry only when ancestry and async context
 // agree. Neighboring events can otherwise belong to unrelated tasks.
@@ -17,7 +20,10 @@ function matchedEntry(call, entry) {
 
 // Extract the user-visible transitions once from prepared events. Statement
 // snapshots stay in the detailed replay; they are not part of this overview.
-export function buildFlowOverview(events = []) {
+export function buildFlowOverview(
+  events = [],
+  preparedOutput = preparePlainTerminalOutput(events),
+) {
   const invocations = new Map();
   const invocationDepth = new Map();
   const invocationParents = new Map();
@@ -78,6 +84,7 @@ export function buildFlowOverview(events = []) {
       previous.thread === (event.values?.thread ?? event.thread)
     ) {
       previous.output += event.output;
+      previous.display += preparedOutput[offset] ?? '';
       previous.index = offset + 1;
       continue;
     }
@@ -94,6 +101,7 @@ export function buildFlowOverview(events = []) {
       result: event.result,
       hasResult: Object.hasOwn(event, 'result'),
       output: event.output,
+      display: preparedOutput[offset],
       stream: event.values?.stream,
       attribution: event.values?.attribution,
       taskId: event.values?.task ?? event.values?.taskId ?? event.taskId,
@@ -145,8 +153,8 @@ export function describeFlowTransition(item) {
       return `${symbol} → ${item.hasResult ? briefValue(item.result) : 'return'}${item.parent ? ' → ' + item.parent : ''}`;
     case 'console':
       if (item.attribution === 'unresolved' && !item.source)
-        return `Process ${item.stream ?? 'output'} (source unresolved): ${briefValue(plainTerminalText(item.output))}`;
-      return `${symbol} → ${item.stream === 'stderr' ? 'stderr' : 'output'} ${briefValue(plainTerminalText(item.output))}`;
+        return `Process ${item.stream ?? 'output'} (source unresolved): ${briefValue(item.display ?? plainTerminalText(item.output))}`;
+      return `${symbol} → ${item.stream === 'stderr' ? 'stderr' : 'output'} ${briefValue(item.display ?? plainTerminalText(item.output))}`;
     case 'throw':
       return `${symbol} → exception: ${item.label ?? 'unresolved'}`;
     default:

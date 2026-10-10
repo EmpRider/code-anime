@@ -1839,7 +1839,9 @@ main {
     min-height: 0;
     max-height: none;
   }
-  main[data-mobile-view='console'] #console-history:not([hidden]) ~ #console-output {
+  main[data-mobile-view='console']
+    #console-history:not([hidden])
+    ~ #console-output {
     inset: 66px 0 0;
   }
 }
