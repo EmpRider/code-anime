@@ -58,6 +58,83 @@ test.afterAll(async () => {
   await runtime?.close();
 });
 
+test('mobile console history navigates every saved page without changing playback', async ({
+  page,
+}) => {
+  const events: TraceEvent[] = Array.from({ length: 655 }, (_, i) => ({
+    id: `event-${i + 1}`,
+    kind: 'console',
+    symbolId: 'process:output',
+    callId: 'process-output',
+    label: 'process stdout',
+    stack: [],
+    values: { task: 'process-output', attribution: 'unresolved' },
+    output: `event-${i + 1}\n`,
+    certainty: 'observed',
+  }));
+  const session = await runtime.store.create(
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'browser-test',
+        projectRoot: 'fixture',
+        sourceHash: 'console-history',
+        target: 'run',
+        scenario: {},
+        events,
+        diagnostics: [],
+        truncated: false,
+        filesAnalyzed: 1,
+        cacheHits: 0,
+        sourceFiles: {},
+      },
+      'run',
+    ),
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await page.locator('button[data-mobile-view="console"]').click();
+  await page.locator('#timeline').fill('655');
+  await expect(page.locator('#console-history')).toBeVisible();
+  await expect(page.locator('#console-range')).toHaveText(
+    '356–655 of 655 events',
+  );
+  await expect(page.locator('#console-count')).toHaveText('655 events');
+  const output = page.locator('#console-output');
+  await expect(output).toContainText('event-655');
+  expect(
+    await output.evaluate((element) =>
+      element.textContent?.startsWith('event-356\n'),
+    ),
+  ).toBe(true);
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  await page.locator('#console-older').click();
+  await expect(page.locator('#console-range')).toHaveText(
+    '56–355 of 655 events',
+  );
+  await page.locator('#console-older').click();
+  await expect(page.locator('#console-range')).toHaveText('1–55 of 655 events');
+  await expect(page.locator('#console-older')).toBeDisabled();
+  expect(
+    await output.evaluate((element) =>
+      element.textContent?.startsWith('event-1\n'),
+    ),
+  ).toBe(true);
+  expect((await output.boundingBox())!.height).toBeGreaterThan(200);
+  await page.locator('#console-newer').click();
+  await expect(page.locator('#console-range')).toHaveText(
+    '56–355 of 655 events',
+  );
+  await expect(page.locator('#progress')).toHaveText('655 / 655');
+  await page.locator('#timeline').fill('400');
+  await expect(page.locator('#console-range')).toHaveText(
+    '101–400 of 400 events',
+  );
+  await expect(page.locator('#console-output')).toContainText('event-400');
+  expect(requests).toEqual([]);
+});
+
 test('separate console source lines remain seekable in the default execution path', async ({
   page,
 }) => {

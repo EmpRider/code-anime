@@ -1577,6 +1577,33 @@ main {
 .console-panel details:not([open]) {
   height: auto;
 }
+.console-history {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  height: 32px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.console-history[hidden] {
+  display: none;
+}
+.console-history button {
+  font: inherit;
+  cursor: pointer;
+  padding: 3px 7px;
+}
+.console-history button:disabled {
+  cursor: default;
+}
+.console-history span {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 #console-output {
   margin: 0;
   padding: 6px 12px;
@@ -1811,6 +1838,9 @@ main {
     inset: 34px 0 0;
     min-height: 0;
     max-height: none;
+  }
+  main[data-mobile-view='console'] #console-history:not([hidden]) ~ #console-output {
+    inset: 66px 0 0;
   }
 }
 

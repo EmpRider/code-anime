@@ -35,6 +35,8 @@ let shownBreakpointVersion = -1;
 let pinnedCallId;
 let inspectedSourceEvent;
 let lastConsoleText = '';
+let consolePageBack = 0;
+const CONSOLE_PAGE_SIZE = 300;
 const sourceLines = new Map();
 const sourceCache = new Map();
 const sourceSyntaxCache = new Map();
@@ -254,6 +256,7 @@ function buildNodes(preserveInspection = false) {
     inspectedSourceEvent = undefined;
     shownSource = '';
     lastConsoleText = '';
+    consolePageBack = 0;
   }
   sourceLines.clear();
   sourceCache.clear();
@@ -962,8 +965,12 @@ function renderConsole() {
     if (consoleEvents[mid].index <= cursor) lo = mid + 1;
     else hi = mid;
   }
+  const maxPage = Math.max(0, Math.ceil(lo / CONSOLE_PAGE_SIZE) - 1);
+  consolePageBack = Math.min(consolePageBack, maxPage);
+  const end = Math.max(0, lo - consolePageBack * CONSOLE_PAGE_SIZE);
+  const start = Math.max(0, end - CONSOLE_PAGE_SIZE);
   const value = consoleEvents
-    .slice(Math.max(0, lo - 300), lo)
+    .slice(start, end)
     .map((e) => e.output)
     .join(flow.trace?.recording ? '' : '\n');
   if (value !== lastConsoleText) {
@@ -971,7 +978,19 @@ function renderConsole() {
     lastConsoleText = value;
   }
   $('console-count').textContent = lo + ' events';
+  $('console-history').hidden = lo <= CONSOLE_PAGE_SIZE;
+  $('console-range').textContent = `${start + 1}–${end} of ${lo} events`;
+  $('console-older').disabled = start === 0;
+  $('console-newer').disabled = consolePageBack === 0;
 }
+$('console-older').onclick = () => {
+  consolePageBack++;
+  renderConsole();
+};
+$('console-newer').onclick = () => {
+  consolePageBack = Math.max(0, consolePageBack - 1);
+  renderConsole();
+};
 // Continuation sessions are prepared by the MCP server. Fetching the next
 // stored chunk only extends the replay timeline; it never performs analysis.
 async function loadNextChunk() {
@@ -1480,7 +1499,9 @@ function seek(index) {
       .catch(() => {}); // loadNextChunk reports the error in the player.
     return;
   }
-  cursor = Math.max(0, Math.min(flow.steps.length, index));
+  const nextCursor = Math.max(0, Math.min(flow.steps.length, index));
+  if (nextCursor !== cursor) consolePageBack = 0;
+  cursor = nextCursor;
   render();
 }
 function tick(version) {
@@ -1499,6 +1520,7 @@ function tick(version) {
     return;
   }
   cursor = Math.min(cursor + 1, flow.steps.length);
+  consolePageBack = 0;
   render();
   if (hasBreakpoint(cursor)) {
     pause();
@@ -1550,6 +1572,10 @@ $('step-over').onclick = () => {
   const events = flow?.trace?.events;
   if (!events || !cursor) return seek(cursor + 1);
   const current = events[cursor - 1];
+  // Unattributed process output has no frame to step over. Keep navigation in
+  // the global event timeline instead of skipping intervening user execution.
+  if (current.kind === 'console' && !current.stack?.length)
+    return seek(cursor + 1);
   const suspended = ['await', 'yield'].includes(current?.kind);
   const callId = suspended
     ? current.callId
@@ -1584,7 +1610,12 @@ $('step-out').onclick = () => {
   const suspended = ['await', 'yield'].includes(current.kind);
   const callId = suspended ? current.callId : current.stack?.at(-1);
   const task = current.values?.task;
-  if (!callId) return;
+  // Pipe output has no observed invocation to step out of. Advance to the next
+  // recorded event instead of leaving Step Out unresponsive at this position.
+  if (!callId) {
+    if (current.kind === 'console') return seek(cursor + 1);
+    return;
+  }
   void (async () => {
     let i = cursor;
     while (true) {

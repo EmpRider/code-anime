@@ -197,7 +197,11 @@ about future changes.
 24. **User navigation control — implemented, bounded verification.**
     Timeline rows, stack buttons, follow toggle, and source breakpoints provide
     navigation. The recorded nested browser scenario verifies diagram selection,
-    source-location navigation, and playback cursor synchronization.
+    source-location navigation, and playback cursor synchronization. Output
+    history now offers Older/Newer navigation through bounded 300-event pages,
+    clearly displaying the visible range and the total output-event count.
+    Player and mobile browser tests verify all 655 prepared output events are
+    reachable while retaining the execution cursor and making no new requests.
 25. **Keyboard/accessibility — partial.**
     Keyboard shortcuts, native disclosure buttons, focus styles, and reduced
     motion exist. Browser tests cover disclosure focus, invocation-selector
@@ -208,11 +212,18 @@ about future changes.
 26. **Responsive workspace — partial.**
     Browser tests cover 1440x900, 820x1180, and 390x844, panel switching, playback
     visibility, and page overflow. Desktop side-by-side flow and a dedicated
-    mobile Flow view pass geometry and replay checks. Mobile diagram method
+    mobile Flow view pass geometry and replay checks. Mobile console-history
+    paging and scrollable output now pass browser checks with 655 events.
+    Mobile diagram method
     disclosure and broader visual accessibility still need verification.
 27. **Large-codebase performance — partial.**
     Cached source lines, event indices, bounded timeline rows, and continuation
-    exist. The 20,000-event synthetic browser test verifies seek/filter/disclosure
+    exist. Console output now renders at most 300 events per page, exposes
+    earlier output via explicit history controls, and resets the visible page
+    to the cursor's latest output on subsequent playback navigation. The
+    655-event player and browser regressions verify full historical access,
+    output ordering, and no reanalysis requests. The 20,000-event synthetic
+    browser test verifies seek/filter/disclosure
     and source reuse. Its synchronous handler timings exclude paint and network.
     A separate 45-level simulated recursion verifies nested visibility after
     collapse/reopen; proportional indentation avoids collapsing its usable width.
@@ -223,7 +234,7 @@ about future changes.
     restoration, and exactly one retrieval per prepared session. These synthetic
     tests exclude browser paint, broad real-project behavior, and heap profiling.
     Measure memory, many methods, larger trees, long stacks, large objects,
-    large output,
+    substantially larger real recorded output,
     multiple files, and real stored continuation chains before accepting this.
     Value-tree DOM creation is now bounded to visible pages and explicitly
     expanded branches; the large-value regression verifies lazy construction,
@@ -290,9 +301,10 @@ about future changes.
 
 ## Checkpoint verification
 
-- `npm run check`: typecheck, 113 core tests (112 passed, one optional live
+- `npm run check`: typecheck, 115 core tests (114 passed, one optional live
   CodeGraph integration test skipped), build, and Prettier passed.
-- `npm run test:browser`: 29 passed, including paired-call, recorded
+- `npm run test:browser`: 30 passed, including bounded console-history paging,
+  preserved mobile output scrolling, paired-call, recorded
   execution-path, separate console writes, overview rewind, and persisted
   five-session continuation-chain coverage.
   Browser coverage includes recorded nested disclosure,

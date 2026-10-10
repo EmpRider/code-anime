@@ -672,3 +672,242 @@ test('interleaved tasks compare local changes with the previous snapshot of the 
     dom.window.close();
   }
 });
+
+test('unattributed process output preserves historical console and frame stepping', async () => {
+  const [html, source] = await Promise.all([
+    readFile(new URL('../public/index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../public/player.js', import.meta.url), 'utf8'),
+  ]);
+  const userEvent = (kind, callId, stack, task, line) => ({
+    kind,
+    callId,
+    symbolId: `main.js:${callId}`,
+    label: kind,
+    stack,
+    values: { task },
+    source: { file: 'main.js', line, endLine: line },
+    certainty: 'observed',
+  });
+  const output = (stream, content) => ({
+    kind: 'console',
+    callId: 'process-output',
+    symbolId: 'process:output',
+    label: `process ${stream}`,
+    stack: [],
+    values: { task: 'process-output', stream, attribution: 'unresolved' },
+    output: content,
+    certainty: 'observed',
+  });
+  const events = [
+    userEvent('enter', 'parent', ['parent'], 'main', 1),
+    userEvent('call', 'parent', ['parent'], 'main', 2),
+    userEvent('enter', 'child', ['parent', 'child'], 'main', 3),
+    output('stdout', 'start'),
+    userEvent('enter', 'other', ['other'], 'other-task', 4),
+    output('stderr', 'warn'),
+    userEvent('assign', 'child', ['parent', 'child'], 'main', 5),
+    userEvent('return', 'child', ['parent'], 'main', 6),
+    userEvent('assign', 'parent', ['parent'], 'main', 7),
+    output('stdout', 'end'),
+    userEvent('return', 'parent', [], 'main', 8),
+  ];
+  const flow = {
+    endpoint: 'main.js',
+    trace: {
+      events,
+      recording: { language: 'javascript' },
+      diagnostics: [],
+      sourceFiles: {
+        'main.js': Array.from({ length: 8 }, (_, i) => `line${i + 1}`).join(
+          '\n',
+        ),
+      },
+    },
+    steps: events.map((event) => ({
+      from: event.symbolId,
+      to: event.symbolId,
+      dtoName: event.label,
+      dtoFields: {},
+    })),
+  };
+  const dom = new JSDOM(html, {
+    url: 'http://127.0.0.1/flow/test',
+    runScripts: 'outside-only',
+  });
+  try {
+    const { window } = dom;
+    const get = (id) => window.document.getElementById(id);
+    window.replayState = replayState;
+    window.prepareSourceHighlighting = prepareSourceHighlighting;
+    window.buildFlowOverview = buildFlowOverview;
+    window.describeFlowTransition = describeFlowTransition;
+    window.plainTerminalText = plainTerminalText;
+    let requests = 0;
+    window.fetch = async () => {
+      requests++;
+      return { ok: true, json: async () => flow };
+    };
+    window.matchMedia = () => ({ matches: true });
+    window.HTMLElement.prototype.scrollIntoView = () => {};
+    window.eval(source.replace(/^import .*;\r?\n/gm, ''));
+    for (let i = 0; i < 40 && get('progress').textContent !== '0 / 11'; i++)
+      await new Promise((r) => setTimeout(r, 5));
+    assert.equal(get('progress').textContent, '0 / 11');
+    const seek = (position) => {
+      get('timeline').value = String(position);
+      get('timeline').dispatchEvent(new window.Event('input'));
+    };
+
+    seek(2);
+    get('step-over').click();
+    assert.equal(get('progress').textContent, '9 / 11');
+    assert.equal(get('console-output').textContent, 'startwarn');
+
+    seek(3);
+    get('step-out').click();
+    assert.equal(get('progress').textContent, '8 / 11');
+    assert.equal(get('console-output').textContent, 'startwarn');
+
+    seek(4);
+    assert.equal(get('snippet').querySelector('.executing-line'), null);
+    assert.equal(get('console-output').textContent, 'start');
+    get('step-over').click();
+    assert.equal(get('progress').textContent, '5 / 11');
+    seek(4);
+    get('step-out').click();
+    assert.equal(get('progress').textContent, '5 / 11');
+    seek(6);
+    get('step-out').click();
+    assert.equal(get('progress').textContent, '7 / 11');
+
+    seek(10);
+    assert.equal(get('console-output').textContent, 'startwarnend');
+    get('previous').click();
+    assert.equal(get('console-output').textContent, 'startwarn');
+    seek(3);
+    assert.equal(get('console-output').textContent, '');
+    assert.equal(requests, 1, 'replay and stepping use saved trace data');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('console history exposes every prepared output event with bounded pages and reversible navigation', async () => {
+  const [html, source] = await Promise.all([
+    readFile(new URL('../public/index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../public/player.js', import.meta.url), 'utf8'),
+  ]);
+  const events = Array.from({ length: 655 }, (_, i) => ({
+    id: `event-${i + 1}`,
+    kind: 'console',
+    symbolId: 'process:output',
+    callId: 'process-output',
+    label: 'process stdout',
+    output: `event-${i + 1}\n`,
+    stack: [],
+    values: { task: 'process-output', attribution: 'unresolved' },
+    certainty: 'observed',
+  }));
+  const flow = {
+    endpoint: 'main.js',
+    trace: { events, diagnostics: [], recording: { language: 'javascript' } },
+    steps: events.map((event) => ({
+      from: event.symbolId,
+      to: event.symbolId,
+      dtoName: event.label,
+      dtoFields: {},
+    })),
+  };
+  const dom = new JSDOM(html, {
+    url: 'http://127.0.0.1/flow/history',
+    runScripts: 'outside-only',
+  });
+  try {
+    const { window } = dom;
+    const get = (id) => window.document.getElementById(id);
+    window.replayState = replayState;
+    window.prepareSourceHighlighting = prepareSourceHighlighting;
+    window.buildFlowOverview = buildFlowOverview;
+    window.describeFlowTransition = describeFlowTransition;
+    window.plainTerminalText = plainTerminalText;
+    let requests = 0;
+    window.fetch = async () => {
+      requests++;
+      return { ok: true, json: async () => flow };
+    };
+    window.matchMedia = () => ({ matches: true });
+    window.HTMLElement.prototype.scrollIntoView = () => {};
+    window.eval(source.replace(/^import .*;\r?\n/gm, ''));
+    for (let i = 0; i < 50 && get('progress').textContent !== '0 / 655'; i++)
+      await new Promise((r) => setTimeout(r, 5));
+    assert.equal(get('progress').textContent, '0 / 655');
+    const seek = (position) => {
+      get('timeline').value = String(position);
+      get('timeline').dispatchEvent(new window.Event('input'));
+    };
+
+    seek(300);
+    assert.equal(get('console-history').hidden, true);
+    assert.equal(
+      get('console-output').textContent,
+      events
+        .slice(0, 300)
+        .map((e) => e.output)
+        .join(''),
+    );
+    seek(655);
+    assert.equal(get('console-count').textContent, '655 events');
+    assert.equal(get('console-history').hidden, false);
+    assert.equal(get('console-range').textContent, '356–655 of 655 events');
+    assert.equal(
+      get('console-output').textContent,
+      events
+        .slice(355)
+        .map((e) => e.output)
+        .join(''),
+    );
+    assert.equal(get('console-newer').disabled, true);
+
+    get('console-older').click();
+    assert.equal(get('console-range').textContent, '56–355 of 655 events');
+    assert.equal(
+      get('console-output').textContent,
+      events
+        .slice(55, 355)
+        .map((e) => e.output)
+        .join(''),
+    );
+    get('console-older').click();
+    assert.equal(get('console-range').textContent, '1–55 of 655 events');
+    assert.equal(get('console-older').disabled, true);
+    assert.equal(
+      get('console-output').textContent,
+      events
+        .slice(0, 55)
+        .map((e) => e.output)
+        .join(''),
+    );
+    get('console-newer').click();
+    assert.equal(get('console-range').textContent, '56–355 of 655 events');
+    assert.equal(get('progress').textContent, '655 / 655');
+    assert.equal(requests, 1, 'history browsing uses only prepared events');
+
+    seek(400);
+    assert.equal(get('console-range').textContent, '101–400 of 400 events');
+    assert.equal(
+      get('console-output').textContent,
+      events
+        .slice(100, 400)
+        .map((e) => e.output)
+        .join(''),
+    );
+    seek(0);
+    assert.equal(get('console-history').hidden, true);
+    assert.equal(get('console-output').textContent, '');
+    seek(655);
+    assert.equal(get('console-range').textContent, '356–655 of 655 events');
+    assert.equal(requests, 1);
+  } finally {
+    dom.window.close();
+  }
+});

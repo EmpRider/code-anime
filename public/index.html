@@ -236,6 +236,20 @@
                 Console
                 <span id="console-count" class="count-badge">0 lines</span>
               </summary>
+              <nav
+                id="console-history"
+                class="console-history"
+                aria-label="Console output history"
+                hidden
+              >
+                <button id="console-older" type="button">Older</button>
+                <span
+                  id="console-range"
+                  role="status"
+                  aria-live="polite"
+                ></span>
+                <button id="console-newer" type="button">Newer</button>
+              </nav>
               <pre id="console-output" role="log" aria-live="off"></pre>
             </details>
           </section>
