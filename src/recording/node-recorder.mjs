@@ -36,7 +36,7 @@ let stderrBuffer = '';
 let applicationStderrTail = '';
 let inspectorUrl;
 let inspectorAttached = false;
-let inspectorHelpSeen = false;
+const inspectorHelpSeen = new Set();
 let inspected = false;
 let previousPause;
 let repeatedPause = 0;
@@ -835,13 +835,16 @@ function stderrLine(text) {
     inspectorAttached = true;
   } else if (
     inspectorUrl &&
-    !inspectorHelpSeen &&
+    !inspected &&
+    !inspectorAttached &&
+    !inspectorHelpSeen.has(line) &&
     (line === 'For help, see: https://nodejs.org/en/docs/inspector' ||
       line ===
         'For help, see: https://nodejs.org/learn/getting-started/debugging')
   ) {
-    // Node's Inspector help URL differs across supported Node versions.
-    inspectorHelpSeen = true;
+    // Both documented Inspector help variants may appear during startup.
+    // Retain subsequent identical lines written by the application.
+    inspectorHelpSeen.add(line);
   } else {
     applicationStderr(text);
   }
@@ -863,15 +866,42 @@ child.stderr.on('data', (data) => {
 });
 
 async function connect(url) {
-  socket = new WebSocket(url);
-  await new Promise((resolve, reject) => {
-    socket.addEventListener('open', resolve, { once: true });
-    socket.addEventListener(
-      'error',
-      () => reject(new Error('WebSocket connection failed')),
-      { once: true },
-    );
-  });
+  // The Inspector can announce its listening URL before it is able to accept
+  // the WebSocket upgrade under heavy startup load. Retry only the initial
+  // connection, with a small bounded delay; never replay debugger commands.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (stopped || child.exitCode !== null)
+      throw new Error('Inspector connection stopped before attachment');
+    const candidate = new WebSocket(url);
+    socket = candidate;
+    try {
+      await new Promise((resolve, reject) => {
+        candidate.addEventListener('open', resolve, { once: true });
+        candidate.addEventListener(
+          'error',
+          () => reject(new Error('WebSocket connection failed')),
+          { once: true },
+        );
+      });
+      if (stopped) {
+        try {
+          candidate.close();
+        } catch {
+          /* The connection may already be closing. */
+        }
+        throw new Error('Inspector connection stopped before attachment');
+      }
+      break;
+    } catch (error) {
+      try {
+        candidate.close();
+      } catch {
+        /* A failed handshake may already have closed the socket. */
+      }
+      if (attempt === 3 || stopped || child.exitCode !== null) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 80 * (attempt + 1)));
+    }
+  }
   socket.addEventListener('message', (message) => {
     let packet;
     try {

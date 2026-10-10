@@ -338,3 +338,51 @@ test('each console statement stays independently navigable in the overview', () 
     [1, 2, 3, 4, 5],
   );
 });
+
+test('unattributed Node output stays independent of user invocations and is labeled as unresolved', () => {
+  const events = [
+    {
+      kind: 'enter',
+      callId: 'user-1',
+      symbolId: 'A.run',
+      stack: ['user-1'],
+      certainty: 'observed',
+    },
+    ...['stdout', 'stderr'].map((stream) => ({
+      kind: 'console',
+      callId: 'process-output',
+      symbolId: 'process:output',
+      label: `process ${stream}`,
+      output: stream === 'stdout' ? 'FIRST' : 'ERR',
+      values: { stream, task: 'process-output', attribution: 'unresolved' },
+      stack: [],
+      certainty: 'observed',
+    })),
+    {
+      kind: 'return',
+      callId: 'user-1',
+      symbolId: 'A.run',
+      stack: [],
+      certainty: 'observed',
+    },
+  ];
+  const transitions = buildFlowOverview(events);
+  assert.deepEqual(
+    transitions.map((item) => item.index),
+    [1, 2, 3, 4],
+  );
+  assert.deepEqual(transitions.slice(1, 3).map(describeFlowTransition), [
+    'Process stdout (source unresolved): "FIRST"',
+    'Process stderr (source unresolved): "ERR"',
+  ]);
+  assert.ok(
+    transitions
+      .slice(1, 3)
+      .every(
+        (item) =>
+          item.source === undefined &&
+          item.parent === undefined &&
+          item.certainty === 'observed',
+      ),
+  );
+});

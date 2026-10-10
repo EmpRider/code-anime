@@ -95,6 +95,7 @@ export function buildFlowOverview(events = []) {
       hasResult: Object.hasOwn(event, 'result'),
       output: event.output,
       stream: event.values?.stream,
+      attribution: event.values?.attribution,
       taskId: event.values?.task ?? event.values?.taskId ?? event.taskId,
       thread: event.values?.thread ?? event.thread,
       certainty: event.certainty,
@@ -143,6 +144,8 @@ export function describeFlowTransition(item) {
     case 'return':
       return `${symbol} → ${item.hasResult ? briefValue(item.result) : 'return'}${item.parent ? ' → ' + item.parent : ''}`;
     case 'console':
+      if (item.attribution === 'unresolved' && !item.source)
+        return `Process ${item.stream ?? 'output'} (source unresolved): ${briefValue(plainTerminalText(item.output))}`;
       return `${symbol} → ${item.stream === 'stderr' ? 'stderr' : 'output'} ${briefValue(plainTerminalText(item.output))}`;
     case 'throw':
       return `${symbol} → exception: ${item.label ?? 'unresolved'}`;

@@ -1217,6 +1217,9 @@ test('observed JavaScript recording replays actual source lines, locals and outp
     await expect(page.locator('#source')).toHaveText(
       'No source location recorded',
     );
+    await expect(page.locator('.overview-step.current')).toContainText(
+      'Process stdout (source unresolved)',
+    );
     await expect(page.locator('.executing-line')).toHaveCount(0);
     await expect(page.locator('#console-output')).toContainText('30 6');
     const maximum = Number(await page.locator('#timeline').getAttribute('max'));

@@ -50,7 +50,10 @@ about future changes.
    source location, invocation, or locals; the observed certainty describes the
    decoded output text, not the origin or write time. A concurrent async regression
    checks both independent output streams, missing newline terminators, and the
-   continued observation of real user-method entries. Exact source causality,
+   continued observation of real user-method entries. The high-level execution
+   path now identifies these events as process output with unresolved source
+   attribution, verified in the overview and recorded browser playback tests.
+   Exact source causality,
    pipe buffering delays, and cross-stream write ordering remain unresolved.
 4. **Preprocess before playback — implemented.**
    `src/services/animation-builder.ts` and `recording-service.ts` persist prepared
@@ -287,7 +290,7 @@ about future changes.
 
 ## Checkpoint verification
 
-- `npm run check`: typecheck, 112 core tests (111 passed, one optional live
+- `npm run check`: typecheck, 113 core tests (112 passed, one optional live
   CodeGraph integration test skipped), build, and Prettier passed.
 - `npm run test:browser`: 29 passed, including paired-call, recorded
   execution-path, separate console writes, overview rewind, and persisted
@@ -325,16 +328,21 @@ about future changes.
   still-pending Promise without predicting later settlement. JavaScript
   event-budget and cancellation regressions passed after adding the Windows
   `taskkill` nonzero-exit fallback.
-  An additional stderr regression writes the current Node.js Inspector help
-  URL from application code. The recorder now filters that URL when Node.js
-  emits it as an Inspector startup notice, while preserving a subsequent
-  identical application-written line. This fixes a Node.js v26.8.1 failure
-  that otherwise appended the startup notice to recorded output.
+  An additional stderr regression writes both documented Node.js Inspector
+  help URLs from application code. The recorder filters each URL at most once
+  during Inspector startup, retaining later application-written lines. This
+  addresses a Node.js v26.8.1 failure that appended an Inspector notice to
+  recorded output. Rare startup notice ordering remains under investigation.
   A concurrent stdout/stderr regression now checks per-stream text preservation
   with unterminated writes while keeping source and invocation attribution
   unresolved. The recording service rejects a failed startup whose only events
   are process diagnostics; the existing syntax-error regression verifies that
   the failure still surfaces the original Node.js diagnostic.
+  Two Inspector WebSocket connection failures appeared when the full core,
+  browser, and package suites ran concurrently; both affected tests passed in
+  isolation. Initial Inspector attachment now allows four bounded handshake
+  attempts to tolerate transient refusal under startup load. This needs broader
+  stress validation; debugger-command replay remains prohibited.
 - `tests/flow-overview.test.mjs`: eight focused cases verify event-to-overview
   transitions, input and return values, nesting, caller call-site timing,
   independently recorded Python task console streams, and rejecting misleading
