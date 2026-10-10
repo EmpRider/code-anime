@@ -667,11 +667,8 @@ function precedingFrameLocals(state, event, previousEvent) {
 // Token spans only decorate literal source text. Source code is never generated.
 function codeText(content, file = '', lexicalState = null) {
   const container = text('span', '', 'code-text');
-  for (const { value, kind } of tokenizeSourceLine(
-    content,
-    file,
-    lexicalState,
-  ).segments) {
+  for (const { value, kind } of tokenizeSourceLine(content, file, lexicalState)
+    .segments) {
     if (kind) container.append(text('span', value, 'token-' + kind));
     else container.append(document.createTextNode(value));
   }
@@ -715,7 +712,10 @@ function renderSource(state, event) {
     sourceCache.set(location.file, sourceCode.split(/\r?\n/));
   const lines = sourceCode === undefined ? [] : sourceCache.get(location.file);
   if (sourceCode !== undefined && !sourceLexCache.has(location.file))
-    sourceLexCache.set(location.file, sourceLexicalStates(lines, location.file));
+    sourceLexCache.set(
+      location.file,
+      sourceLexicalStates(lines, location.file),
+    );
   const lexicalStates =
     sourceCode === undefined ? [] : sourceLexCache.get(location.file);
   // Long files keep only the current source window in the DOM.
