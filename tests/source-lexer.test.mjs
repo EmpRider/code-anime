@@ -65,7 +65,11 @@ test('JavaScript block comments and template literals keep multiline context', (
 });
 
 test('Kotlin raw strings keep comment-like text as literals', () => {
-  const lines = ['val description = """begin', '/* inside */', 'end""" // outside'];
+  const lines = [
+    'val description = """begin',
+    '/* inside */',
+    'end""" // outside',
+  ];
   const result = tokenizeFile(lines, 'demo.kt');
   assert.deepEqual(result[1], [{ value: '/* inside */', kind: 'string' }]);
   assert.deepEqual(
