@@ -1181,6 +1181,12 @@ test('observed JavaScript recording replays actual source lines, locals and outp
         event.kind === 'enter' && event.symbolId === 'node-main.cjs:add',
     );
     expect(entryIndex).toBeGreaterThanOrEqual(0);
+    const outputIndex = recorded.events.findIndex(
+      (event) => event.kind === 'console' && event.values?.stream === 'stdout',
+    );
+    expect(outputIndex).toBeGreaterThanOrEqual(0);
+    expect(recorded.events[outputIndex]?.source).toBeUndefined();
+    expect(recorded.events[outputIndex]?.callId).toBe('process-output');
     let chunk = await runtime.store.get(status.sessionId!);
     let stdout = '';
     while (chunk) {
@@ -1207,6 +1213,12 @@ test('observed JavaScript recording replays actual source lines, locals and outp
     await expect(page.locator('#local-tree')).toContainText('a: 10');
     await expect(page.locator('#local-tree')).toContainText('b: 20');
     await expect(page.locator('#console-output')).toHaveText('');
+    await page.locator('#timeline').fill(String(outputIndex + 1));
+    await expect(page.locator('#source')).toHaveText(
+      'No source location recorded',
+    );
+    await expect(page.locator('.executing-line')).toHaveCount(0);
+    await expect(page.locator('#console-output')).toContainText('30 6');
     const maximum = Number(await page.locator('#timeline').getAttribute('max'));
     await page.locator('#timeline').fill(String(maximum));
     // Playwright's color environment may append a Node warning on stderr.

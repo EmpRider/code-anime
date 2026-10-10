@@ -53,8 +53,9 @@ const coverage =
   'Returns are reported only when V8 exposes a return value. Promise snapshots ' +
   'include debugger-observed state/results when available; later settlement is not tracked. ' +
   'Other frame exits remain unresolved, without invented causes. ' +
-  'Stdout/stderr output is captured, but its association with the last paused frame may lag ' +
-  'as pipes flush. Original source positions are used only when a local source map and its ' +
+  'UTF-8 stdout/stderr text is captured at pipe delivery, without assigning an unverified ' +
+  'source location or invocation; cross-stream write ordering is not established. ' +
+  'Original source positions are used only when a local source map and its ' +
   'embedded source content match the project files; unmapped generated locations are omitted. ' +
   'Native frames, worker threads, child processes, timers after process exit, ' +
   'getters, Proxies, and framework internals are outside the recorded scope.';
@@ -761,20 +762,26 @@ async function paused(params) {
 function output(data, stream) {
   if (stopped || !data) return;
   try {
-    const frame = lastFrame;
-    if (!frame) return;
+    // Pipe reads are asynchronous with respect to debugger pauses. The most
+    // recently paused frame may already have returned, or another async task
+    // may have executed. Preserve the decoded text as observed process output without
+    // claiming the last frame wrote them. This also keeps output produced
+    // before the first project frame is observed.
     emit({
       kind: 'console',
-      symbolId: frame.symbolId,
-      callId: frame.callId,
-      label: `console ${frame.symbol}`,
-      source: sourceLocation(frame),
-      values: { task: 'main', thread: 'main', stream },
-      stack: frame.stack,
-      locals: frame.locals,
+      symbolId: 'process:output',
+      callId: 'process-output',
+      label: `process ${stream}`,
+      values: {
+        task: 'process-output',
+        thread: 'unknown',
+        stream,
+        attribution: 'unresolved',
+      },
+      stack: [],
       output: data,
       certainty: 'observed',
-      note: 'Observed process output; last paused source position is approximate',
+      note: 'Observed process output text; source invocation and write time are unresolved because pipe delivery may lag execution',
     });
   } catch (error) {
     stop(error.message);

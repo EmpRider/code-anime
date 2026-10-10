@@ -395,6 +395,80 @@ test('JavaScript stderr preserves trailing fragments, spacing and application no
   }
 });
 
+test('JavaScript process output is preserved without inventing its originating invocation', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'async function first() {',
+      "  process.stdout.write('FIRST');",
+      '  await new Promise((resolve) => setTimeout(resolve, 20));',
+      "  process.stderr.write('ERR');",
+      '}',
+      'async function second() {',
+      '  await new Promise((resolve) => setTimeout(resolve, 5));',
+      "  process.stdout.write('SECOND');",
+      '}',
+      'async function last() {',
+      '  await Promise.all([first(), second()]);',
+      "  process.stdout.write('END');",
+      '}',
+      'last();',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const output = events.filter((event) => event.kind === 'console');
+    assert.equal(
+      output
+        .filter((event) => event.values.stream === 'stdout')
+        .map((event) => event.output)
+        .join(''),
+      'FIRSTSECONDEND',
+    );
+    assert.equal(
+      output
+        .filter((event) => event.values.stream === 'stderr')
+        .map((event) => event.output)
+        .join(''),
+      'ERR',
+    );
+    assert.ok(output.length >= 2);
+    assert.ok(
+      output.every(
+        (event) =>
+          event.certainty === 'observed' &&
+          event.symbolId === 'process:output' &&
+          event.callId === 'process-output' &&
+          event.source === undefined &&
+          event.locals === undefined &&
+          event.stack.length === 0 &&
+          event.values.attribution === 'unresolved',
+      ),
+    );
+    assert.ok(
+      events.some(
+        (event) =>
+          event.kind === 'enter' && event.symbolId === 'main.cjs:first',
+      ),
+    );
+    assert.ok(
+      events.some(
+        (event) =>
+          event.kind === 'enter' && event.symbolId === 'main.cjs:second',
+      ),
+    );
+  } finally {
+    await f.close();
+  }
+});
+
 test('JavaScript startup syntax errors retain stderr diagnostics even without a trace frame', async () => {
   const f = await fixture({
     'main.cjs': 'function invalid( {\n',

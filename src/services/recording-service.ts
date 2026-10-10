@@ -274,7 +274,11 @@ export class RecordingService {
       clearTimeout(timeout);
     }
     if (this.closed) return;
-    if (!events.length)
+    // A failed startup may write diagnostics before the debugger observes any
+    // user-code frame. Pipe output alone is not evidence of an executed trace.
+    // Keep the original failure diagnostic instead of saving an output-only
+    // session that looks like a replayable application execution.
+    if (!events.some((event) => event.kind !== 'console'))
       throw new Error(
         job.stopReason ||
           completion?.reason ||
