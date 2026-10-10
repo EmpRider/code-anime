@@ -1,6 +1,6 @@
 # CodeGraph evidence and AI simulation
 
-Code Anime 0.4.1 uses CodeGraph for source discovery/retrieval and the host AI for mock execution. No built-in language parser or application executor exists.
+Code Anime uses CodeGraph for source discovery/retrieval and the host AI for mock execution. The default simulation workflow does not execute application code. A separate opt-in Python runtime recorder captures observed execution; see the README for its scope and limits.
 
 ## Native connection
 
@@ -20,7 +20,7 @@ The builder automatically splits completed traces into bounded storage chunks li
 
 ## Optional structural jobs and bridge
 
-`visualize_code_flow` walks indexed relationships. Its defaults remain depth 12/events 1000, maximum depth 30/events 2000 and a 100-request traversal budget. Those limits apply only to graph jobs; they do not set simulation depth. The graph output is labeled structural evidence.
+`visualize_code_flow` walks indexed relationships. Native traversal has no default call-depth limit; callers may supply a depth budget. The default event budget is 2,000, and individual provider calls have timeouts and bounded responses. Callee queries request up to 100 relationships and report possible truncation when that boundary is reached. Resource boundaries and unresolved relationships produce explicit incomplete-coverage diagnostics. These graph visits are structural evidence, not observed execution. They do not set simulation depth.
 
 An optional `CODE_ANIME_CODEGRAPH_CONFIG` may configure a normalized stdio/HTTP bridge for structural job tools. The v2 trace contract remains supported. The default evidence/AI workflow uses the native CLI and needs no bridge file. Importing an export preserves producer-supplied claims and is not live verification.
 

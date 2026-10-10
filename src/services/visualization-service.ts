@@ -94,7 +94,7 @@ export class VisualizationService {
         tool: 'record_execution',
         languages: ['python'],
         scope:
-          'Opt-in execution of synchronous main-thread Python user code; real local side effects. No CodeGraph required for runtime recording.',
+          'Opt-in execution of main-thread Python user code, including generators and asyncio task transitions; real local side effects. Concurrent threads are unsupported. No CodeGraph required for runtime recording.',
         unsupported: [
           'generators',
           'coroutines',
