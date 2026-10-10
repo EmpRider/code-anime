@@ -128,7 +128,10 @@ about future changes.
     Deep simulated recursion (45 invocations) and keyboard pagination (100 events)
     pass. A persisted 1,502-event fixture now tests 300 sibling invocations,
     paged nested disclosure, position retention and no extra HTTP flow requests.
-    Multi-chunk, larger branching-tree performance remains unverified.
+    A five-session synthetic persisted chain now exercises 1,500 distinct
+    invocations and 7,503 events; the final invocation remains inspectable
+    after loading all prepared chunks. Real-world larger branching-tree
+    performance remains unverified.
 23. **Contextual variable inspection — implemented, bounded verification.**
     Collapsible inspector shows locals, arguments, object changes, and returns.
     Player tests check historical values and per-invocation async differences.
@@ -154,8 +157,11 @@ about future changes.
     A separate 45-level simulated recursion verifies nested visibility after
     collapse/reopen; proportional indentation avoids collapsing its usable width.
     The persisted 300-child/1,502-event browser fixture measures seek performance
-    and checks paged expansion without restarting analysis. It does not exercise
-    more than one stored session.
+    and checks paged expansion without restarting analysis. A separate browser
+    fixture persists and loads five linked sessions with 1,500 invocations and
+    7,503 events, verifying final-method inspection, reverse seeks, console
+    restoration, and exactly one retrieval per prepared session. These synthetic
+    tests exclude browser paint, broad real-project behavior, and heap profiling.
     Measure memory, many methods, larger trees, long stacks, large objects,
     large output,
     multiple files, and real stored continuation chains before accepting this.
@@ -190,7 +196,7 @@ about future changes.
     reversible playback are verified. Syntax-window tests cover 1,000 source
     lines and escaped/multiline lexical boundaries. Large real continuation
     performance and the representative supported-language matrix remain
-    unverified. Do not infer acceptance from counts.
+    unverified for real recorded programs. Do not infer acceptance from counts.
 36. **UI acceptance — incomplete.**
     Responsive layout, packet stability, method disclosure, and source-state
     regressions pass, but full rendered visual review and keyboard/screen-reader
@@ -203,7 +209,8 @@ about future changes.
 
 - `npm run check`: typecheck, build, Prettier, and 74 core tests passed; one
   optional live CodeGraph integration test skipped (2026-10-10 candidate).
-- `npm run test:browser`: 23 passed, including recorded nested disclosure,
+- `npm run test:browser`: 24 passed, including the five-session persisted
+  continuation-chain fixture. Browser coverage includes recorded nested disclosure,
   repeated simulated invocations, recorded continuation preservation, deep
   simulated recursion, keyboard pagination, multiline lexical state, virtualized
   source continuity, real five-iteration loop playback, and mobile layouts.
@@ -217,10 +224,16 @@ about future changes.
   subsequent statements; comprehensive syntax grammar remains unverified.
 - A separate persisted branching browser trace uses 300 child invocations and
   1,502 events, with independent nested disclosure and paged expansion; its
-  seek fixture reported p95 17.4 ms, excluding paint and network. This is
+  seek fixture reported p95 20.1 ms, excluding paint and network. This is
   bounded evidence for one stored session, not long continuation chains.
+- Five linked persisted synthetic sessions (7,503 events; 1,500 child
+  invocations) loaded successfully in a focused Playwright test. A post-load
+  seek sample reported p95 27.5 ms, excluding paint and network. The browser
+  inspected the final child invocation, restored earlier console state, and
+  made no extra flow requests during already-loaded playback. This is bounded
+  evidence of the stored continuation path, not recorded program performance.
 - The 20,000-event synthetic single-invocation browser fixture reported seek
-  p50 13.9 ms and p95 20.4 ms, excluding paint and network. These figures do
+  p50 12.8 ms and p95 19.0 ms, excluding paint and network. These figures do
   not verify performance for broad or deep trees.
 - `git diff --check`: passed with no whitespace errors.
 

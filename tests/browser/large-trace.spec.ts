@@ -245,3 +245,185 @@ test('stored branching trace supports paged method disclosure and seeks without 
     await runtime.close();
   }
 });
+
+test('five persisted continuations preserve 1,500 invocations and reversible navigation', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const runtime = await startRuntime({ ...readConfig({}), port: 0 });
+  try {
+    const sourceText = Array.from(
+      { length: 950 },
+      (_, i) => `const value${i} = ${i};`,
+    ).join('\n');
+    let previousSessionId: string | undefined;
+    let firstSessionId: string | undefined;
+    for (let chunkIndex = 0; chunkIndex < 5; chunkIndex++) {
+      const events: Array<Record<string, unknown>> = [];
+      const append = (event: Record<string, unknown>) =>
+        events.push({
+          id: `event-${chunkIndex * 1500 + events.length + (chunkIndex ? 2 : 1)}`,
+          certainty: 'mock',
+          values: {},
+          ...event,
+        });
+      if (chunkIndex === 0)
+        append({
+          kind: 'enter',
+          callId: 'call-main',
+          symbolId: 'main',
+          label: 'main()',
+          stack: ['call-main'],
+          source: { file: 'branches.ts', line: 1, endLine: 1 },
+          locals: { 'call-main': { completed: 0 } },
+        });
+      for (let offset = 0; offset < 300; offset++) {
+        const index = chunkIndex * 300 + offset;
+        const callId = `call-${index}`;
+        const common = {
+          callId,
+          parentCallId: 'call-main',
+          symbolId: `worker_${index}`,
+          stack: ['call-main', callId],
+          source: {
+            file: 'branches.ts',
+            line: (index % 900) + 2,
+            endLine: (index % 900) + 2,
+          },
+          locals: { [callId]: { input: index, result: index * 2 } },
+        };
+        append({ ...common, kind: 'enter', label: `worker(${index})` });
+        for (let step = 0; step < 3; step++)
+          append({
+            ...common,
+            kind: 'assign',
+            label: `compute ${index}:${step}`,
+            after: { result: index * 2 + step },
+          });
+        append({
+          ...common,
+          kind: 'return',
+          label: `return ${index * 2}`,
+          result: index * 2,
+        });
+      }
+      if (chunkIndex === 4) {
+        append({
+          kind: 'console',
+          callId: 'call-main',
+          symbolId: 'main',
+          label: 'print complete',
+          stack: ['call-main'],
+          output: 'completed 1500 calls\n',
+          source: { file: 'branches.ts', line: 1, endLine: 1 },
+        });
+        append({
+          kind: 'return',
+          callId: 'call-main',
+          symbolId: 'main',
+          label: 'main returns',
+          stack: ['call-main'],
+          result: 1500,
+          source: { file: 'branches.ts', line: 1, endLine: 1 },
+        });
+      }
+      // The initial main entry adds one event; IDs stay continuous thereafter.
+      const session = await runtime.store.create(
+        traceToFlow(
+          {
+            version: 2,
+            provider: 'persisted-continuation-fixture',
+            projectRoot: 'fixture',
+            sourceHash: 'multi-chunk-fixture',
+            target: 'main',
+            scenario: {},
+            events: events as never[],
+            diagnostics: ['Synthetic continuation performance fixture'],
+            truncated: chunkIndex < 4,
+            filesAnalyzed: 1,
+            cacheHits: 0,
+            sourceFiles: { 'branches.ts': sourceText },
+            simulation: {
+              mode: 'ai-mock',
+              complete: chunkIndex === 4,
+              coverage: 'Synthetic prepared continuation chain',
+              evidenceIds: [],
+              ...(previousSessionId ? { previousSessionId } : {}),
+            },
+          },
+          'main',
+        ),
+      );
+      firstSessionId ??= session.id;
+      previousSessionId = session.id;
+    }
+    const requests: string[] = [];
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.route('**/api/flow/*', async (route) => {
+      requests.push(route.request().url());
+      await route.continue();
+    });
+    await page.goto(`${runtime.baseUrl}/flow/${firstSessionId}`);
+    await expect(page.locator('#progress')).toHaveText('0 / 1501');
+    let loaded = 1501;
+    for (let i = 1; i < 5; i++) {
+      await page.locator('#timeline').fill(String(loaded));
+      await page.locator('#next').click();
+      await expect
+        .poll(async () =>
+          Number(await page.locator('#timeline').getAttribute('max')),
+        )
+        .toBeGreaterThan(loaded);
+      loaded += i === 4 ? 1502 : 1500;
+      await expect(page.locator('#timeline')).toHaveAttribute(
+        'max',
+        String(loaded),
+      );
+    }
+    expect(loaded).toBe(7503);
+    expect(requests).toHaveLength(5);
+    const timings = await page.evaluate(() => {
+      const timeline = document.querySelector<HTMLInputElement>('#timeline')!;
+      return Array.from({ length: 20 }, (_, i) => {
+        timeline.value = String(5000 + i);
+        const start = performance.now();
+        timeline.dispatchEvent(new Event('input', { bubbles: true }));
+        return performance.now() - start;
+      }).sort((a, b) => a - b);
+    });
+    console.log(`persisted continuation seek p95=${timings[18]!.toFixed(1)}ms`);
+    expect(timings[18]).toBeLessThan(700);
+    await page.locator('#view-mode').selectOption('map');
+    await page
+      .getByRole('button', { name: 'Inspect method worker_1499' })
+      .click();
+    const finalInvocation = page.locator(
+      '#method-details details[data-invocation="call-1499"]',
+    );
+    await expect(finalInvocation).toHaveAttribute('open', '');
+    await expect(finalInvocation.locator('.method-event')).toHaveCount(5);
+    await finalInvocation.locator('.method-event').first().click();
+    await expect(page.locator('#progress')).toHaveText('7497 / 7503');
+    await expect(page.locator('.executing-line')).toHaveAttribute(
+      'data-line',
+      '601',
+    );
+    await expect(page.locator('#local-tree')).toContainText('1499');
+    await finalInvocation.locator('summary').click();
+    await expect(page.locator('#progress')).toHaveText('7497 / 7503');
+    await page.locator('#timeline').fill('7502');
+    await expect(page.locator('#console-output')).toHaveText(
+      'completed 1500 calls\n',
+    );
+    await page.locator('#timeline').fill('1501');
+    await expect(page.locator('#console-output')).toHaveText('');
+    await expect(page.locator('#progress')).toHaveText('1501 / 7503');
+    await page.locator('#timeline').fill('7503');
+    await expect(page.locator('#status')).toHaveText('Replay complete');
+    expect(requests).toHaveLength(5);
+    expect(errors).toEqual([]);
+  } finally {
+    await runtime.close();
+  }
+});
