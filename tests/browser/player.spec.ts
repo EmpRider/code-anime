@@ -54,6 +54,40 @@ test.afterAll(async () => {
   await runtime?.close();
 });
 
+test('Python source colors comments and floor division without changing literal text', async ({
+  page,
+}) => {
+  const source = [
+    'def calculate(value):',
+    '    return value // 2 # integer division',
+    'text = "# <img src=x onerror=alert(1)>"',
+  ];
+  await page.route('**/api/flow/*', async (route) => {
+    const response = await route.fetch();
+    const flow = await response.json();
+    flow.trace.sourceFiles = { 'example.py': source.join('\n') };
+    flow.trace.events.forEach((event: TraceEvent) => {
+      event.source = { file: 'example.py', line: 2, endLine: 2 };
+    });
+    await route.fulfill({ json: flow });
+  });
+  await page.goto(url);
+  await page.locator('#next').click();
+  await expect(page.locator('.code-text')).toHaveText(source);
+  await expect(page.locator('.token-comment')).toHaveText([
+    '# integer division',
+  ]);
+  await expect(page.locator('.token-keyword')).toHaveText(['def', 'return']);
+  await expect(page.locator('.token-string')).toHaveText(
+    '"# <img src=x onerror=alert(1)>"',
+  );
+  await expect(page.locator('#snippet img')).toHaveCount(0);
+  await expect(page.locator('.executing-line')).toHaveAttribute(
+    'data-line',
+    '2',
+  );
+});
+
 test('desktop layout resizes, focuses and remembers preferences without moving playback', async ({
   page,
 }) => {

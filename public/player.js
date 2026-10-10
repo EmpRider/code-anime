@@ -479,17 +479,19 @@ function precedingFrameLocals(state, event, previousEvent) {
   return undefined;
 }
 // Token spans only decorate literal source text. Source code is never generated.
-function codeText(content) {
+function codeText(content, file = '') {
   const container = text('span', '', 'code-text');
-  const token =
-    /\/\/.*|\/\*.*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b(?:class|function|fun|const|let|var|public|private|static|return|if|else|for|while|new|async|await|throw|import|export|void|int|String|number|boolean|true|false|null)\b|\b\d+(?:\.\d+)?\b/g;
+  const python = /\.(?:py|pyw|pyi)$/i.test(file);
+  const token = python
+    ? /#.*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b(?:False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b|\b\d+(?:\.\d+)?\b/g
+    : /\/\/.*|\/\*.*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b(?:class|function|fun|const|let|var|public|private|static|return|if|else|for|while|new|async|await|throw|import|export|void|int|String|number|boolean|true|false|null)\b|\b\d+(?:\.\d+)?\b/g;
   let start = 0;
   for (const match of content.matchAll(token)) {
     if (match.index > start)
       container.append(
         document.createTextNode(content.slice(start, match.index)),
       );
-    const kind = /^(?:\/\/|\/\*)/.test(match[0])
+    const kind = (python ? /^#/ : /^(?:\/\/|\/\*)/).test(match[0])
       ? 'comment'
       : /^["']/.test(match[0])
         ? 'string'
@@ -579,7 +581,7 @@ function renderSource(state, event) {
           ? 'Toggle breakpoint at line ' + i
           : 'No execution recorded on this line';
         gutter.disabled = !stepIndex;
-        row.append(gutter, codeText(lines[i - 1] ?? ''));
+        row.append(gutter, codeText(lines[i - 1] ?? '', location.file));
         fragment.append(row);
       }
       $('snippet').replaceChildren(fragment);
