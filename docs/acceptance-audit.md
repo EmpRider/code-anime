@@ -68,7 +68,8 @@ about future changes.
     breakpoint controls, and source-follow navigation. A multiline-aware lexer
     now carries Python triple-string, JavaScript block-comment/template, and
     Kotlin raw-string state across source windows. Lexical unit tests and a
-    virtualized browser regression were added; browser validation is pending.
+    virtualized browser regression passed in CI on 2026-10-10. Full language
+    grammar, rendering fidelity, and source-map scenarios remain unverified.
     Full language grammar and source-map scenarios remain unverified.
 12. **Follow method execution — implemented, bounded verification.**
     Player and recording browser tests cover source transitions, returning caller
@@ -195,6 +196,12 @@ about future changes.
   p50 12.8 ms and p95 23.3 ms, excluding paint and network. These figures do
   not verify performance for broad or deep trees.
 - `git diff --check`: passed with no whitespace errors.
+- The `codex/multiline-source-lexing` branch passed 70 core tests with one
+  optional real-CodeGraph integration skip; 19 Chromium browser tests passed,
+  including multiline virtualized windows and immediate console persistence.
+  Core, formatting, build, and package gates passed on Ubuntu and Windows
+  with Node 22 and 24 (2026-10-10, commit `550d5b6`).
+
 
 ## Next implementation order
 
