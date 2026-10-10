@@ -1506,6 +1506,14 @@ divider.onkeydown = (event) => {
   render();
 };
 $('console-panel').open = layout.console;
+$('console-panel summary').addEventListener('click', () => {
+  // The native toggle event is queued; save the choice before a fast reload.
+  queueMicrotask(() => {
+    if (window.innerWidth <= 650) return;
+    layout.console = $('console-panel').open;
+    saveLayout();
+  });
+});
 $('console-panel').addEventListener('toggle', () => {
   if (window.innerWidth <= 650) return;
   layout.console = $('console-panel').open;
