@@ -33,8 +33,12 @@ about future changes.
    ES modules, debugger-observed nested calls and locals, loops, 37 levels of
    recursion, timers, output, nonzero exit, and event-budget truncation.
    V8-reported JavaScript throws and entry into catch scopes are now tested as
-   observed events for caught and uncaught exceptions. JavaScript return values
-   and frame-exit causes are still explicitly unresolved;
+   observed events for caught and uncaught exceptions. JavaScript now records
+   debugger-reported return values for ordinary and recursive calls; unobserved
+   exits remain unresolved. Promise snapshots now preserve V8-reported settlement
+   state and result when available, while pending or later settlements remain
+   unresolved. A throwing `finally` does not emit a
+   normal return in the new regression. Other frame-exit causes are unresolved.
    Concurrent repeated awaits, loop awaits, async recursion, and nested
    same-argument awaited calls now have invocation-identity regressions. These
    use V8-visible async ancestry to keep resumed parent and child invocations
@@ -206,8 +210,17 @@ about future changes.
     Observed recording is implemented for Python and experimentally for
     Node.js JavaScript through V8 Inspector. JavaScript coverage includes
     verified recursive calls, ES modules, timer callbacks, caught/uncaught throws,
-    catch-handler entry, output and budgets,
-    but does not establish precise return values or all async behavior. The
+    catch-handler entry, output, budgets, and debugger-observed return values
+    for tested synchronous calls. Unobserved exits remain unresolved, while
+    Promise snapshots expose V8-observed state/results and explicitly preserve
+    unknown future settlement. The regression exercises a fulfilled and pending
+    Promise, without evaluating application code. This does
+    not establish complete return-value accuracy or all async behavior. The
+    JavaScript snapshot regression now verifies dense/sparse/nested arrays,
+    accessor non-evaluation, and non-index array properties; a separate
+    regression verifies V8-reported Date, Map, Set, RegExp, Error, typed-array,
+    and class-instance types without claiming their native internal state was
+    captured. Snapshot depth and property counts remain bounded. The
     optional real CodeGraph integration test previously passed against an
     indexed Kotlin fixture on Windows with the default npm CLI launcher.
     Structural analysis does not establish Kotlin runtime recording. Establish
@@ -247,7 +260,7 @@ about future changes.
 
 ## Checkpoint verification
 
-- `npm run check`: typecheck, 103 core tests (102 passed, one optional live
+- `npm run check`: typecheck, 109 core tests (108 passed, one optional live
   CodeGraph integration test skipped), build, and Prettier passed.
 - `npm run test:browser`: 27 passed, including paired-call, recorded
   execution-path, separate console writes, overview rewind, and persisted
@@ -257,7 +270,8 @@ about future changes.
   simulated recursion, keyboard pagination, multiline lexical state, virtualized
   source continuity, real five-iteration loop playback, and mobile layouts.
   JavaScript recording also verifies source, local values, ANSI-decorated output
-  display, and reverse seeking without rewriting recorded stdout.
+  display, and reverse seeking without rewriting recorded stdout. The 27-test
+  Playwright suite was rerun after the V8 Promise snapshot update.
 - `npm run package:check`: packed CLI installation, MCP handshake, player assets,
   and stored flow API passed, including both Python and JavaScript observed
   recordings through the installed package.
@@ -274,6 +288,10 @@ about future changes.
   A previously flaky timeout assertion now allows enough interpreter startup
   time during concurrent suite execution, while still verifying timeout and
   partial-trace semantics.
+  A new Promise regression verifies a V8-observed fulfilled result and a
+  still-pending Promise without predicting later settlement. JavaScript
+  event-budget and cancellation regressions passed after adding the Windows
+  `taskkill` nonzero-exit fallback.
 - `tests/flow-overview.test.mjs`: eight focused cases verify event-to-overview
   transitions, input and return values, nesting, caller call-site timing,
   independently recorded Python task console streams, and rejecting misleading

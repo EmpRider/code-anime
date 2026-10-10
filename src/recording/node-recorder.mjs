@@ -32,18 +32,27 @@ let lastFrame;
 let stopped = false;
 let stopReason = '';
 let stderrBuffer = '';
-let childError = '';
+let applicationStderrTail = '';
+let inspectorUrl;
+let inspectorAttached = false;
+let inspectorHelpSeen = false;
 let inspected = false;
 let previousPause;
 let repeatedPause = 0;
+let pausedInFlight = 0;
+let closeRequested = false;
 
 const coverage =
   'Node.js JavaScript execution observed via V8 Inspector, in one process for this input. ' +
   'Source-line snapshots precede execution; parameters, block locals and own data properties ' +
-  'are bounded. Calls are identified from debugger-visible JavaScript frames. ' +
+  'are bounded. Sparse array holes and non-index properties remain distinct; V8 object types ' +
+  'are retained, but native internal state is not inspected. Calls are identified from ' +
+  'debugger-visible JavaScript frames. ' +
   'Exceptions thrown in active user source frames are recorded when V8 reports their values. ' +
-  'Frame disappearance is recorded without an invented return value or exception cause. ' +
-  'Stdout/stderr bytes are real, but their association with the last paused frame may lag ' +
+  'Returns are reported only when V8 exposes a return value. Promise snapshots ' +
+  'include debugger-observed state/results when available; later settlement is not tracked. ' +
+  'Other frame exits remain unresolved, without invented causes. ' +
+  'Stdout/stderr output is captured, but its association with the last paused frame may lag ' +
   'as pipes flush. Native frames, worker threads, child processes, timers after process exit, ' +
   'getters, Proxies, and framework internals are outside the recorded scope.';
 
@@ -79,6 +88,9 @@ function stop(reason) {
       stdio: 'ignore',
     });
     killer.once('error', () => child.kill());
+    killer.once('exit', (code) => {
+      if (code !== 0) child.kill();
+    });
   } else child.kill('SIGKILL');
 }
 
@@ -90,6 +102,14 @@ function request(method, params = {}) {
     requests.set(id, { resolve, reject });
     socket.send(JSON.stringify({ id, method, params }));
   });
+}
+
+function closeDebuggerWhenIdle() {
+  // Node may announce shutdown while the response to the final step request
+  // is still in flight. Closing here would reject that request and turn a
+  // successfully completed recording into "Debugger disconnected".
+  closeRequested = true;
+  if (pausedInFlight === 0) socket?.close();
 }
 
 async function projectFile(scriptId) {
@@ -143,6 +163,49 @@ async function remoteValue(object, depth = 0, seen = new Set()) {
     return { $type: object.type, $unavailable: 'Debugger value unavailable' };
   if (object.type === 'function')
     return { $type: 'function', $unavailable: 'Function internals omitted' };
+  if (object.subtype === 'promise' || object.className === 'Promise') {
+    // V8 exposes Promise state through internalProperties without evaluating
+    // user code. This is only the state at inspection time: a pending Promise
+    // must never be presented as a later fulfilled/rejected result.
+    try {
+      const { internalProperties = [] } = await request(
+        'Runtime.getProperties',
+        { objectId: object.objectId, ownProperties: true },
+      );
+      const state = internalProperties.find(
+        (property) => property.name === '[[PromiseState]]',
+      )?.value?.value;
+      const settled = internalProperties.find(
+        (property) => property.name === '[[PromiseResult]]',
+      )?.value;
+      if (['fulfilled', 'rejected'].includes(state))
+        return {
+          $type: 'Promise',
+          $state: state,
+          ...(settled
+            ? { $result: await remoteValue(settled, depth + 1, seen) }
+            : {}),
+          ...(!settled
+            ? { $unavailable: 'Promise result not exposed by V8' }
+            : {}),
+        };
+      if (state === 'pending')
+        return {
+          $type: 'Promise',
+          $state: 'pending',
+          $unavailable: 'Settlement after this snapshot was not observed',
+        };
+    } catch {
+      // V8 can revoke inspection handles during shutdown or reject access.
+      // Preserve the Promise identity without inventing its settlement.
+    }
+    return {
+      $type: 'Promise',
+      $unavailable: 'Promise settlement not observed',
+    };
+  }
+  if (object.subtype === 'proxy')
+    return { $type: 'Proxy', $unavailable: 'Proxy traps not evaluated' };
   if (depth >= 3 || seen.has(object.objectId))
     return {
       $type: object.className || object.type,
@@ -164,16 +227,56 @@ async function remoteValue(object, depth = 0, seen = new Set()) {
   }
   const entries = properties.filter((property) => property.enumerable);
   const limited = entries.slice(0, 40);
-  if (object.subtype === 'array' && entries.length <= 40) {
-    const result = [];
-    for (const item of limited) {
-      const index = Number(item.name);
-      if (!Number.isSafeInteger(index) || index < 0 || index >= 40) continue;
-      result[index] = item.value
-        ? await remoteValue(item.value, depth + 1, visited)
-        : { $unavailable: 'Accessor not evaluated' };
+  if (object.subtype === 'array') {
+    const length = properties.find((property) => property.name === 'length')
+      ?.value?.value;
+    const isElement = (name) =>
+      /^(0|[1-9]\d*)$/.test(name) &&
+      Number.isSafeInteger(length) &&
+      Number(name) < length;
+    const dense =
+      Number.isSafeInteger(length) &&
+      length <= 40 &&
+      entries.length === length &&
+      entries.every((item) => isElement(item.name));
+    if (dense) {
+      const result = Array(length);
+      for (const item of entries)
+        result[Number(item.name)] = item.value
+          ? await remoteValue(item.value, depth + 1, visited)
+          : { $unavailable: 'Accessor not evaluated' };
+      return result;
     }
-    return result;
+    // JSON turns array holes into null and drops trailing holes. Preserve the
+    // observed length and exact own keys instead of manufacturing values.
+    const elements = {};
+    const namedProperties = {};
+    for (const item of limited)
+      Object.defineProperty(
+        isElement(item.name) ? elements : namedProperties,
+        item.name,
+        {
+          value: item.value
+            ? await remoteValue(item.value, depth + 1, visited)
+            : { $unavailable: 'Accessor not evaluated' },
+          enumerable: true,
+        },
+      );
+    return {
+      $type: 'Array',
+      length: Number.isSafeInteger(length)
+        ? length
+        : { $unavailable: 'Unknown length' },
+      elements,
+      ...(Object.keys(namedProperties).length
+        ? { properties: namedProperties }
+        : {}),
+      ...(entries.length > 40
+        ? {
+            $unavailable: `${entries.length - 40} additional properties omitted`,
+          }
+        : {}),
+    };
   }
   const result = {};
   for (const item of limited) {
@@ -187,6 +290,25 @@ async function remoteValue(object, depth = 0, seen = new Set()) {
   }
   if (entries.length > 40)
     result.$unavailable = `${entries.length - 40} additional properties omitted`;
+  // Native containers (Map, Set, Date, RegExp, typed arrays, Errors) can have
+  // no enumerable own keys despite holding significant internal state. Class
+  // instances also lose their identity when flattened to plain JSON objects.
+  // Preserve V8's observed type and visible own properties, and explicitly
+  // mark the uninspected internals instead of reporting a misleading `{}`.
+  if (
+    object.type === 'object' &&
+    object.className &&
+    object.className !== 'Object'
+  )
+    return {
+      $type: object.className,
+      ...(typeof object.description === 'string'
+        ? { $description: object.description.slice(0, 256) }
+        : {}),
+      properties: result,
+      $unavailable:
+        'Prototype, non-enumerable properties and internal state not inspected',
+    };
   return result;
 }
 
@@ -332,16 +454,20 @@ async function paused(params) {
       });
       continue;
     }
+    const observedReturn = Object.hasOwn(old, 'observedReturn');
     emit({
-      kind: 'unresolved',
+      kind: observedReturn ? 'return' : 'unresolved',
       symbolId: old.symbolId,
       callId: old.callId,
       ...(stack.at(-1) ? { parentCallId: stack.at(-1).callId } : {}),
-      label: `exited ${old.symbol}`,
+      label: `${observedReturn ? 'return' : 'exited'} ${old.symbol}`,
       source: { file: old.file, line: old.line, endLine: old.line },
       values: { task: 'main', thread: 'main' },
       stack: stack.map((frame) => frame.callId),
-      note: 'Frame disappeared; debugger did not establish the return value or exception cause',
+      ...(observedReturn ? { result: old.observedReturn } : {}),
+      note: observedReturn
+        ? 'Return value reported by V8 at the function return position'
+        : 'Frame disappeared; debugger did not establish the return value or exception cause',
       certainty: 'observed',
     });
   }
@@ -391,6 +517,11 @@ async function paused(params) {
       stack[index].line = current.line;
     }
     snapshots[current.callId] = await locals(current.raw);
+    // V8 exposes `returnValue` only at a debugger-observed return position.
+    // Do not evaluate the source expression or derive a return from locals.
+    if (Object.hasOwn(current.raw, 'returnValue')) {
+      stack[index].observedReturn = await remoteValue(current.raw.returnValue);
+    }
     if (index >= common && !current.resuming) {
       emit({
         kind: 'enter',
@@ -551,23 +682,66 @@ const child = spawn(
 child.stdout.setEncoding('utf8');
 child.stdout.on('data', (data) => output(data, 'stdout'));
 child.stderr.setEncoding('utf8');
+function applicationStderr(text) {
+  // Keep a bounded diagnostic excerpt even when the program fails before V8
+  // reaches a project frame (so no console event can yet be associated with it).
+  applicationStderrTail = (applicationStderrTail + text).slice(-4096);
+  output(text, 'stderr');
+}
+function stderrLine(text) {
+  // Match whole, known Inspector notices, while preserving application text
+  // verbatim (including trailing spaces, carriage returns and final fragments).
+  const line = text.replace(/\r?\n$/, '');
+  const shutdownNotice = 'Waiting for the debugger to disconnect...';
+  if (inspectorUrl && line.endsWith(shutdownNotice)) {
+    // Node may append the notice to an unterminated application stderr write.
+    // The prefix belongs to the application and has no synthetic newline.
+    const prefix = line.slice(0, -shutdownNotice.length);
+    if (prefix) applicationStderr(prefix);
+    closeDebuggerWhenIdle();
+    return;
+  }
+  if (inspectorUrl && line.endsWith(`Debugger ending on ${inspectorUrl}`)) {
+    const prefix = line.slice(0, -`Debugger ending on ${inspectorUrl}`.length);
+    if (prefix) applicationStderr(prefix);
+    return;
+  }
+  const listening = line.match(/^Debugger listening on (ws:\/\/\S+)$/);
+  if (listening && !inspectorUrl) {
+    inspectorUrl = listening[1];
+    connect(inspectorUrl).catch((error) =>
+      stop('Inspector setup: ' + error.message),
+    );
+  } else if (
+    inspectorUrl &&
+    !inspectorAttached &&
+    line === 'Debugger attached.'
+  ) {
+    inspectorAttached = true;
+  } else if (
+    inspectorUrl &&
+    !inspectorHelpSeen &&
+    line === 'For help, see: https://nodejs.org/en/docs/inspector'
+  ) {
+    // Node emits this after its initial listening notice.
+    inspectorHelpSeen = true;
+  } else {
+    applicationStderr(text);
+  }
+}
+
 child.stderr.on('data', (data) => {
   stderrBuffer += data;
   let index;
   while ((index = stderrBuffer.indexOf('\n')) >= 0) {
-    const line = stderrBuffer.slice(0, index).trimEnd();
+    stderrLine(stderrBuffer.slice(0, index + 1));
     stderrBuffer = stderrBuffer.slice(index + 1);
-    const match = line.match(/Debugger listening on (ws:\/\/\S+)/);
-    if (match && !socket) {
-      connect(match[1]).catch((error) =>
-        stop('Inspector setup: ' + error.message),
-      );
-    } else if (line.startsWith('Waiting for the debugger to disconnect')) {
-      socket?.close();
-    } else if (!/^(For help, see:|Debugger attached\.)/.test(line)) {
-      childError = (childError + line + '\n').slice(-4096);
-      output(line + '\n', 'stderr');
-    }
+  }
+  // An application can write indefinitely without newlines. Bound the parser
+  // buffer; a long fragment cannot be a standard Inspector notice.
+  if (stderrBuffer.length > 8192) {
+    applicationStderr(stderrBuffer);
+    stderrBuffer = '';
   }
 });
 
@@ -596,6 +770,7 @@ async function connect(url) {
     } else if (packet.method === 'Debugger.scriptParsed') {
       scripts.set(packet.params.scriptId, { url: packet.params.url });
     } else if (packet.method === 'Debugger.paused') {
+      pausedInFlight++;
       void (async () => {
         try {
           await paused(packet.params);
@@ -609,13 +784,16 @@ async function connect(url) {
             );
         } catch (error) {
           stop(error.message);
+        } finally {
+          pausedInFlight--;
+          if (closeRequested && pausedInFlight === 0) socket?.close();
         }
       })();
     } else if (
       packet.method === 'Runtime.executionContextDestroyed' &&
       inspected
     ) {
-      socket.close();
+      closeDebuggerWhenIdle();
     }
   });
   socket.addEventListener('close', () => {
@@ -647,6 +825,8 @@ try {
 } catch (error) {
   stop('Unable to start Node.js program: ' + error.message);
 }
+// Node may close stderr with no newline after the final application write.
+if (stderrBuffer) stderrLine(stderrBuffer);
 // There is no guarantee that Node emits executionContextDestroyed on exit.
 socket?.close();
 const complete = inspected && !stopped && exitCode === 0 && eventCount > 0;
@@ -656,7 +836,12 @@ send(
     complete,
     reason:
       stopReason ||
-      (exitCode ? `Node.js exited with code ${exitCode}` : childError.trim()),
+      (exitCode !== 0
+        ? `Node.js exited with code ${exitCode}` +
+          (applicationStderrTail.trim()
+            ? `: ${applicationStderrTail.trim()}`
+            : '')
+        : ''),
     coverage,
   },
   false,

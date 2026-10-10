@@ -195,16 +195,12 @@ test('records observed JavaScript calls, source steps, loop values and output ac
     assert.equal(add.inputs?.a, 10);
     assert.equal(add.inputs?.b, 20);
     assert.ok(add.parentCallId);
-    assert.ok(
-      events.some(
-        (event) => event.kind === 'unresolved' && event.callId === add.callId,
-      ),
-      'A frame exit without an observed return value stays unresolved',
+    const addReturn = events.find(
+      (event) => event.kind === 'return' && event.callId === add.callId,
     );
-    assert.equal(
-      events.some((event) => event.kind === 'return'),
-      false,
-    );
+    assert.ok(addReturn, 'Capture the return value supplied by V8');
+    assert.equal(addReturn.result, 30);
+    assert.equal(addReturn.parentCallId, add.parentCallId);
     const lineVisits = events.filter(
       (event) =>
         event.kind === 'statement' &&
@@ -229,6 +225,268 @@ test('records observed JavaScript calls, source steps, loop values and output ac
     assert.equal(saved.provider, 'node-v8-inspector');
     assert.equal(saved.sourceFiles?.['main.cjs'], main);
     assert.match(saved.sourceFiles?.['helper.cjs'] ?? '', /function add/);
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript stderr preserves trailing fragments, spacing and application notices', async () => {
+  const messages = [
+    'alpha  \r\n',
+    'For help, see: application docs\n',
+    'Debugger ending on ws://example.invalid/not-the-inspector\n',
+    'Debugger attached. application notice\n',
+    'final fragment  ',
+  ];
+  const f = await fixture({
+    'main.cjs': [
+      'function write() {',
+      ...messages.map(
+        (message) => `  process.stderr.write(${JSON.stringify(message)});`,
+      ),
+      '}',
+      'write();',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      messages.join(''),
+    );
+    assert.ok(
+      !result.diagnostics?.some((diagnostic) =>
+        diagnostic.includes('final fragment'),
+      ),
+      'Normal stderr output is evidence, not a recording failure reason',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript startup syntax errors retain stderr diagnostics even without a trace frame', async () => {
+  const f = await fixture({
+    'main.cjs': 'function invalid( {\n',
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    await assert.rejects(
+      wait(f.service, job.jobId),
+      (error: Error) =>
+        /SyntaxError/.test(error.message) &&
+        /main\.cjs/.test(error.message) &&
+        /exited with code/.test(error.message),
+      'An error before any user frame must include the Node.js diagnostic',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript return snapshots preserve sparse arrays and bounded values', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'function dense() { return [1, null, 3]; }',
+      'function sparse() { const a = new Array(4); a[2] = 9; return a; }',
+      'function empty() { return new Array(3); }',
+      'function object() { return { ok: true, nested: { count: 4 } }; }',
+      'function explicitUndefined() { return undefined; }',
+      'function explicitNull() { return null; }',
+      'function longArray() { return Array.from({ length: 42 }, (_, i) => i); }',
+      'let getterReads = 0;',
+      "function extras() { const a = new Array(4); a[2] = 9; a.note = 'observed'; Object.defineProperty(a, 'lazy', { enumerable: true, get() { getterReads++; return 42; } }); return a; }",
+      'function nestedSparse() { return { inside: new Array(2) }; }',
+      'dense(); sparse(); empty(); object(); explicitUndefined(); explicitNull(); longArray(); extras(); nestedSparse();',
+      'console.log("DONE", getterReads);',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const returned = (symbol: string) => {
+      const found = events.find(
+        (event) =>
+          event.kind === 'return' && event.symbolId === 'main.cjs:' + symbol,
+      );
+      assert.ok(found, 'Missing observed return from ' + symbol);
+      return found.result;
+    };
+    assert.deepEqual(returned('dense'), [1, null, 3]);
+    assert.deepEqual(returned('sparse'), {
+      $type: 'Array',
+      length: 4,
+      elements: { '2': 9 },
+    });
+    assert.deepEqual(returned('empty'), {
+      $type: 'Array',
+      length: 3,
+      elements: {},
+    });
+    assert.deepEqual(returned('object'), {
+      ok: true,
+      nested: { count: 4 },
+    });
+    assert.deepEqual(returned('explicitUndefined'), { $type: 'undefined' });
+    assert.equal(returned('explicitNull'), null);
+    assert.deepEqual(returned('longArray'), {
+      $type: 'Array',
+      length: 42,
+      elements: Object.fromEntries(
+        Array.from({ length: 40 }, (_, i) => [i, i]),
+      ),
+      $unavailable: '2 additional properties omitted',
+    });
+    assert.deepEqual(returned('extras'), {
+      $type: 'Array',
+      length: 4,
+      elements: { '2': 9 },
+      properties: {
+        note: 'observed',
+        lazy: { $unavailable: 'Accessor not evaluated' },
+      },
+    });
+    assert.deepEqual(returned('nestedSparse'), {
+      inside: { $type: 'Array', length: 2, elements: {} },
+    });
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((e) => e.output)
+        .join(''),
+      'DONE 0\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript Promise snapshots report only V8-observed settlement at inspection time', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'function fulfilled() { return Promise.resolve(19); }',
+      'function pending() { return new Promise(() => {}); }',
+      'fulfilled(); pending();',
+      "console.log('DONE');",
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const returned = (symbol: string) => {
+      const found = events.find(
+        (event) =>
+          event.kind === 'return' && event.symbolId === `main.cjs:${symbol}`,
+      );
+      assert.ok(found, `Missing observed return for ${symbol}`);
+      return found.result;
+    };
+    assert.deepEqual(returned('fulfilled'), {
+      $type: 'Promise',
+      $state: 'fulfilled',
+      $result: 19,
+    });
+    assert.deepEqual(returned('pending'), {
+      $type: 'Promise',
+      $state: 'pending',
+      $unavailable: 'Settlement after this snapshot was not observed',
+    });
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'DONE\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript return snapshots identify native objects without inventing their internal state', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      "function dateValue() { return new Date('2020-01-02T03:04:05.000Z'); }",
+      "function mapValue() { const value = new Map([['a', 5]]); value.label = 'user'; return value; }",
+      'function setValue() { return new Set([2, 4]); }',
+      'function regexpValue() { return /a+/gi; }',
+      "function errorValue() { return new TypeError('bad input'); }",
+      'function bytesValue() { return new Uint8Array([3, 7]); }',
+      'class Example { constructor() { this.count = 2; } }',
+      'function instanceValue() { return new Example(); }',
+      'dateValue(); mapValue(); setValue(); regexpValue(); errorValue(); bytesValue(); instanceValue();',
+      "console.log('DONE');",
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const returned = (symbol: string) => {
+      const event = events.find(
+        (item) =>
+          item.kind === 'return' && item.symbolId === `main.cjs:${symbol}`,
+      );
+      assert.ok(event, `Missing observed return for ${symbol}`);
+      return event.result as Record<string, unknown>;
+    };
+    for (const [method, type] of [
+      ['dateValue', 'Date'],
+      ['mapValue', 'Map'],
+      ['setValue', 'Set'],
+      ['regexpValue', 'RegExp'],
+      ['errorValue', 'TypeError'],
+      ['bytesValue', 'Uint8Array'],
+      ['instanceValue', 'Example'],
+    ] as const) {
+      assert.equal(returned(method).$type, type);
+    }
+    assert.deepEqual(returned('mapValue').properties, { label: 'user' });
+    assert.deepEqual(returned('instanceValue').properties, { count: 2 });
+    assert.match(String(returned('mapValue').$unavailable), /internal/i);
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'DONE\n',
+    );
   } finally {
     await f.close();
   }
@@ -348,9 +606,14 @@ test('JavaScript recording follows more than 30 nested user calls through an ES 
         .join(''),
       '36\n',
     );
-    assert.equal(
-      events.some((event) => event.kind === 'return'),
-      false,
+    const returns = events.filter(
+      (event) =>
+        event.kind === 'return' && event.symbolId === 'helper.mjs:descend',
+    );
+    assert.deepEqual(
+      returns.map((event) => event.result),
+      Array.from({ length: 37 }, (_, index) => index),
+      'Every recursive return must use its debugger-observed result',
     );
   } finally {
     await f.close();
@@ -697,6 +960,16 @@ test('JavaScript nested and recursive async calls retain independent invocation 
         `Missing resumed frame for n=${enter.inputs?.n}`,
       );
     }
+    assert.deepEqual(
+      events
+        .filter(
+          (event) =>
+            event.kind === 'return' && event.symbolId === 'main.mjs:descend',
+        )
+        .map((event) => (event.result as { $type: string }).$type),
+      Array(5).fill('Promise'),
+      'V8 reports async Promise returns; fulfillment values stay unresolved',
+    );
     assert.equal(
       events
         .filter((event) => event.kind === 'console')
@@ -793,6 +1066,15 @@ test('JavaScript concurrent same-argument calls stay distinct through nested awa
         );
       }
     }
+    assert.deepEqual(
+      events
+        .filter(
+          (event) =>
+            event.kind === 'return' && event.symbolId === 'main.mjs:inner',
+        )
+        .map((event) => (event.result as { $type: string }).$type),
+      ['Promise', 'Promise'],
+    );
     assert.equal(
       events
         .filter((event) => event.kind === 'console')
@@ -819,6 +1101,7 @@ test('JavaScript uncaught errors preserve the observed throw and remain incomple
     const result = await wait(f.service, job.jobId);
     assert.equal(result.complete, false);
     assert.match(result.diagnostics!.join(' '), /exited with code/);
+    assert.match(result.diagnostics!.join(' '), /Error: BOOM/);
     const { events } = await allEvents(f.store, result.sessionId!);
     assert.ok(
       events.some(
@@ -882,7 +1165,62 @@ test('JavaScript caught exception records the observed throw and still follows t
         .join(''),
       'CAUGHT_BY_USER\n',
     );
-    assert.ok(events.every((event) => event.kind !== 'return'));
+    assert.ok(
+      events.every(
+        (event) =>
+          event.kind !== 'return' || event.symbolId !== 'main.cjs:fail',
+      ),
+      'A throwing function must not be recorded as returning normally',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript return interrupted by a throwing finally is not recorded as a completed return', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'function calculate() {',
+      '  try { return 12; }',
+      '  finally { throw new Error("OVERRIDE"); }',
+      '}',
+      'try { calculate(); } catch (error) { console.log(error.message); }',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const invocation = events.find(
+      (event) =>
+        event.kind === 'enter' && event.symbolId === 'main.cjs:calculate',
+    );
+    assert.ok(invocation);
+    assert.ok(
+      events.some(
+        (event) => event.kind === 'throw' && event.callId === invocation.callId,
+      ),
+    );
+    assert.equal(
+      events.some(
+        (event) =>
+          event.kind === 'return' && event.callId === invocation.callId,
+      ),
+      false,
+    );
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'OVERRIDE\n',
+    );
   } finally {
     await f.close();
   }
