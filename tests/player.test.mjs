@@ -78,8 +78,8 @@ test('player renders evidence safely and Previous/seek restore local state', asy
   try {
     const { window } = dom;
     window.replayState = replayState;
-  window.sourceLexicalStates = sourceLexicalStates;
-  window.tokenizeSourceLine = tokenizeSourceLine;
+    window.sourceLexicalStates = sourceLexicalStates;
+    window.tokenizeSourceLine = tokenizeSourceLine;
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
@@ -192,10 +192,12 @@ test('studio search, bookmarks, keyboard tabs and breakpoints preserve replay st
     const { window } = dom,
       get = (id) => window.document.getElementById(id);
     window.replayState = replayState;
+    window.sourceLexicalStates = sourceLexicalStates;
+    window.tokenizeSourceLine = tokenizeSourceLine;
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
-    window.eval(source.replace(/^import .*;\r?\n/, ''));
+    window.eval(source.replace(/^import .*;\r?\n/gm, ''));
     for (let i = 0; i < 20 && get('progress').textContent !== '0 / 3'; i++)
       await new Promise((r) => setTimeout(r, 5));
     const visibleRows = () => [
@@ -400,10 +402,12 @@ test('source-first playback follows nested calls, restores parent locals, and re
     const { window } = dom;
     const get = (id) => window.document.getElementById(id);
     window.replayState = replayState;
+    window.sourceLexicalStates = sourceLexicalStates;
+    window.tokenizeSourceLine = tokenizeSourceLine;
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
-    window.eval(source.replace(/^import .*;\r?\n/, ''));
+    window.eval(source.replace(/^import .*;\r?\n/gm, ''));
     for (let i = 0; i < 40 && get('progress').textContent !== '0 / 8'; i++)
       await new Promise((r) => setTimeout(r, 5));
     assert.equal(get('flow-panel').id, 'flow-panel');
@@ -591,10 +595,12 @@ test('interleaved tasks compare local changes with the previous snapshot of the 
     const { window } = dom;
     const get = (id) => window.document.getElementById(id);
     window.replayState = replayState;
+    window.sourceLexicalStates = sourceLexicalStates;
+    window.tokenizeSourceLine = tokenizeSourceLine;
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
-    window.eval(source.replace(/^import .*;\r?\n/, ''));
+    window.eval(source.replace(/^import .*;\r?\n/gm, ''));
     for (let i = 0; i < 40 && get('progress').textContent !== '0 / 5'; i++)
       await new Promise((r) => setTimeout(r, 5));
 
