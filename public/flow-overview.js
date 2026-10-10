@@ -1,3 +1,5 @@
+import { plainTerminalText } from './terminal-text.js';
+
 // Match a call with its adjacent entry only when ancestry and async context
 // agree. Neighboring events can otherwise belong to unrelated tasks.
 function matchedEntry(call, entry) {
@@ -141,7 +143,7 @@ export function describeFlowTransition(item) {
     case 'return':
       return `${symbol} → ${item.hasResult ? briefValue(item.result) : 'return'}${item.parent ? ' → ' + item.parent : ''}`;
     case 'console':
-      return `${symbol} → ${item.stream === 'stderr' ? 'stderr' : 'output'} ${briefValue(item.output)}`;
+      return `${symbol} → ${item.stream === 'stderr' ? 'stderr' : 'output'} ${briefValue(plainTerminalText(item.output))}`;
     case 'throw':
       return `${symbol} → exception: ${item.label ?? 'unresolved'}`;
     default:

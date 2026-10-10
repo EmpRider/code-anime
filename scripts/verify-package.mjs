@@ -25,6 +25,7 @@ try {
   for (const path of [
     'dist/index.js',
     'dist/recording/python-recorder.py',
+    'dist/recording/node-recorder.mjs',
     'public/index.html',
     'public/player.js',
     'public/styles.css',
@@ -146,6 +147,52 @@ try {
   ).json();
   assert.equal(
     recordedFlow.trace.events
+      .filter((event) => event.kind === 'console')
+      .map((event) => event.output)
+      .join(''),
+    '30\n',
+  );
+  await writeFile(
+    join(project, 'runtime.cjs'),
+    'function add(a, b) { return a + b; }\nconsole.log(add(10, 20));\n',
+  );
+  const javascriptJob = await recordCall({
+    action: 'start',
+    language: 'javascript',
+    projectRoot: project,
+    entry: 'runtime.cjs',
+  });
+  let javascriptRecording;
+  for (let i = 0; i < 200; i++) {
+    javascriptRecording = await recordCall({
+      action: 'status',
+      jobId: javascriptJob.jobId,
+    });
+    if (!['running', 'saving'].includes(javascriptRecording.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.equal(
+    javascriptRecording.status,
+    'ready',
+    JSON.stringify(javascriptRecording),
+  );
+  assert.equal(javascriptRecording.complete, true);
+  const javascriptFlow = await (
+    await fetch(
+      new URL(
+        '/api/flow/' + javascriptRecording.sessionId,
+        javascriptRecording.url,
+      ),
+    )
+  ).json();
+  assert.equal(javascriptFlow.trace.provider, 'node-v8-inspector');
+  assert.ok(
+    javascriptFlow.trace.events.some(
+      (event) => event.kind === 'enter' && event.symbolId === 'runtime.cjs:add',
+    ),
+  );
+  assert.equal(
+    javascriptFlow.trace.events
       .filter((event) => event.kind === 'console')
       .map((event) => event.output)
       .join(''),

@@ -8,6 +8,7 @@ import {
 } from '../public/flow-overview.js';
 import { replayState } from '../public/replay.js';
 import { prepareSourceHighlighting } from '../public/source-highlighter.js';
+import { plainTerminalText } from '../public/terminal-text.js';
 
 test('large object inspectors load bounded pages and retain disclosure through historical replay', async () => {
   const [html, source] = await Promise.all([
@@ -64,6 +65,7 @@ test('large object inspectors load bounded pages and retain disclosure through h
     window.prepareSourceHighlighting = prepareSourceHighlighting;
     window.buildFlowOverview = buildFlowOverview;
     window.describeFlowTransition = describeFlowTransition;
+    window.plainTerminalText = plainTerminalText;
     let requests = 0;
     window.fetch = async () => {
       requests++;

@@ -1,6 +1,7 @@
 import { replayState } from './replay.js';
 import { prepareSourceHighlighting } from './source-highlighter.js';
 import { buildFlowOverview, describeFlowTransition } from './flow-overview.js';
+import { plainTerminalText } from './terminal-text.js';
 const $ = (id) => document.getElementById(id);
 let flow, originalFlow, timer, animation;
 let cursor = 0;
@@ -947,7 +948,7 @@ function renderConsole() {
     .map((e) => e.output)
     .join(flow.trace?.recording ? '' : '\n');
   if (value !== lastConsoleText) {
-    $('console-output').textContent = value;
+    $('console-output').textContent = plainTerminalText(value);
     lastConsoleText = value;
   }
   $('console-count').textContent = lo + ' events';

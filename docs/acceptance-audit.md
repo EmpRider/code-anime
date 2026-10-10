@@ -2,7 +2,8 @@
 
 Checkpoint: 2026-10-10, branch `codex/execution-visualizer-improvements`.
 Multilingual source highlighting, a persisted branching-tree performance
-fixture, and a recorded five-iteration Python loop are covered by tests.
+fixture, recorded Python execution, and experimental Node.js JavaScript
+recording are covered by tests.
 
 Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
@@ -21,15 +22,26 @@ about future changes.
    30 calls; `tests/recording.test.ts` covers recursion, linked chunks, timeout,
    cancellation, and infinite execution. Runtime recursion still obeys Python's
    runtime limit. These tests do not prove arbitrary unbounded execution.
-2. **Focus on user code — implemented for the recorded Python scope.**
-   The runtime fixture crosses user files and excludes dependency internals.
-   `tests/recording.test.ts` verifies user-file events. Broad framework callback
-   coverage and generated infrastructure filtering remain unverified.
+2. **Focus on user code — implemented for tested Python and JavaScript scope.**
+   Recorded fixtures cross user files; the JavaScript V8 Inspector adapter
+   excludes Node runtime and dependency frames. `tests/recording.test.ts`
+   verifies user-file entries. Broad framework callback coverage, generated
+   infrastructure filtering, and worker-thread coverage remain unverified.
 3. **Understand entry through completion — partial.**
-   Recording tests exercise calls, locals, returns, loops, branches, exceptions,
-   generators, and asyncio. Evidence labels distinguish observed recordings from
-   CodeGraph structure and AI simulation. Representative end-to-end scenarios
-   across all advertised provider languages remain unverified.
+   Python recording tests exercise calls, locals, returns, loops, branches,
+   exceptions, generators, and asyncio. JavaScript tests now cover CommonJS and
+   ES modules, debugger-observed nested calls and locals, loops, 37 levels of
+   recursion, timers, output, nonzero exit, and event-budget truncation.
+   V8-reported JavaScript throws and entry into catch scopes are now tested as
+   observed events for caught and uncaught exceptions. JavaScript return values
+   and frame-exit causes are still explicitly unresolved;
+   Concurrent repeated awaits, loop awaits, async recursion, and nested
+   same-argument awaited calls now have invocation-identity regressions. These
+   use V8-visible async ancestry to keep resumed parent and child invocations
+   distinct. Arbitrary asynchronous execution and other languages remain incomplete.
+   Evidence labels distinguish observed recording from CodeGraph and simulation.
+   Captured JavaScript stdout remains unchanged in the saved trace; the browser
+   removes ANSI control sequences only when displaying plain text.
 4. **Preprocess before playback — implemented.**
    `src/services/animation-builder.ts` and `recording-service.ts` persist prepared
    data. `public/player.js` fetches saved flow/continuation data during replay.
@@ -96,8 +108,9 @@ about future changes.
     original loop-body line, the exact historical `i` and `sum` values,
     reverse navigation, and final console output `15` from observed execution.
     Runtime event snapshots here describe values _before_ executing each line;
-    the updated sum appears on the following event. Broader loop semantics
-    across supported languages remain unverified.
+    the updated sum appears on the following event. A CommonJS V8 Inspector
+    regression additionally checks each `i=0..3` loop value across a repeated
+    source line. Broader loop semantics remain unverified.
 14. **Playback/debugger controls — implemented, bounded verification.**
     Player tests cover reverse, seek, step-over/out, breakpoints, continuation,
     and async invocation semantics. Browser tests cover playback controls.
@@ -190,12 +203,15 @@ about future changes.
     Extend request assertions to all ordinary controls for behavioral acceptance.
 29. **Existing language compatibility — partial.**
     Shared frontend and CodeGraph-backed simulation remain language-independent.
-    Observed recording is Python-only. The optional real CodeGraph integration
-    test passed against an indexed Kotlin fixture on Windows with the default
-    npm CLI PATH launcher. It verifies structural relationships, ambiguous
-    overload handling, index prerequisites, and refinements. Structural analysis
-    does not establish recorded Kotlin execution semantics. Establish the
-    supported-language inventory and broader representative evidence.
+    Observed recording is implemented for Python and experimentally for
+    Node.js JavaScript through V8 Inspector. JavaScript coverage includes
+    verified recursive calls, ES modules, timer callbacks, caught/uncaught throws,
+    catch-handler entry, output and budgets,
+    but does not establish precise return values or all async behavior. The
+    optional real CodeGraph integration test previously passed against an
+    indexed Kotlin fixture on Windows with the default npm CLI launcher.
+    Structural analysis does not establish Kotlin runtime recording. Establish
+    the full supported-language inventory and representative runtime evidence.
 30. **Single execution state — implemented, bounded verification.**
     `replayState()` and the cursor drive stack, locals, source, console, and flow.
     Continuation tests check historical state and scenario isolation. Recorded
@@ -211,8 +227,8 @@ about future changes.
     Analysis, shared events, hierarchical disclosure, source replay, synchronization,
     layout, performance, and tests exist, but stages are not all accepted.
 34. **Preserve working functionality — tested at checkpoint.**
-    Core, browser, and package delivery gates are rerun after each substantial
-    batch. Recheck all gates for the final candidate before pushing.
+    Core, browser, and package delivery gates pass for this checkpoint.
+    Recheck affected gates after any further changes.
 35. **Ten functional acceptance scenarios — incomplete as a set.**
     Existing tests cover portions of each scenario, including deep recursion and
     safe unbounded execution. Recorded nested disclosure and five-iteration
@@ -231,17 +247,33 @@ about future changes.
 
 ## Checkpoint verification
 
-- `npm run check`: typecheck, 85 core tests, build, and Prettier passed;
-  one optional live CodeGraph integration test skipped.
-- `npm run test:browser`: 26 passed, including paired-call, recorded
+- `npm run check`: typecheck, 103 core tests (102 passed, one optional live
+  CodeGraph integration test skipped), build, and Prettier passed.
+- `npm run test:browser`: 27 passed, including paired-call, recorded
   execution-path, separate console writes, overview rewind, and persisted
   five-session continuation-chain coverage.
-  continuation-chain fixture. Browser coverage includes recorded nested disclosure,
+  Browser coverage includes recorded nested disclosure,
   repeated simulated invocations, recorded continuation preservation, deep
   simulated recursion, keyboard pagination, multiline lexical state, virtualized
   source continuity, real five-iteration loop playback, and mobile layouts.
+  JavaScript recording also verifies source, local values, ANSI-decorated output
+  display, and reverse seeking without rewriting recorded stdout.
 - `npm run package:check`: packed CLI installation, MCP handshake, player assets,
-  and stored flow API passed for the current candidate.
+  and stored flow API passed, including both Python and JavaScript observed
+  recordings through the installed package.
+- `tests/recording.test.ts`: JavaScript regressions also cover repeated
+  source-line visits with identical visible locals, debugger-observed throw
+  values on caught and uncaught errors, and catch-scope entry, alongside
+  cross-file calls/values, 37 recursive invocations via ESM, an explicitly
+  truncated event budget and a timer callback.
+  Four additional async regressions cover repeated concurrent awaits,
+  awaited loop iterations, async recursion, and concurrent identical arguments
+  passed through nested awaited functions. A transient debugger-disconnect
+  failure occurred in one timer test run; the isolated rerun and complete
+  `npm run check` passed. Stress and shutdown-race coverage remains open.
+  A previously flaky timeout assertion now allows enough interpreter startup
+  time during concurrent suite execution, while still verifying timeout and
+  partial-trace semantics.
 - `tests/flow-overview.test.mjs`: eight focused cases verify event-to-overview
   transitions, input and return values, nesting, caller call-site timing,
   independently recorded Python task console streams, and rejecting misleading
@@ -253,27 +285,29 @@ about future changes.
   confirmed rejection without an index, then verified PATH-discovered CLI
   transport, a provider-only trace, refinement, and ambiguous target selection.
   This does not establish live runtime tracing for Kotlin.
-- Both JSDOM player suites exercise the module-imported stateful lexer; 26
-  player and continuation tests passed after updating the JSDOM import harness.
+- The player, continuation, and value-inspection JSDOM suites pass with the
+  terminal-display helper injected into their module import harness.
+  A dedicated helper regression checks ANSI SGR and OSC stripping while
+  preserving the raw recorded output string.
 - Additional focused lexer regressions cover multiline/nested JavaScript template
   interpolations, escaped interpolation markers, single-line Rust raw strings,
   and empty source windows. Browser coverage checks embedded code tokens and
   subsequent statements; comprehensive syntax grammar remains unverified.
 - A separate persisted branching browser trace uses 300 child invocations and
   1,502 events, with independent nested disclosure and paged expansion; its
-  seek fixture reported p95 20.1 ms, excluding paint and network. This is
+  seek fixture reported p95 31.6 ms, excluding paint and network. This is
   bounded evidence for one stored session, not long continuation chains.
 - Five linked persisted synthetic sessions (7,503 events; 1,500 child
   invocations) loaded successfully in a focused Playwright test. A post-load
-  seek sample reported p95 27.5 ms, excluding paint and network. The browser
+  seek sample reported p95 37.3 ms, excluding paint and network. The browser
   inspected the final child invocation, restored earlier console state, and
   made no extra flow requests during already-loaded playback. This is bounded
   evidence of the stored continuation path, not recorded program performance.
 - The 20,000-event synthetic single-invocation browser fixture reported seek
-  p50 12.8 ms and p95 19.0 ms, excluding paint and network. These figures do
+  p50 14.0 ms and p95 17.6 ms, excluding paint and network. These figures do
   not verify performance for broad or deep trees.
 - `git diff --check`: passed with no whitespace errors.
-- Large object inspector behavior also passed the full 25-test browser suite;
+- Large object inspector behavior also passed the full 27-test browser suite;
   broader rendered accessibility and memory profiling remain open.
 
 ## Next implementation order

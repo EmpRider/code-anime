@@ -12,7 +12,7 @@ import { EventJournal } from '../storage/event-journal.js';
 const startSchema = z
   .object({
     action: z.literal('start'),
-    language: z.literal('python'),
+    language: z.enum(['python', 'javascript']),
     projectRoot: z.string().min(1),
     entry: z.string().min(1),
     args: z.array(z.string().max(4096)).max(100).default([]),
@@ -77,8 +77,15 @@ export class RecordingService {
     const within = relative(input.projectRoot, entry);
     if (within === '..' || within.startsWith('..' + sep) || isAbsolute(within))
       throw new Error('Entry must be inside projectRoot');
-    if (!entry.endsWith('.py') || !(await stat(entry)).isFile())
-      throw new Error('Entry must be a Python source file');
+    const extensions =
+      input.language === 'python' ? ['.py'] : ['.js', '.mjs', '.cjs'];
+    if (
+      !extensions.some((ext) => entry.endsWith(ext)) ||
+      !(await stat(entry)).isFile()
+    )
+      throw new Error(
+        `Entry must be a ${input.language} source file (${extensions.join(', ')})`,
+      );
     if (this.closed) throw new Error('Recorder is closed');
     for (const [id, job] of this.jobs)
       if (
@@ -157,14 +164,21 @@ export class RecordingService {
     let pending = '';
     let stderr = '';
     let sourceBytes = 0;
+    const python = input.language === 'python';
     const child = spawn(
-      process.env.CODE_ANIME_PYTHON_COMMAND ||
-        (process.platform === 'win32' ? 'python' : 'python3'),
+      python
+        ? process.env.CODE_ANIME_PYTHON_COMMAND ||
+            (process.platform === 'win32' ? 'python' : 'python3')
+        : process.execPath,
       [
-        '-B',
-        '-u',
+        ...(python ? ['-B', '-u'] : []),
         fileURLToPath(
-          new URL('../recording/python-recorder.py', import.meta.url),
+          new URL(
+            python
+              ? '../recording/python-recorder.py'
+              : '../recording/node-recorder.mjs',
+            import.meta.url,
+          ),
         ),
         input.projectRoot,
         entry,
@@ -265,7 +279,7 @@ export class RecordingService {
         job.stopReason ||
           completion?.reason ||
           stderr ||
-          'Python recorder produced no events',
+          `${input.language} recorder produced no events`,
       );
     job.status = 'saving';
     const complete = Boolean(
@@ -273,7 +287,7 @@ export class RecordingService {
     );
     const diagnostics = [
       completion?.coverage ||
-        'Partial synchronous Python recording; missing completion metadata. Values are bounded snapshots.',
+        `Partial ${input.language} recording; missing completion metadata. Values are bounded snapshots.`,
       ...(job.stopReason ? [job.stopReason] : []),
       ...(completion?.reason ? [completion.reason] : []),
       ...(!completion ? ['Recorder terminated before completion'] : []),
@@ -281,7 +295,7 @@ export class RecordingService {
     ];
     const trace: Trace = {
       version: 2,
-      provider: 'python-sys.settrace',
+      provider: python ? 'python-sys.settrace' : 'node-v8-inspector',
       projectRoot: input.projectRoot,
       target: input.entry,
       scenario: { args: input.args },
@@ -296,7 +310,7 @@ export class RecordingService {
       cacheHits: 0,
       recording: {
         mode: 'runtime',
-        language: 'python',
+        language: input.language,
         runId: job.id,
         complete,
         coverage: diagnostics.join('\n'),

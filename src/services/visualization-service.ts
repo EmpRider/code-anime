@@ -92,16 +92,15 @@ export class VisualizationService {
       tools: 11,
       runtimeRecording: {
         tool: 'record_execution',
-        languages: ['python'],
+        languages: ['python', 'javascript'],
         scope:
-          'Opt-in execution of main-thread Python user code, including generators and asyncio task transitions; real local side effects. Concurrent threads are unsupported. No CodeGraph required for runtime recording.',
+          'Opt-in Python or Node.js JavaScript runtime recording with real local side effects. Python records generators/asyncio; JavaScript records V8 Inspector source steps, parameters, bounded locals and output. JavaScript return values and worker threads are outside the observed scope. No CodeGraph required for runtime recording.',
         unsupported: [
-          'generators',
-          'coroutines',
           'other threads/processes',
           'native internals',
           'binary output',
           'opaque object internals',
+          'JavaScript return values and exact asynchronous output-to-line timing',
         ],
         pythonCommand:
           process.env.CODE_ANIME_PYTHON_COMMAND ||

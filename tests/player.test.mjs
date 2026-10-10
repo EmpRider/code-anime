@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 import { replayState } from '../public/replay.js';
 import { prepareSourceHighlighting } from '../public/source-highlighter.js';
+import { plainTerminalText } from '../public/terminal-text.js';
 import {
   buildFlowOverview,
   describeFlowTransition,
@@ -82,6 +83,7 @@ test('player renders evidence safely and Previous/seek restore local state', asy
     window.prepareSourceHighlighting = prepareSourceHighlighting;
     window.buildFlowOverview = buildFlowOverview;
     window.describeFlowTransition = describeFlowTransition;
+    window.plainTerminalText = plainTerminalText;
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
@@ -197,6 +199,7 @@ test('studio search, bookmarks, keyboard tabs and breakpoints preserve replay st
     window.prepareSourceHighlighting = prepareSourceHighlighting;
     window.buildFlowOverview = buildFlowOverview;
     window.describeFlowTransition = describeFlowTransition;
+    window.plainTerminalText = plainTerminalText;
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
@@ -408,6 +411,7 @@ test('source-first playback follows nested calls, restores parent locals, and re
     window.prepareSourceHighlighting = prepareSourceHighlighting;
     window.buildFlowOverview = buildFlowOverview;
     window.describeFlowTransition = describeFlowTransition;
+    window.plainTerminalText = plainTerminalText;
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
@@ -634,6 +638,7 @@ test('interleaved tasks compare local changes with the previous snapshot of the 
     window.prepareSourceHighlighting = prepareSourceHighlighting;
     window.buildFlowOverview = buildFlowOverview;
     window.describeFlowTransition = describeFlowTransition;
+    window.plainTerminalText = plainTerminalText;
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};

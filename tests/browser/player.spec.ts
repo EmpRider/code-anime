@@ -3,6 +3,7 @@ import { startRuntime } from '../../src/runtime.js';
 import { readConfig } from '../../src/config.js';
 import type { TraceEvent } from '../../src/domain/trace.js';
 import { traceToFlow } from '../../src/analysis/contract.js';
+import { plainTerminalText } from '../../public/terminal-text.js';
 import { RecordingService } from '../../src/services/recording-service.js';
 import { realpath } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -1103,6 +1104,77 @@ test('actual Python recording replays across chunks with exact output and revers
     );
     await page.locator('#previous').click();
     await expect(page.locator('#local-tree')).toContainText(String(before));
+    expect(errors).toEqual([]);
+  } finally {
+    recorder.close();
+  }
+});
+
+test('observed JavaScript recording replays actual source lines, locals and output', async ({
+  page,
+}) => {
+  const recorder = new RecordingService(
+    runtime.store,
+    runtime.baseUrl,
+    realpath,
+  );
+  try {
+    const started = await recorder.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: fileURLToPath(
+        new URL('../fixtures/runtime/', import.meta.url),
+      ),
+      entry: 'node-main.cjs',
+    });
+    let status = started;
+    await expect
+      .poll(async () => {
+        status = await recorder.run({ action: 'status', jobId: started.jobId });
+        return status.status;
+      })
+      .toBe('ready');
+    expect(status.complete).toBe(true);
+    const recorded = (await runtime.store.get(status.sessionId!))!.flow.trace!;
+    const entryIndex = recorded.events.findIndex(
+      (event) =>
+        event.kind === 'enter' && event.symbolId === 'node-main.cjs:add',
+    );
+    expect(entryIndex).toBeGreaterThanOrEqual(0);
+    let chunk = await runtime.store.get(status.sessionId!);
+    let stdout = '';
+    while (chunk) {
+      for (const event of chunk.flow.trace!.events)
+        if (event.kind === 'console' && event.values?.stream === 'stdout')
+          stdout += event.output ?? '';
+      chunk = await runtime.store.next(chunk.id);
+    }
+    // The trace retains the bytes emitted by Node, including ANSI colors.
+    // The browser only strips terminal formatting during presentation.
+    expect(plainTerminalText(stdout)).toBe('30 6\n');
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(status.url!);
+    await expect(page.locator('#evidence-mode')).toHaveText(
+      'Recorded execution',
+    );
+    await page.locator('#timeline').fill(String(entryIndex + 1));
+    await expect(page.locator('#source')).toHaveText('node-main.cjs');
+    await expect(page.locator('.executing-line')).toHaveAttribute(
+      'data-line',
+      '2',
+    );
+    await expect(page.locator('#local-tree')).toContainText('a: 10');
+    await expect(page.locator('#local-tree')).toContainText('b: 20');
+    await expect(page.locator('#console-output')).toHaveText('');
+    const maximum = Number(await page.locator('#timeline').getAttribute('max'));
+    await page.locator('#timeline').fill(String(maximum));
+    // Playwright's color environment may append a Node warning on stderr.
+    // The recorded stdout event above verifies the exact bytes separately.
+    await expect(page.locator('#console-output')).toContainText('30 6');
+    await page.locator('#timeline').fill(String(entryIndex + 1));
+    await expect(page.locator('#console-output')).toHaveText('');
+    await expect(page.locator('#local-tree')).toContainText('a: 10');
     expect(errors).toEqual([]);
   } finally {
     recorder.close();

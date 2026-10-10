@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { JSDOM } from 'jsdom';
 import { replayState } from '../public/replay.js';
 import { prepareSourceHighlighting } from '../public/source-highlighter.js';
+import { plainTerminalText } from '../public/terminal-text.js';
 import {
   buildFlowOverview,
   describeFlowTransition,
@@ -100,6 +101,7 @@ async function createPlayer(loadContinuation, first = initial()) {
   window.prepareSourceHighlighting = prepareSourceHighlighting;
   window.buildFlowOverview = buildFlowOverview;
   window.describeFlowTransition = describeFlowTransition;
+  window.plainTerminalText = plainTerminalText;
   window.matchMedia = () => ({ matches: true });
   window.HTMLElement.prototype.scrollIntoView = () => {};
   window.fetch = async (url) => {

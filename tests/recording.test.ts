@@ -54,6 +54,13 @@ async function allEvents(store: FileSessionStore, sessionId: string) {
   return { events, chunks };
 }
 
+function localValue(event: TraceEvent, callId: string, name: string) {
+  const frame = event.locals?.[callId];
+  return frame && typeof frame === 'object'
+    ? (frame as Record<string, unknown>)[name]
+    : undefined;
+}
+
 test('records actual nested calls, loop states, executed branches, returns and console across files', async () => {
   const main = [
     'from helpers import add',
@@ -154,6 +161,819 @@ test('records actual nested calls, loop states, executed branches, returns and c
   }
 });
 
+test('records observed JavaScript calls, source steps, loop values and output across user files', async () => {
+  const main = [
+    "const { add } = require('./helper.cjs');",
+    'const answer = add(10, 20);',
+    'let total = 0;',
+    'for (let i = 0; i < 4; i++) total += i;',
+    'console.log(answer, total);',
+  ].join('\n');
+  const f = await fixture({
+    'main.cjs': main,
+    'helper.cjs':
+      'exports.add = function add(a, b) {\n  const sum = a + b;\n  return sum;\n};\n',
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+      maxEvents: 1000,
+      maxTraceBytes: 2 * 1024 * 1024,
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    assert.ok(events.length > 5);
+    assert.ok(events.every((event) => event.certainty === 'observed'));
+    const add = events.find(
+      (event) => event.kind === 'enter' && event.symbolId === 'helper.cjs:add',
+    );
+    assert.ok(add, 'Captured user-defined function call');
+    assert.equal(add.inputs?.a, 10);
+    assert.equal(add.inputs?.b, 20);
+    assert.ok(add.parentCallId);
+    assert.ok(
+      events.some(
+        (event) => event.kind === 'unresolved' && event.callId === add.callId,
+      ),
+      'A frame exit without an observed return value stays unresolved',
+    );
+    assert.equal(
+      events.some((event) => event.kind === 'return'),
+      false,
+    );
+    const lineVisits = events.filter(
+      (event) =>
+        event.kind === 'statement' &&
+        event.source?.file === 'main.cjs' &&
+        event.source.line === 4,
+    );
+    const iterations = lineVisits.map((event) => {
+      const current = event.locals?.[event.callId] as { i?: number };
+      return current?.i;
+    });
+    for (const i of [0, 1, 2, 3])
+      assert.ok(iterations.includes(i), `Missing iteration i=${i}`);
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      '30 6\n',
+    );
+    const saved = (await f.store.get(result.sessionId!))!.flow.trace!;
+    assert.equal(saved.recording?.language, 'javascript');
+    assert.equal(saved.provider, 'node-v8-inspector');
+    assert.equal(saved.sourceFiles?.['main.cjs'], main);
+    assert.match(saved.sourceFiles?.['helper.cjs'] ?? '', /function add/);
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript recording retains repeated loop visits with identical visible locals', async () => {
+  const f = await fixture({
+    'main.cjs':
+      'for (const value of [7, 7, 7, 7]) process.stdout.write(String(value));\n',
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const visits = events.filter(
+      (event) =>
+        event.kind === 'statement' &&
+        event.source?.file === 'main.cjs' &&
+        event.source.line === 1,
+    );
+    assert.ok(
+      visits.length >= 4,
+      'Each executed loop body needs its own source event',
+    );
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      '7777',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript call sites with identical visible state still trace each user invocation', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'function visit(value) {',
+      '  process.stdout.write(String(value));',
+      '}',
+      'for (const value of [7, 7, 7, 7]) visit(value);',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const invocations = events.filter(
+      (event) => event.kind === 'enter' && event.symbolId === 'main.cjs:visit',
+    );
+    assert.equal(invocations.length, 4, JSON.stringify(invocations));
+    assert.equal(new Set(invocations.map((event) => event.callId)).size, 4);
+    assert.ok(invocations.every((event) => event.inputs?.value === 7));
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      '7777',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript recording follows more than 30 nested user calls through an ES module', async () => {
+  const f = await fixture({
+    'main.mjs': [
+      'import { descend } from "./helper.mjs";',
+      'console.log(descend(36));',
+    ].join('\n'),
+    'helper.mjs': [
+      'export function descend(n) {',
+      '  if (n === 0) return 0;',
+      '  return descend(n - 1) + 1;',
+      '}',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.mjs',
+      maxEvents: 3000,
+      maxTraceBytes: 8 * 1024 * 1024,
+      timeoutMs: 20000,
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const descents = events.filter(
+      (event) =>
+        event.kind === 'enter' && event.symbolId === 'helper.mjs:descend',
+    );
+    assert.equal(descents.length, 37, 'Every recursive invocation is recorded');
+    assert.equal(new Set(descents.map((event) => event.callId)).size, 37);
+    assert.ok(descents.some((event) => event.inputs?.n === 0));
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      '36\n',
+    );
+    assert.equal(
+      events.some((event) => event.kind === 'return'),
+      false,
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript execution budget produces an explicitly incomplete saved trace', async () => {
+  const f = await fixture({
+    'main.cjs': 'let n = 0;\nwhile (n < 1000) {\n  n++;\n}\nconsole.log(n);\n',
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+      maxEvents: 30,
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, false);
+    assert.equal(result.eventCount, 30);
+    assert.match(result.diagnostics!.join(' '), /event budget/);
+    const saved = (await f.store.get(result.sessionId!))!.flow.trace!;
+    assert.equal(saved.truncated, true);
+    assert.ok(saved.events.every((event) => event.certainty === 'observed'));
+  } finally {
+    await f.close();
+  }
+});
+
+test('cancelling JavaScript recording preserves observed partial events', async () => {
+  const f = await fixture({
+    'main.cjs': 'let n = 0;\nwhile (true) {\n  n++;\n}\n',
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+      timeoutMs: 15000,
+      maxEvents: 100000,
+    });
+    let observed = 0;
+    for (let i = 0; i < 300; i++) {
+      const state = await f.service.run({ action: 'status', jobId: job.jobId });
+      if (state.status === 'failed') throw new Error(state.error);
+      observed = state.eventCount;
+      if (observed >= 3) break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.ok(observed >= 3, 'Capture initial events before cancellation');
+    await f.service.run({ action: 'cancel', jobId: job.jobId });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, false);
+    assert.match(result.diagnostics!.join(' '), /cancelled/);
+    const { events } = await allEvents(f.store, result.sessionId!);
+    assert.ok(events.length >= 3);
+    assert.ok(events.every((event) => event.certainty === 'observed'));
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript async callbacks retain observed events and console output', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'function onTimer() {',
+      '  const answer = 42;',
+      '  console.log(answer);',
+      '}',
+      'setTimeout(onTimer, 1);',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    assert.ok(
+      events.some(
+        (event) =>
+          event.kind === 'enter' && event.symbolId === 'main.cjs:onTimer',
+      ),
+    );
+    assert.ok(
+      events.some(
+        (event) => event.kind === 'statement' && event.source?.line === 3,
+      ),
+    );
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      '42\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript async functions retain invocation identity across awaits', async () => {
+  const f = await fixture({
+    'main.mjs': [
+      'async function worker(label) {',
+      '  const name = label;',
+      '  await Promise.resolve();',
+      '  const result = name + "!";',
+      '  console.log(result);',
+      '}',
+      'await Promise.all([worker("A"), worker("B")]);',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.mjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const workers = events.filter(
+      (event) => event.kind === 'enter' && event.symbolId === 'main.mjs:worker',
+    );
+    assert.equal(workers.length, 2, JSON.stringify(workers));
+    assert.deepEqual(
+      workers.map((event) => event.inputs?.label),
+      ['A', 'B'],
+      JSON.stringify(
+        events.map((event) => ({
+          kind: event.kind,
+          symbol: event.symbolId,
+          callId: event.callId,
+          line: event.source?.line,
+          label: event.inputs?.label,
+          value: localValue(event, event.callId, 'label'),
+        })),
+      ),
+    );
+    for (const worker of workers) {
+      const steps = events.filter(
+        (event) => event.kind === 'statement' && event.callId === worker.callId,
+      );
+      assert.ok(steps.some((event) => event.source?.line === 4));
+      assert.ok(steps.some((event) => event.source?.line === 5));
+    }
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'A!\nB!\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('concurrent JavaScript invocations retain identity across repeated awaits', async () => {
+  const f = await fixture({
+    'main.mjs': [
+      'async function worker(label) {',
+      '  let value = label;',
+      '  await Promise.resolve();',
+      '  value += "1";',
+      '  await Promise.resolve();',
+      '  value += "2";',
+      '  console.log(value);',
+      '}',
+      'await Promise.all([worker("A"), worker("B")]);',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.mjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const workers = events.filter(
+      (event) => event.kind === 'enter' && event.symbolId === 'main.mjs:worker',
+    );
+    assert.deepEqual(
+      workers.map((event) => event.inputs?.label),
+      ['A', 'B'],
+    );
+    assert.equal(new Set(workers.map((event) => event.callId)).size, 2);
+    for (const worker of workers) {
+      const steps = events.filter(
+        (event) => event.kind === 'statement' && event.callId === worker.callId,
+      );
+      assert.ok(steps.some((event) => event.source?.line === 4));
+      assert.ok(steps.some((event) => event.source?.line === 6));
+      assert.ok(steps.some((event) => event.source?.line === 7));
+      assert.ok(
+        steps.every(
+          (event) =>
+            localValue(event, worker.callId, 'label') === worker.inputs?.label,
+        ),
+      );
+      assert.equal(
+        events.filter(
+          (event) => event.kind === 'resume' && event.callId === worker.callId,
+        ).length,
+        2,
+      );
+    }
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'A12\nB12\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript awaits inside loops preserve each invocation and iteration', async () => {
+  const f = await fixture({
+    'main.mjs': [
+      'async function worker(label) {',
+      '  let value = label;',
+      '  for (let i = 0; i < 3; i++) {',
+      '    await Promise.resolve();',
+      '    value += i;',
+      '  }',
+      '  console.log(value);',
+      '}',
+      'await Promise.all([worker("A"), worker("B")]);',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.mjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const workers = events.filter(
+      (event) => event.kind === 'enter' && event.symbolId === 'main.mjs:worker',
+    );
+    assert.equal(
+      workers.length,
+      2,
+      JSON.stringify(
+        events.map((e) => [e.kind, e.callId, e.source?.line, e.inputs?.label]),
+      ),
+    );
+    for (const worker of workers) {
+      const iterations = events.filter(
+        (event) =>
+          event.kind === 'statement' &&
+          event.callId === worker.callId &&
+          event.source?.line === 5,
+      );
+      assert.deepEqual(
+        iterations.map((event) => localValue(event, worker.callId, 'i')),
+        [0, 1, 2],
+      );
+      assert.ok(
+        iterations.every(
+          (event) =>
+            localValue(event, worker.callId, 'label') === worker.inputs?.label,
+        ),
+      );
+      assert.equal(
+        events.filter(
+          (event) => event.kind === 'resume' && event.callId === worker.callId,
+        ).length,
+        3,
+      );
+    }
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'A012\nB012\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript nested and recursive async calls retain independent invocation IDs', async () => {
+  const f = await fixture({
+    'main.mjs': [
+      'async function descend(n) {',
+      '  if (n === 0) return 0;',
+      '  await Promise.resolve();',
+      '  const next = await descend(n - 1);',
+      '  return next + 1;',
+      '}',
+      'console.log(await descend(4));',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.mjs',
+      maxEvents: 3000,
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const enters = events.filter(
+      (event) =>
+        event.kind === 'enter' && event.symbolId === 'main.mjs:descend',
+    );
+    assert.deepEqual(
+      enters.map((event) => event.inputs?.n),
+      [4, 3, 2, 1, 0],
+      JSON.stringify(
+        events.map((e) => [e.kind, e.callId, e.source?.line, e.inputs?.n]),
+      ),
+    );
+    assert.equal(new Set(enters.map((event) => event.callId)).size, 5);
+    for (const enter of enters.filter((event) => Number(event.inputs?.n) > 0)) {
+      assert.ok(
+        events.some(
+          (event) =>
+            event.kind === 'statement' &&
+            event.callId === enter.callId &&
+            event.source?.line === 5,
+        ),
+        `Missing resumed frame for n=${enter.inputs?.n}`,
+      );
+    }
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      '4\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript concurrent same-argument calls stay distinct through nested awaited calls', async () => {
+  const f = await fixture({
+    'main.mjs': [
+      'async function inner(label) {',
+      '  await Promise.resolve();',
+      '  const result = label + "!";',
+      '  return result;',
+      '}',
+      'async function outer(label) {',
+      '  const result = await inner(label);',
+      '  console.log(result);',
+      '}',
+      'await Promise.all([outer("same"), outer("same")]);',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.mjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const outerCalls = events.filter(
+      (event) => event.kind === 'enter' && event.symbolId === 'main.mjs:outer',
+    );
+    const innerCalls = events.filter(
+      (event) => event.kind === 'enter' && event.symbolId === 'main.mjs:inner',
+    );
+    assert.deepEqual(
+      innerCalls.map((event) => event.parentCallId),
+      outerCalls.map((event) => event.callId),
+    );
+    for (const outer of outerCalls) {
+      assert.equal(
+        events.filter(
+          (event) => event.kind === 'await' && event.callId === outer.callId,
+        ).length,
+        1,
+      );
+      assert.equal(
+        events.filter(
+          (event) => event.kind === 'resume' && event.callId === outer.callId,
+        ).length,
+        1,
+      );
+    }
+    for (const symbol of ['outer', 'inner']) {
+      const enters = events.filter(
+        (event) =>
+          event.kind === 'enter' && event.symbolId === `main.mjs:${symbol}`,
+      );
+      assert.equal(
+        enters.length,
+        2,
+        JSON.stringify(
+          events.map((e) => [e.kind, e.symbolId, e.callId, e.source?.line]),
+        ),
+      );
+      assert.equal(new Set(enters.map((event) => event.callId)).size, 2);
+      assert.ok(enters.every((event) => event.inputs?.label === 'same'));
+      for (const enter of enters) {
+        assert.ok(
+          events.some(
+            (event) =>
+              event.kind === 'statement' &&
+              event.callId === enter.callId &&
+              event.source?.line === (symbol === 'outer' ? 8 : 4),
+          ),
+          JSON.stringify(
+            events.map((e) => [
+              e.kind,
+              e.symbolId,
+              e.callId,
+              e.source?.line,
+              e.inputs?.label,
+              localValue(e, e.callId, 'label'),
+            ]),
+          ),
+        );
+      }
+    }
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'same!\nsame!\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript uncaught errors preserve the observed throw and remain incomplete', async () => {
+  const f = await fixture({
+    'main.cjs': 'function fail() {\n  throw new Error("BOOM");\n}\nfail();\n',
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, false);
+    assert.match(result.diagnostics!.join(' '), /exited with code/);
+    const { events } = await allEvents(f.store, result.sessionId!);
+    assert.ok(
+      events.some(
+        (event) => event.kind === 'enter' && event.symbolId === 'main.cjs:fail',
+      ),
+    );
+    assert.ok(events.every((event) => event.kind !== 'return'));
+    const thrown = events.filter((event) => event.kind === 'throw');
+    assert.equal(thrown.length, 1);
+    assert.equal(thrown[0]!.symbolId, 'main.cjs:fail');
+    assert.equal(thrown[0]!.source?.line, 2);
+    assert.match(JSON.stringify(thrown[0]!.result), /BOOM/);
+    assert.ok(
+      events.some(
+        (event) =>
+          event.kind === 'console' && event.values?.stream === 'stderr',
+      ),
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript caught exception records the observed throw and still follows the catch handler', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'function fail() {',
+      '  throw new Error("CAUGHT_BY_USER");',
+      '}',
+      'try {',
+      '  fail();',
+      '} catch (error) {',
+      '  console.log(error.message);',
+      '}',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const thrown = events.filter(
+      (event) => event.kind === 'throw' && event.symbolId === 'main.cjs:fail',
+    );
+    assert.equal(thrown.length, 1, 'Capture the actual exception once');
+    assert.equal(thrown[0]!.source?.line, 2);
+    assert.equal(thrown[0]!.certainty, 'observed');
+    assert.match(JSON.stringify(thrown[0]!.result), /CAUGHT_BY_USER/);
+    const handled = events.filter((event) => event.kind === 'catch');
+    assert.equal(handled.length, 1, 'Handler entry is an observed event');
+    assert.equal(handled[0]!.source?.file, 'main.cjs');
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'CAUGHT_BY_USER\n',
+    );
+    assert.ok(events.every((event) => event.kind !== 'return'));
+  } finally {
+    await f.close();
+  }
+});
+
+test('nested JavaScript catch handlers retain independent observed handler entries', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'function processErrors() {',
+      '  try {',
+      '    throw new Error("OUTER");',
+      '  } catch (outer) {',
+      '    try {',
+      '      throw new Error("INNER");',
+      '    } catch (inner) {',
+      '      console.log(outer.message, inner.message);',
+      '    }',
+      '  }',
+      '}',
+      'processErrors();',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const handlers = events.filter(
+      (event) =>
+        event.kind === 'catch' && event.symbolId === 'main.cjs:processErrors',
+    );
+    assert.equal(handlers.length, 2, JSON.stringify(handlers));
+    assert.ok(handlers[0]!.source!.line < handlers[1]!.source!.line);
+    const thrown = events.filter(
+      (event) =>
+        event.kind === 'throw' && event.symbolId === 'main.cjs:processErrors',
+    );
+    assert.equal(thrown.length, 2);
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'OUTER INNER\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('reentering one JavaScript catch handler records each loop iteration', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'for (let i = 0; i < 3; i++) {',
+      '  try {',
+      '    throw new Error(String(i));',
+      '  } catch (error) {',
+      '    console.log(error.message);',
+      '  }',
+      '}',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    assert.equal(events.filter((event) => event.kind === 'catch').length, 3);
+    assert.equal(events.filter((event) => event.kind === 'throw').length, 3);
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      '0\n1\n2\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
 test('deep recursion exceeds 30 invocations and large recordings use linked storage chunks', async () => {
   const f = await fixture({
     'main.py':
@@ -225,11 +1045,11 @@ test('timeout and explicit cancellation stop blocked execution and retain partia
       language: 'python',
       projectRoot: f.root,
       entry: 'main.py',
-      timeoutMs: 700,
+      timeoutMs: 2500,
     });
     const timed = await wait(f.service, job.jobId);
     assert.equal(timed.complete, false);
-    assert.match(timed.diagnostics!.join(' '), /exceeded 700 ms/);
+    assert.match(timed.diagnostics!.join(' '), /exceeded 2500 ms/);
     const second = await f.service.run({
       action: 'start',
       language: 'python',

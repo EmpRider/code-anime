@@ -43,11 +43,11 @@ export function createMcpServer(
     {
       name: 'record_execution',
       description:
-        'Execute a trusted Python entry file and record actual synchronous main-thread events. This runs application code with local permissions and real side effects; use only when the user requests execution. No CodeGraph or AI-generated steps required. Returns jobId; use status to get progress and a prepared player URL, cancel to stop and retain partial evidence. Supports Python calls, source lines (pre-execution state), bounded locals, returns, exceptions and text output. Generators/coroutines stop with an explicit unsupported boundary. Other languages still use structural/mock workflows.',
+        'Execute a trusted Python or JavaScript entry file and record actual runtime events. Runs application code with local permissions and real side effects; use only when execution is requested. No CodeGraph or AI-generated steps required. Returns jobId; use status to get progress and a player URL, cancel to retain partial evidence. Python captures main-thread calls, generators, asyncio tasks, return values, exceptions, lines, locals and output. JavaScript captures V8 debugger-visible functions, pre-line locals and process output. JavaScript frame exits have no verified return value, and worker threads or child processes are outside scope.',
       inputSchema: schema(
         {
           action: { type: 'string', enum: ['start', 'status', 'cancel'] },
-          language: { type: 'string', enum: ['python'] },
+          language: { type: 'string', enum: ['python', 'javascript'] },
           projectRoot: string,
           entry: string,
           args: { type: 'array', items: string },

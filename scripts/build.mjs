@@ -11,3 +11,7 @@ copyFileSync(
   'src/recording/python-recorder.py',
   'dist/recording/python-recorder.py',
 );
+copyFileSync(
+  'src/recording/node-recorder.mjs',
+  'dist/recording/node-recorder.mjs',
+);
