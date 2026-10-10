@@ -54,6 +54,42 @@ test.afterAll(async () => {
   await runtime?.close();
 });
 
+test('inspection changes preserve the current packet without replaying its animation', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto(url);
+  await page.locator('#next').click();
+  const packet = await page.locator('.packet').elementHandle();
+  const animation = await packet!.evaluateHandle(
+    (node) => node.getAnimations()[0],
+  );
+  expect(await animation.evaluate((value) => Boolean(value))).toBe(true);
+  await page.locator('#toggle-inspector').click();
+  await page.locator('#bookmark').click();
+  await page.locator('#breakpoint').click();
+  expect(await packet!.evaluate((node) => node.isConnected)).toBe(true);
+  // Finished animations may be removed by the browser; no replacement may start.
+  expect(
+    await packet!.evaluate(
+      (node, previous) =>
+        node.getAnimations().every((item) => item === previous),
+      animation,
+    ),
+  ).toBe(true);
+  await expect(page.locator('#progress')).toHaveText('1 / 100');
+  await page.locator('#next').click();
+  expect(await packet!.evaluate((node) => node.isConnected)).toBe(false);
+  await expect(page.locator('.packet')).toContainText('Line 2');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.locator('#next').click();
+  expect(
+    await page
+      .locator('.packet')
+      .evaluate((node) => node.getAnimations().length),
+  ).toBe(0);
+});
+
 test('Python source colors comments and floor division without changing literal text', async ({
   page,
 }) => {

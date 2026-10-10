@@ -195,6 +195,15 @@ passed. The mobile flow experience, compact toolbar, nested visual interactions,
 and other open items above still require work; this closes the desktop layout
 gap only.
 
+### Animation stability follow-up
+
+Packet rendering now retains the existing node and animation when only inspector,
+bookmark, breakpoint, or layout state changes. A browser regression verifies node
+and animation identity, replacement on forward navigation, and no animation under
+reduced-motion preferences. All 26 player/continuation tests and typecheck pass.
+This addresses the packet restart defect in items 20–21; broader nested visual
+acceptance and avoiding unrelated inspector/connection rebuilds remain open.
+
 1. Correct default desktop source/flow layout, preserve compact mobile switching,
    add panel controls/preferences and acceptance assertions for actual geometry.
 2. Prevent non-navigation updates from restarting packet animations; verify

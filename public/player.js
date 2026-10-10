@@ -2,6 +2,8 @@ import { replayState } from './replay.js';
 const $ = (id) => document.getElementById(id);
 let flow, originalFlow, timer, animation;
 let cursor = 0;
+let renderedFlow;
+let renderedCursor = -1;
 const nodes = new Map();
 const bookmarks = new Set();
 const breakpoints = new Set();
@@ -795,6 +797,9 @@ function drawConnection(from, to) {
 }
 function render() {
   if (!flow) return;
+  const positionChanged = renderedFlow !== flow || renderedCursor !== cursor;
+  renderedFlow = flow;
+  renderedCursor = cursor;
   const recording = flow.trace?.recording;
   const isMock = flowHasMock;
   $('evidence-mode').textContent = recording
@@ -807,9 +812,12 @@ function render() {
     : isMock
       ? 'Ordered by simulated execution'
       : 'Graph traversal / supplied order';
-  animation?.cancel();
+  if (positionChanged) {
+    animation?.cancel();
+    $('canvas').querySelector('.packet')?.remove();
+  }
   $('canvas')
-    .querySelectorAll('.packet,.connections,.canvas-empty')
+    .querySelectorAll('.connections,.canvas-empty')
     .forEach((e) => e.remove());
   for (const node of nodes.values())
     node.classList.remove('active', 'destination');
@@ -961,19 +969,22 @@ function render() {
   from.classList.add('active');
   to.classList.add('active', 'destination');
   drawConnection(from, to);
-  const packet = text('div', '', 'packet');
-  packet.append(text('strong', step.dtoName));
-  if (event?.objectId) packet.append(text('div', event.objectId));
-  if (event?.inputs)
-    packet.append(
-      text('div', 'Inputs: ' + valueText(event.inputs), 'packet-inputs'),
-    );
-  fieldRows(packet, after, before);
-  if (event && Object.hasOwn(event, 'result'))
-    packet.append(
-      text('div', 'Return: ' + valueText(event.result), 'field changed'),
-    );
-  $('canvas').append(packet);
+  let packet = $('canvas').querySelector('.packet');
+  if (!packet) {
+    packet = text('div', '', 'packet');
+    packet.append(text('strong', step.dtoName));
+    if (event?.objectId) packet.append(text('div', event.objectId));
+    if (event?.inputs)
+      packet.append(
+        text('div', 'Inputs: ' + valueText(event.inputs), 'packet-inputs'),
+      );
+    fieldRows(packet, after, before);
+    if (event && Object.hasOwn(event, 'result'))
+      packet.append(
+        text('div', 'Return: ' + valueText(event.result), 'field changed'),
+      );
+    $('canvas').append(packet);
+  }
   const x = (node) =>
     Math.max(
       12,
@@ -1003,7 +1014,11 @@ function render() {
         list.scrollTop = Math.max(0, top - list.clientHeight / 2);
     }
   }
-  if (!matchMedia('(prefers-reduced-motion: reduce)').matches && packet.animate)
+  if (
+    positionChanged &&
+    !matchMedia('(prefers-reduced-motion: reduce)').matches &&
+    packet.animate
+  )
     animation = packet.animate(
       [
         { left: x(from) + 'px', opacity: 0.4 },
