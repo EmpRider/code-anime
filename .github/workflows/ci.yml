@@ -23,6 +23,11 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run package:check
+      - name: Diagnose formatting drift
+        if: failure() && runner.os == 'Linux'
+        run: |
+          npx prettier --write public/player.js public/source-lexer.js tests/source-lexer.test.mjs
+          git --no-pager diff -- public/player.js public/source-lexer.js tests/source-lexer.test.mjs
 
   browser:
     runs-on: ubuntu-latest
