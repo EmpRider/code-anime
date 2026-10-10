@@ -1,6 +1,7 @@
 # Execution visualizer acceptance audit
 
-Checkpoint: 2026-10-10, implementation baseline `2178cb8`.
+Checkpoint: 2026-10-10, last pushed baseline `0045a2a` with pending browser
+disclosure improvements.
 
 Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
@@ -31,29 +32,34 @@ about future changes.
 4. **Preprocess before playback — implemented.**
    `src/services/animation-builder.ts` and `recording-service.ts` persist prepared
    data. `public/player.js` fetches saved flow/continuation data during replay.
-   The browser disclosure test verifies no requests during that interaction;
-   broader interaction coverage is still needed for a complete acceptance claim.
+   Recorded nested disclosure and paginated method inspection browser tests
+   verify no requests during those interactions. Other UI controls still need
+   request-level coverage.
 5. **Shared execution model — implemented, bounded verification.**
    `src/domain/trace.ts` carries invocation, stack, source, values, output, and
    evidence data. Async task identity is carried in event values. Array order
    supplies sequence; immutable snapshots support backward navigation.
    `tests/replay.test.mjs` and player tests verify historical state restoration.
 6. **High-level default view — partial.**
-   `filterList()` hides internal statement details until disclosure. The animated
-   diagram itself is hidden by default. Verify that the initial view communicates
-   caller, arguments, return transfer, and output in the requested example.
-7. **Expandable methods — partial.**
-   Invocation disclosure is implemented in timeline rows, with values in the
-   inspector and packet. Browser tests cover disclosure, but clickable diagram
-   entities do not yet provide the full requested nested method presentation.
-8. **Independent nested expansion — implemented, incomplete acceptance.**
-   `expandedCalls` preserves invocation-specific state and does not move the
-   cursor. Existing disclosure coverage is narrower than a full A/B/C nested
-   scenario with independently retained expansion and active playback.
+   `filterList()` hides internal statement details until disclosure, and the
+   diagram now opens alongside source on desktop. Verify the initial diagram
+   communicates caller, arguments, return transfer, and output in the requested
+   A/B example before accepting the default overview.
+7. **Expandable methods — implemented, bounded verification.**
+   Timeline invocation disclosure and clickable diagram method buttons share
+   one nested recorded-event inspector. Browser tests cover source lines,
+   annotation separation, and event selection; a 45-level simulated recursion
+   verifies that deeply nested user calls remain inspectable. Broader visual
+   review and real deeply recursive frontend recordings remain open.
+8. **Independent nested expansion — implemented, bounded verification.**
+   `expandedCalls` preserves invocation-specific state and cursor position.
+   A recorded `outer -> middle -> add` scenario verifies independent collapse,
+   re-expansion, return propagation, and continuing playback. The simulated
+   45-level diagram fixture checks retained nested expansion beyond 30 calls.
 9. **Synchronize detail levels — implemented, bounded verification.**
    Disclosure and inspector derive from the same cursor. Browser tests verify
-   position preservation. Full nested expansion during running playback remains
-   unverified.
+   position preservation while a recorded nested trace is playing, including
+   diagram selection and source navigation. Broader multi-task scenarios remain.
 10. **VisualJS interaction reference — unverified.**
     A direct visual/interaction comparison is still required. Existing layout
     tests do not establish fidelity to the requested source execution experience.
@@ -78,60 +84,64 @@ about future changes.
     Reverse restores snapshots without running the program again.
 15. **Reduce wasted viewport — partial.**
     CSS makes headers smaller, inspector collapsible, and console compact.
-    The diagram is optional and the visible diagram layout remains vertical.
-    Measure primary-content allocation after completing the desktop layout.
+    Desktop source and diagram are side by side with a persisted resize handle.
+    Viewport allocations and visual quality still need broader measurement.
 16. **Content-first progressive disclosure — partial.**
-    Inspector, console, and method details are disclosed on demand. The default
-    visualization and source layout needs the corrections in items 6 and 18;
-    visual clarity remains an acceptance task, not proven by DOM assertions.
+    Inspector, console, and method details are disclosed on demand. The desktop
+    source/flow arrangement is implemented. Default overview clarity and visual
+    acceptance remain open; DOM geometry alone cannot prove them.
 17. **Compact application structure — partial.**
     Resizable timeline, source, inspector, and console exist. Playback is in a
-    bottom dock, with separate header regions. The requested compact primary
-    toolbar and resizable source/flow arrangement need review and implementation.
-18. **Default side-by-side layout — contradicted by current CSS.**
-    `.center-column:not(.show-flow) > .flow-panel` hides the diagram initially;
-    `.center-column.show-flow` uses stacked rows. Source focus and preferences
-    exist, but flow maximization and default side-by-side primary panels are
-    missing. Existing tests preserve the current layout rather than this goal.
+    bottom dock, with separate header regions. Resizable source/flow panes are
+    implemented; toolbar density and secondary-control organization still need
+    review.
+18. **Default side-by-side layout — implemented for tested desktops.**
+    Source and diagram display side by side by default at desktop widths.
+    Pointer/keyboard resizing, per-pane focus, persisted preferences, and mobile
+    switching have browser geometry regressions. Visual acceptance remains open.
 19. **Visual style — partially inspected, not accepted.**
     Existing typography and restrained colors are retained. Contrast, active
     line readability, and compactness require rendered inspection. There is no
     evidence here establishing a second supported theme.
 20. **Meaningful animation — partial.**
-    `render()` animates value packets and honors reduced motion. It recreates
-    packets on every render, including unrelated state updates. Inspect and
-    prevent animation restart when the execution position has not changed.
+    `render()` animates value packets and honors reduced motion. An identity
+    regression verifies unchanged packets on non-navigation updates. Connection
+    rebuilds and broader timing/visual quality remain unverified.
 21. **No flicker/layout jumps — partial.**
     Source-window reuse and cached timeline filtering reduce DOM work; the
     large-trace browser regression protects source node identity. Inspector,
     packet, and connection updates still need scrutiny for unnecessary rebuilds.
 22. **Immediate disclosure — implemented, incomplete scale evidence.**
     Disclosure uses prepared data; tests verify no request and cursor retention.
-    The 20,000-event fixture has only one invocation, so it does not establish
-    deep-tree disclosure responsiveness.
+    Deep simulated recursion (45 invocations) and keyboard pagination (100 events)
+    pass; the 20,000-event fixture has one invocation, so large branching-tree
+    performance remains unverified.
 23. **Contextual variable inspection — implemented, bounded verification.**
     Collapsible inspector shows locals, arguments, object changes, and returns.
     Player tests check historical values and per-invocation async differences.
     Large/deep object inspection usability remains unverified.
 24. **User navigation control — implemented, bounded verification.**
     Timeline rows, stack buttons, follow toggle, and source breakpoints provide
-    navigation. Test diagram method inspection and source-location navigation
-    explicitly against the requested behavior.
+    navigation. The recorded nested browser scenario verifies diagram selection,
+    source-location navigation, and playback cursor synchronization.
 25. **Keyboard/accessibility — partial.**
     Keyboard shortcuts, native disclosure buttons, focus styles, and reduced
-    motion exist. Browser tests cover disclosure focus, mobile keyboard controls,
-    and keyboard resizing. Screen-reader behavior, all focus paths, and reduced
-    motion during all interaction types remain unverified.
+    motion exist. Browser tests cover disclosure focus, invocation-selector
+    focus preservation, pagination focus, mobile controls, and keyboard resizing.
+    Screen-reader behavior and all focus paths remain unverified.
 26. **Responsive workspace — partial.**
     Browser tests cover 1440x900, 820x1180, and 390x844, panel switching, playback
-    visibility, and page overflow. Large-screen side-by-side animation remains
-    missing as described in item 18. Mobile Execution currently shows the trace
-    list while the diagram is hidden; verify the requested flow experience.
+    visibility, and page overflow. Desktop side-by-side flow and a dedicated
+    mobile Flow view pass geometry and replay checks. Mobile diagram method
+    disclosure and broader visual accessibility still need verification.
 27. **Large-codebase performance — partial.**
     Cached source lines, event indices, bounded timeline rows, and continuation
     exist. The 20,000-event synthetic browser test verifies seek/filter/disclosure
     and source reuse. Its synchronous handler timings exclude paint and network.
-    Measure memory, many methods, long stacks, large objects, large output,
+    A separate 45-level simulated recursion verifies nested visibility after
+    collapse/reopen; proportional indentation avoids collapsing its usable width.
+    Measure memory, many methods, larger trees, long stacks, large objects,
+    large output,
     multiple files, and real stored continuation chains before accepting this.
 28. **No repeated AI processing — implemented by architecture.**
     Player HTTP requests retrieve stored flows. Backend analysis is separate.
@@ -143,8 +153,8 @@ about future changes.
     Establish the supported-language inventory and representative evidence.
 30. **Single execution state — implemented, bounded verification.**
     `replayState()` and the cursor drive stack, locals, source, console, and flow.
-    Continuation tests check exact historical state and scenario isolation.
-    Complete the nested animation acceptance scenario to cover all views together.
+    Continuation tests check historical state and scenario isolation. Recorded
+    nested browser tests cover flow, source, output, return, and cursor together.
 31. **Source separate from annotations — implemented.**
     Source rows use captured file text and text nodes; inspector/packet annotations
     are separate. Browser regression verifies literal HTML-like source stays text.
@@ -156,17 +166,16 @@ about future changes.
     Analysis, shared events, hierarchical disclosure, source replay, synchronization,
     layout, performance, and tests exist, but stages are not all accepted.
 34. **Preserve working functionality — tested at checkpoint.**
-    Existing suites passed before the most recent lexical-only change; 26 player
-    tests, the lexical browser regression, and typecheck passed after it.
-    Rerun affected gates after further implementation changes.
+    Core, browser, and package delivery gates are rerun after each substantial
+    batch. Recheck all gates for the final candidate before pushing.
 35. **Ten functional acceptance scenarios — incomplete as a set.**
     Existing tests cover portions of each scenario, including deep recursion and
-    safe unbounded execution. Missing full-scope evidence includes nested
-    disclosure during playback, large real continuation performance, and the
-    representative supported-language matrix. Do not infer acceptance from counts.
+    safe unbounded execution. Recorded nested disclosure during playback is now
+    verified. Large real continuation performance and the representative
+    supported-language matrix remain unverified. Do not infer acceptance from counts.
 36. **UI acceptance — incomplete.**
-    Responsive and source-state assertions pass, but default source/animation
-    layout, stable animations, rendered visual review, and comprehensive keyboard
+    Responsive layout, packet stability, method disclosure, and source-state
+    regressions pass, but full rendered visual review and keyboard/screen-reader
     validation are still required.
 37. **Integrated implementation and final delivery — in progress.**
     Changes are integrated and pushed on `codex/execution-visualizer-improvements`.
@@ -174,13 +183,17 @@ about future changes.
 
 ## Checkpoint verification
 
-- `npm run check`: 66 passed, 1 optional real-CodeGraph test skipped; typecheck,
-  build, and formatting passed at `fd3ba34` before the Python coloring change.
-- `npm run test:browser`: 10 passed at that same performance checkpoint.
-- `npm run package:check`: installed CLI, MCP handshake, player assets, and flow
-  API passed at that checkpoint.
-- At `2178cb8`: Python lexical browser regression passed, 26 player/continuation
-  tests passed, typecheck and diff whitespace checks passed.
+- `npm run check`: typecheck, build, Prettier, and 66 core tests passed; one
+  optional live CodeGraph integration test skipped (2026-10-10 candidate).
+- `npm run test:browser`: 18 passed, including recorded nested disclosure,
+  repeated simulated invocations, recorded continuation preservation, deep
+  simulated recursion, keyboard pagination, source coloring, and mobile layouts.
+- `npm run package:check`: packed CLI installation, MCP handshake, player assets,
+  and stored flow API passed for the current candidate.
+- The 20,000-event synthetic single-invocation browser fixture reported seek
+  p50 12.8 ms and p95 23.3 ms, excluding paint and network. These figures do
+  not verify performance for broad or deep trees.
+- `git diff --check`: passed with no whitespace errors.
 
 ## Next implementation order
 
@@ -226,6 +239,27 @@ back to the caller, final console output, reverse console restoration, and no
 additional requests. This supplies stronger evidence for items 8–9 and the nested
 part of item 35. Diagram-entity disclosure and large deep-tree performance are
 still separate open requirements.
+
+### Diagram disclosure follow-up
+
+Diagram method boxes are now keyboard-accessible buttons that open the active or
+most recently visited invocation of that symbol. The flow panel shows a nested
+prepared-event tree with source lines kept separate from inputs, values, returns,
+and output annotations. Child branches are created on expansion and each method
+is paged in groups of 50 events. Expansion shares invocation state with the
+timeline. Selecting an event seeks the existing shared replay.
+
+The recorded nested browser scenario now exercises diagram selection, nested
+collapse/reopen, retained child expansion, return values, source navigation, and
+the current-step marker without additional requests. Repeated simulated calls of
+one symbol retain independent return values when switching invocation selection;
+the selector keeps keyboard focus. A recorded continuation retains the selected
+method as later chunks are loaded. A separate simulated 45-level recursion test
+verifies nested collapse/reopen and exposed a layout defect: fixed indentation
+consumed all available width at deep levels. Proportional indentation now preserves
+deep nested visibility. Keyboard pagination loads only prepared events, retains
+the playback position, and transfers focus to the last event when complete.
+Large branching trees and broader visual acceptance still need focused checks.
 
 1. Correct default desktop source/flow layout, preserve compact mobile switching,
    add panel controls/preferences and acceptance assertions for actual geometry.

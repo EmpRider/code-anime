@@ -132,10 +132,266 @@ test('recorded nested calls retain independent disclosure during playback and re
     await expect(page.locator('#console-output')).toHaveText('30\n');
     await page.locator('#timeline').fill(String(innerReturn + 1));
     await expect(page.locator('#console-output')).toHaveText('');
+    const outer = events.find(
+      (event) => event.kind === 'enter' && event.callId === parents.at(-2),
+    )!;
+    await page.locator('#view-mode').selectOption('map');
+    await page
+      .getByRole('button', {
+        name: 'Inspect method ' + outer.symbolId,
+        exact: true,
+      })
+      .click();
+    const detailsPanel = page.locator('#method-details');
+    await expect(detailsPanel).toBeVisible();
+    const childDetails = detailsPanel.locator(
+      `details[data-invocation="${inner.callId}"]`,
+    );
+    await expect(childDetails).toHaveAttribute('open', '');
+    await expect(childDetails).toContainText('Return: 30');
+    const middleDetails = detailsPanel.locator(
+      `details[data-invocation="${parents.at(-1)}"]`,
+    );
+    await middleDetails.locator(':scope > summary').click();
+    await expect(childDetails).toBeHidden();
+    await expect(page.locator('#progress')).toHaveText(
+      `${innerReturn + 1} / ${events.length}`,
+    );
+    await middleDetails.locator(':scope > summary').click();
+    await expect(childDetails).toBeVisible();
+    await expect(childDetails).toHaveAttribute('open', '');
+    await detailsPanel
+      .locator(`[data-event-index="${detailIndex + 1}"]`)
+      .click();
+    await expect(page.locator('#source')).toHaveText('helper.py');
+    await expect(detailsPanel.locator('[aria-current="step"]')).toHaveAttribute(
+      'data-event-index',
+      String(detailIndex + 1),
+    );
     expect(requests).toEqual([]);
   } finally {
     await recorder.close();
   }
+});
+
+test('repeated method invocations can be inspected independently without moving playback', async ({
+  page,
+}) => {
+  const events: TraceEvent[] = [
+    {
+      id: 'event-1',
+      kind: 'enter',
+      callId: 'main-call',
+      symbolId: 'main',
+      label: 'main',
+      stack: ['main-call'],
+      values: {},
+      locals: {},
+      certainty: 'mock',
+    },
+    ...[10, 20].flatMap((result, index): TraceEvent[] => {
+      const callId = `worker-${index + 1}`;
+      return [
+        {
+          id: `event-${index * 2 + 2}`,
+          kind: 'enter',
+          callId,
+          parentCallId: 'main-call',
+          symbolId: 'worker',
+          label: `worker call ${index + 1}`,
+          source: { file: 'worker.ts', line: 1, endLine: 1 },
+          stack: ['main-call', callId],
+          values: {},
+          inputs: { input: result },
+          locals: {},
+          certainty: 'mock',
+        },
+        {
+          id: `event-${index * 2 + 3}`,
+          kind: 'return',
+          callId,
+          symbolId: 'worker',
+          label: `return ${result}`,
+          source: { file: 'worker.ts', line: 2, endLine: 2 },
+          stack: ['main-call', callId],
+          values: {},
+          result,
+          locals: {},
+          certainty: 'mock',
+        },
+      ];
+    }),
+  ];
+  const session = await runtime.store.create(
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'browser-test',
+        projectRoot: 'fixture',
+        sourceHash: 'repeated',
+        target: 'main',
+        scenario: {},
+        events,
+        diagnostics: ['Simulated browser fixture'],
+        truncated: false,
+        filesAnalyzed: 1,
+        cacheHits: 0,
+        sourceFiles: {
+          'worker.ts': 'function worker(input) {\n  return input;\n}',
+        },
+      },
+      'main',
+    ),
+  );
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await page.locator('#view-mode').selectOption('map');
+  await page.locator('#timeline').fill('2');
+  await page.getByRole('button', { name: 'Inspect method worker' }).click();
+  const panel = page.locator('#method-details');
+  const selector = page.getByRole('combobox', {
+    name: 'Select invocation of worker',
+  });
+  await expect(selector.locator('option')).toHaveCount(2);
+  await expect(selector).toHaveValue('worker-1');
+  await expect(
+    panel.locator('details[data-invocation="worker-1"]'),
+  ).toContainText('Return: 10');
+  await selector.focus();
+  await selector.selectOption('worker-2');
+  await expect(selector).toBeFocused();
+  await expect(
+    panel.locator('details[data-invocation="worker-2"]'),
+  ).toContainText('Return: 20');
+  await expect(
+    panel.locator('details[data-invocation="worker-1"]'),
+  ).toHaveCount(0);
+  await expect(page.locator('#progress')).toHaveText('2 / 5');
+  await page.locator('#next').click();
+  await expect(selector).toHaveValue('worker-2');
+  await selector.selectOption('worker-1');
+  await expect(
+    panel.locator('details[data-invocation="worker-1"]'),
+  ).toContainText('Return: 10');
+  await expect(page.locator('#progress')).toHaveText('3 / 5');
+});
+
+test('method inspector paginates prepared steps without losing keyboard focus or replay state', async ({
+  page,
+}) => {
+  await page.goto(url);
+  await page.locator('#view-mode').selectOption('map');
+  await page.locator('#timeline').fill('70');
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  const node = page.getByRole('button', { name: 'Inspect method run' });
+  await node.focus();
+  await page.keyboard.press('Enter');
+  const panel = page.locator('#method-details');
+  await expect(panel.locator('.method-event')).toHaveCount(50);
+  const more = panel.getByRole('button', { name: 'More prepared steps' });
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel.locator('.method-event')).toHaveCount(100);
+  await expect(more).toHaveCount(0);
+  await expect(panel.locator('.method-event').last()).toBeFocused();
+  await expect(page.locator('#progress')).toHaveText('70 / 100');
+  await expect(page.locator('#console-output')).toContainText('output 69');
+  expect(requests).toEqual([]);
+});
+
+test('diagram disclosure supports recursion deeper than 30 nested invocations', async ({
+  page,
+}) => {
+  const depth = 45;
+  const ids = Array.from({ length: depth }, (_, i) => `recursive-${i}`);
+  const events: TraceEvent[] = [];
+  for (let i = 0; i < depth; i++) {
+    events.push({
+      id: `event-${events.length + 1}`,
+      kind: 'enter',
+      callId: ids[i]!,
+      ...(i ? { parentCallId: ids[i - 1]! } : {}),
+      symbolId: 'recurse',
+      label: `enter depth ${i + 1}`,
+      source: { file: 'recursive.ts', line: 2, endLine: 2 },
+      stack: ids.slice(0, i + 1),
+      values: {},
+      locals: {},
+      certainty: 'mock',
+    });
+  }
+  for (let i = depth - 1; i >= 0; i--) {
+    events.push({
+      id: `event-${events.length + 1}`,
+      kind: 'return',
+      callId: ids[i]!,
+      symbolId: 'recurse',
+      label: `return depth ${i + 1}`,
+      source: { file: 'recursive.ts', line: 3, endLine: 3 },
+      stack: ids.slice(0, i + 1),
+      values: {},
+      locals: {},
+      certainty: 'mock',
+      result: depth - i,
+    });
+  }
+  const session = await runtime.store.create(
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'browser-test',
+        projectRoot: 'fixture',
+        sourceHash: 'recursive',
+        target: 'recurse',
+        scenario: {},
+        events,
+        diagnostics: ['Simulated recursion fixture'],
+        truncated: false,
+        filesAnalyzed: 1,
+        cacheHits: 0,
+        sourceFiles: {
+          'recursive.ts':
+            'function recurse(n) {\n  return n ? recurse(n - 1) : 0;\n}',
+        },
+      },
+      'recurse',
+    ),
+  );
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await page.locator('#view-mode').selectOption('map');
+  await page.locator('#timeline').fill('1');
+  await page.getByRole('button', { name: 'Inspect method recurse' }).click();
+  const panel = page.locator('#method-details');
+  for (let i = 1; i < depth; i++) {
+    const child = panel.locator(`details[data-invocation="${ids[i]}"]`);
+    await child.locator(':scope > summary').click();
+    await expect(child).toHaveAttribute('open', '');
+  }
+  await expect(
+    panel.locator(`details[data-invocation="${ids[depth - 1]}"]`),
+  ).toContainText(`return depth ${depth}`);
+  await expect(page.locator('#progress')).toHaveText(`1 / ${events.length}`);
+  await panel
+    .locator(`details[data-invocation="${ids[10]}"] > summary`)
+    .click();
+  await expect(
+    panel.locator(`details[data-invocation="${ids[depth - 1]}"]`),
+  ).toBeHidden();
+  await panel
+    .locator(`details[data-invocation="${ids[10]}"] > summary`)
+    .click();
+  const closed = await panel
+    .locator('details')
+    .evaluateAll((nodes) =>
+      nodes
+        .filter((node) => !(node as HTMLDetailsElement).open)
+        .map((node) => node.getAttribute('data-invocation')),
+    );
+  expect(closed).toEqual([]);
+  await expect(
+    panel.locator(`details[data-invocation="${ids[depth - 1]}"]`),
+  ).toBeVisible();
+  await expect(page.locator('#progress')).toHaveText(`1 / ${events.length}`);
 });
 
 test('inspection changes preserve the current packet without replaying its animation', async ({
@@ -362,6 +618,20 @@ test('actual Python recording replays across chunks with exact output and revers
     await expect(page.locator('#evidence-mode')).toHaveText(
       'Recorded execution',
     );
+    const firstChunk = await runtime.store.get(status.sessionId!);
+    const firstInvocation = firstChunk!.flow.trace!.events.find(
+      (event) => event.kind === 'enter',
+    )!;
+    await page.locator('#view-mode').selectOption('map');
+    await page
+      .getByRole('button', {
+        name: 'Inspect method ' + firstInvocation.symbolId,
+      })
+      .click();
+    const selectedDetails = page.locator(
+      `#method-details details[data-invocation="${firstInvocation.callId}"]`,
+    );
+    await expect(selectedDetails).toBeVisible();
     let maximum = Number(await page.locator('#timeline').getAttribute('max'));
     while (maximum < status.eventCount) {
       await page.locator('#timeline').fill(String(maximum));
@@ -373,6 +643,10 @@ test('actual Python recording replays across chunks with exact output and revers
         .toBeGreaterThan(maximum);
       maximum = Number(await page.locator('#timeline').getAttribute('max'));
     }
+    await expect(selectedDetails).toBeVisible();
+    await expect(page.locator('#method-details')).toContainText(
+      firstInvocation.symbolId,
+    );
     await page.locator('#timeline').fill(String(maximum));
     await expect(page.locator('#console-output')).toHaveText('83845\n');
     await expect(page.locator('#status')).toHaveText('Replay complete');

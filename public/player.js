@@ -17,6 +17,11 @@ const hasBreakpoint = (index) =>
   );
 const rows = [];
 const invocations = new Map();
+const invocationPositions = new Map();
+const invocationDetails = new Map();
+const symbolInvocations = new Map();
+let selectedMethod;
+let renderedMethod;
 const expandedCalls = new Set();
 let shownSource = '';
 let shownFirstLine = 1;
@@ -131,6 +136,11 @@ function traceSteps(trace) {
 function buildNodes(preserveInspection = false) {
   nodes.clear();
   invocations.clear();
+  invocationPositions.clear();
+  invocationDetails.clear();
+  symbolInvocations.clear();
+  renderedMethod = undefined;
+  if (!preserveInspection) selectedMethod = undefined;
   if (!preserveInspection) {
     expandedCalls.clear();
     pinnedCallId = undefined;
@@ -151,9 +161,23 @@ function buildNodes(preserveInspection = false) {
       ['mock', 'assumed', 'proposed'].includes(e.certainty),
     ),
   );
-  for (const event of flow.trace?.events ?? [])
-    if (event.kind === 'enter') invocations.set(event.callId, event);
+  for (const [index, event] of (flow.trace?.events ?? []).entries())
+    if (event.kind === 'enter') {
+      if (invocations.has(event.callId)) continue;
+      invocations.set(event.callId, event);
+      invocationPositions.set(event.callId, index);
+      invocationDetails.set(event.callId, []);
+      if (!symbolInvocations.has(event.symbolId))
+        symbolInvocations.set(event.symbolId, []);
+      symbolInvocations.get(event.symbolId).push(event.callId);
+    }
   flow.trace?.events.forEach((event, index) => {
+    invocationDetails.get(event.callId)?.push({ index });
+    if (event.kind === 'enter') {
+      const parent = event.parentCallId ?? event.stack?.at(-2);
+      if (parent && parent !== event.callId)
+        invocationDetails.get(parent)?.push({ index, child: event.callId });
+    }
     if (event.objectId && event.after !== undefined) {
       if (!objectHistory.has(event.objectId))
         objectHistory.set(event.objectId, []);
@@ -185,7 +209,25 @@ function buildNodes(preserveInspection = false) {
   for (const step of flow.steps)
     for (const name of [step.from, step.to]) {
       if (nodes.has(name)) continue;
-      const node = text('div', '', 'node');
+      const node = text('button', '', 'node');
+      node.type = 'button';
+      node.setAttribute('aria-label', 'Inspect method ' + name);
+      node.onclick = () => {
+        const events = flow.trace?.events ?? [];
+        const active = events[cursor - 1]?.stack ?? [];
+        const matches = symbolInvocations.get(name) ?? [];
+        const invocationId =
+          matches.findLast((id) => active.includes(id)) ??
+          matches.findLast((id) => invocationPositions.get(id) < cursor) ??
+          matches[0];
+        if (!invocationId) return;
+        selectedMethod =
+          selectedMethod === invocationId ? undefined : invocationId;
+        if (selectedMethod) expandedCalls.add(selectedMethod);
+        filterRevision++;
+        filterList();
+        renderMethodDetails();
+      };
       node.append(
         text('span', 'SYMBOL', 'node-caption'),
         text('span', name, 'node-name'),
@@ -263,6 +305,7 @@ function createEventRow(index) {
         : expandedCalls.add(event.callId);
       filterRevision++;
       filterList();
+      renderMethodDetails();
       // Filtering can replace this page. Keep keyboard focus on its disclosure.
       for (const control of $('event-list').querySelectorAll(
         '.call-disclosure',
@@ -428,6 +471,144 @@ function filterList() {
   }
   $('trace-count').textContent = count + ' / ' + rows.length;
   $('no-events').hidden = count > 0;
+}
+function renderMethodDetails() {
+  const panel = $('method-details');
+  panel.hidden = !selectedMethod;
+  for (const [name, node] of nodes)
+    node.setAttribute(
+      'aria-expanded',
+      String(invocations.get(selectedMethod)?.symbolId === name),
+    );
+  if (!selectedMethod) {
+    panel.replaceChildren();
+    renderedMethod = undefined;
+    return;
+  }
+  if (renderedMethod !== selectedMethod) {
+    renderedMethod = selectedMethod;
+    const symbol = invocations.get(selectedMethod)?.symbolId;
+    const calls = symbolInvocations.get(symbol) ?? [];
+    const header = text('div', '', 'method-details-heading');
+    header.append(text('strong', symbol ?? '', 'method-details-title'));
+    if (calls.length > 1) {
+      const label = text('label', 'Invocation ', 'method-invocation-label');
+      const select = document.createElement('select');
+      select.setAttribute('aria-label', 'Select invocation of ' + symbol);
+      for (const [index, callId] of calls.entries()) {
+        const entry = invocations.get(callId);
+        const location = entry.source
+          ? ` · ${entry.source.file}:${entry.source.line}`
+          : '';
+        const option = text('option', `#${index + 1}${location} · ${callId}`);
+        option.value = callId;
+        select.append(option);
+      }
+      select.value = selectedMethod;
+      select.onchange = () => {
+        selectedMethod = select.value;
+        expandedCalls.add(selectedMethod);
+        renderMethodDetails();
+        panel.querySelector('.method-invocation-label select')?.focus({
+          preventScroll: true,
+        });
+      };
+      label.append(select);
+      header.append(label);
+    }
+    const branch = (callId, ancestors = new Set()) => {
+      const entry = invocations.get(callId);
+      const details = document.createElement('details');
+      details.dataset.invocation = callId;
+      details.append(text('summary', entry.symbolId + ' · ' + callId));
+      const body = text('div', '', 'method-events');
+      details.append(body);
+      let loaded = 0;
+      let initialized = false;
+      const items = invocationDetails.get(callId) ?? [];
+      const lineage = new Set([...ancestors, callId]);
+      const appendPage = () => {
+        const more = body.querySelector(':scope > .more-method-events');
+        more?.remove();
+        for (const item of items.slice(loaded, loaded + 50)) {
+          if (item.child && !lineage.has(item.child)) {
+            body.append(branch(item.child, lineage));
+            continue;
+          }
+          const event = flow.trace.events[item.index];
+          const row = text('button', '', 'method-event');
+          row.dataset.eventIndex = item.index + 1;
+          row.append(text('span', event.kind + ' · ' + event.label));
+          if (event.source) {
+            row.append(
+              text('small', event.source.file + ':' + event.source.line),
+            );
+            const original = flow.trace.sourceFiles?.[event.source.file];
+            if (original !== undefined) {
+              if (!sourceCache.has(event.source.file))
+                sourceCache.set(event.source.file, original.split(/\r?\n/));
+              const line = sourceCache.get(event.source.file)[
+                event.source.line - 1
+              ];
+              if (line !== undefined)
+                row.append(text('pre', line, 'method-source'));
+            }
+          }
+          const annotations = [];
+          if (event.inputs)
+            annotations.push('Inputs: ' + valueText(event.inputs));
+          if (Object.hasOwn(event, 'result'))
+            annotations.push('Return: ' + valueText(event.result));
+          if (Object.hasOwn(event, 'after'))
+            annotations.push('Values: ' + valueText(event.after));
+          if (event.output !== undefined)
+            annotations.push('Output: ' + event.output);
+          if (annotations.length)
+            row.append(text('pre', annotations.join('\n')));
+          row.onclick = () => seek(item.index + 1);
+          body.append(row);
+        }
+        loaded += 50;
+        if (loaded < items.length) {
+          const next =
+            more ?? text('button', 'More prepared steps', 'more-method-events');
+          next.onclick = () => {
+            appendPage();
+            renderMethodDetails();
+          };
+          body.append(next);
+          if (more) next.focus({ preventScroll: true });
+        } else if (more) {
+          body.lastElementChild?.focus({ preventScroll: true });
+        }
+      };
+      const populate = () => {
+        if (details.open && !initialized) {
+          initialized = true;
+          appendPage();
+        }
+      };
+      details.open = expandedCalls.has(callId);
+      populate();
+      details.ontoggle = () => {
+        details.open ? expandedCalls.add(callId) : expandedCalls.delete(callId);
+        populate();
+        filterRevision++;
+        filterList();
+        renderMethodDetails();
+      };
+      return details;
+    };
+    panel.replaceChildren(header, branch(selectedMethod));
+  }
+  for (const details of panel.querySelectorAll('details'))
+    if (details.open !== expandedCalls.has(details.dataset.invocation))
+      details.open = expandedCalls.has(details.dataset.invocation);
+  for (const row of panel.querySelectorAll('.method-event')) {
+    if (Number(row.dataset.eventIndex) === cursor)
+      row.setAttribute('aria-current', 'step');
+    else row.removeAttribute('aria-current');
+  }
 }
 function inspectFrame(callId) {
   pinnedCallId = callId;
@@ -863,6 +1044,7 @@ function render() {
     2,
   );
   filterList();
+  renderMethodDetails();
   for (const id of ['fields', 'frame-list', 'local-tree', 'object-tree'])
     $(id).replaceChildren();
   for (const id of [

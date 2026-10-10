@@ -1726,3 +1726,73 @@ main {
     grid-column: 1;
   }
 }
+
+#method-details {
+  flex: 0 1 45%;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+  padding: 8px;
+  font-size: 11px;
+}
+#method-details[hidden] {
+  display: none;
+}
+.method-details-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 3px 8px;
+}
+.method-details-title {
+  overflow-wrap: anywhere;
+}
+.method-invocation-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.method-invocation-label select {
+  min-width: 0;
+  max-width: 200px;
+}
+#method-details summary {
+  cursor: pointer;
+  padding: 7px 3px;
+  overflow-wrap: anywhere;
+}
+.method-events {
+  /* Proportional indentation keeps deep recursive traces usable in narrow panes. */
+  padding-left: 1%;
+  min-width: 0;
+  border-left: 1px solid var(--border);
+}
+#method-details details {
+  min-width: 0;
+}
+.method-event {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-block: 4px;
+  padding: 6px;
+}
+.method-event small {
+  display: block;
+  color: var(--muted);
+}
+.method-event pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 4px 0;
+}
+.method-event[aria-current='step'] {
+  border-color: var(--accent);
+  background: #2a2542;
+}
+button.node {
+  text-align: left;
+}
