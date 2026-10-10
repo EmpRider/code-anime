@@ -5,8 +5,11 @@ import type { TraceEvent } from '../../src/domain/trace.js';
 import { traceToFlow } from '../../src/analysis/contract.js';
 import { plainTerminalText } from '../../public/terminal-text.js';
 import { RecordingService } from '../../src/services/recording-service.js';
-import { realpath } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 let runtime: Awaited<ReturnType<typeof startRuntime>>;
 let url: string;
@@ -1215,6 +1218,92 @@ test('observed JavaScript recording replays actual source lines, locals and outp
     expect(errors).toEqual([]);
   } finally {
     recorder.close();
+  }
+});
+
+test('verified TypeScript source map follows the original lines in real browser playback', async ({
+  page,
+}) => {
+  const root = await mkdtemp(join(tmpdir(), 'code-anime-source-map-'));
+  const recorder = new RecordingService(
+    runtime.store,
+    runtime.baseUrl,
+    realpath,
+  );
+  const original = [
+    'function double(value: number): number {',
+    '  const result = value * 2;',
+    '  return result;',
+    '}',
+    'console.log(double(15));',
+  ].join('\n');
+  try {
+    await mkdir(join(root, 'src'));
+    await mkdir(join(root, 'dist'));
+    const transpiled = ts.transpileModule(original, {
+      fileName: 'entry.ts',
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        sourceMap: true,
+        inlineSources: true,
+      },
+    });
+    const map = JSON.parse(transpiled.sourceMapText!);
+    map.sources = ['../src/entry.ts'];
+    await writeFile(join(root, 'src', 'entry.ts'), original);
+    await writeFile(
+      join(root, 'dist', 'entry.cjs'),
+      transpiled.outputText.replace(
+        'sourceMappingURL=entry.js.map',
+        'sourceMappingURL=entry.cjs.map',
+      ),
+    );
+    await writeFile(join(root, 'dist', 'entry.cjs.map'), JSON.stringify(map));
+    const started = await recorder.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: root,
+      entry: 'dist/entry.cjs',
+    });
+    let status = started;
+    await expect
+      .poll(async () => {
+        status = await recorder.run({ action: 'status', jobId: started.jobId });
+        return status.status;
+      })
+      .toBe('ready');
+    expect(status.complete).toBe(true);
+    const recorded = (await runtime.store.get(status.sessionId!))!.flow.trace!;
+    const mappedIndex = recorded.events.findIndex(
+      (event) =>
+        event.kind === 'statement' &&
+        event.source?.file === 'src/entry.ts' &&
+        event.source?.line === 2,
+    );
+    expect(mappedIndex).toBeGreaterThanOrEqual(0);
+    await page.goto(status.url!);
+    await page.locator('#timeline').fill(String(mappedIndex + 1));
+    await expect(page.locator('#source')).toHaveText('src/entry.ts');
+    await expect(page.locator('#source')).toHaveAttribute(
+      'title',
+      /Original source mapped from V8 location dist\/entry\.cjs:/,
+    );
+    await expect(page.locator('.executing-line')).toHaveAttribute(
+      'data-line',
+      '2',
+    );
+    await expect(page.locator('.executing-line')).toContainText(
+      'const result = value * 2;',
+    );
+    const finalIndex = Number(
+      await page.locator('#timeline').getAttribute('max'),
+    );
+    await page.locator('#timeline').fill(String(finalIndex));
+    await expect(page.locator('#console-output')).toContainText('30');
+  } finally {
+    recorder.close();
+    await rm(root, { recursive: true, force: true });
   }
 });
 

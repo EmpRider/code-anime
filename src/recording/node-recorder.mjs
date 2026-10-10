@@ -4,8 +4,9 @@
  * Only debugger-observed locations and values become `observed` trace events.
  */
 import { spawn } from 'node:child_process';
-import { realpath, stat } from 'node:fs/promises';
-import { isAbsolute, relative, sep } from 'node:path';
+import { readFile, realpath, stat } from 'node:fs/promises';
+import { SourceMap } from 'node:module';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const [rootArg, entry, eventLimitArg, byteLimitArg, ...arguments_] =
@@ -53,7 +54,9 @@ const coverage =
   'include debugger-observed state/results when available; later settlement is not tracked. ' +
   'Other frame exits remain unresolved, without invented causes. ' +
   'Stdout/stderr output is captured, but its association with the last paused frame may lag ' +
-  'as pipes flush. Native frames, worker threads, child processes, timers after process exit, ' +
+  'as pipes flush. Original source positions are used only when a local source map and its ' +
+  'embedded source content match the project files; unmapped generated locations are omitted. ' +
+  'Native frames, worker threads, child processes, timers after process exit, ' +
   'getters, Proxies, and framework internals are outside the recorded scope.';
 
 function send(message, budget = true) {
@@ -112,46 +115,150 @@ function closeDebuggerWhenIdle() {
   if (pausedInFlight === 0) socket?.close();
 }
 
-async function projectFile(scriptId) {
-  if (scripts.has(scriptId) && scripts.get(scriptId)?.checked)
-    return scripts.get(scriptId).file;
-  const script = scripts.get(scriptId);
-  if (!script?.url.startsWith('file://')) return undefined;
-  let filename;
+function projectPath(filename) {
+  const path = relative(root, filename);
+  if (
+    path === '..' ||
+    path.startsWith('..' + sep) ||
+    isAbsolute(path) ||
+    path
+      .split(sep)
+      .some((part) => ['node_modules', '.git', '.venv'].includes(part))
+  )
+    return undefined;
+  return path.split(sep).join('/');
+}
+
+async function snapshotSource(file, content) {
+  if (sources.has(file)) return;
+  sourceBytes += Buffer.byteLength(content);
+  if (sourceBytes > 2 * 1024 * 1024)
+    throw new Error('Source snapshots exceed 2 MiB budget');
+  send({ type: 'source', file, content });
+  sources.add(file);
+}
+
+async function verifiedSourceMap(filename, compiled) {
+  // Only consume a locally referenced map; remote URLs and untrusted sources
+  // must not redirect the displayed code away from the inspected project.
+  const matches = [
+    ...compiled.matchAll(/^\s*\/\/[#@]\s*sourceMappingURL\s*=\s*(\S+)\s*$/gm),
+  ];
+  const reference = matches.at(-1)?.[1];
+  if (!reference) return undefined;
+  let mapFile = filename;
+  let payload;
   try {
-    filename = await realpath(fileURLToPath(script.url));
+    if (/^data:application\/json(?:;charset=utf-8)?;base64,/i.test(reference)) {
+      const encoded = reference.slice(reference.indexOf(',') + 1);
+      if (encoded.length > 700000) return undefined;
+      payload = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
+    } else {
+      if (!/^[\w./\\%-]+\.map$/.test(reference)) return undefined;
+      mapFile = await realpath(
+        resolve(dirname(filename), decodeURIComponent(reference)),
+      );
+      if (!projectPath(mapFile)) return undefined;
+      const info = await stat(mapFile);
+      if (!info.isFile() || info.size > 512 * 1024) return undefined;
+      payload = JSON.parse(await readFile(mapFile, 'utf8'));
+    }
+    if (
+      payload?.version !== 3 ||
+      !Array.isArray(payload.sources) ||
+      !Array.isArray(payload.sourcesContent) ||
+      payload.sources.length > 100 ||
+      (typeof payload.sourceRoot !== 'undefined' &&
+        typeof payload.sourceRoot !== 'string')
+    )
+      return undefined;
+    const targets = new Map();
+    for (let i = 0; i < payload.sources.length; i++) {
+      const source = payload.sources[i];
+      const expected = payload.sourcesContent[i];
+      if (typeof source !== 'string' || typeof expected !== 'string') continue;
+      if (Buffer.byteLength(expected) > 512 * 1024) continue;
+      const path = resolve(dirname(mapFile), payload.sourceRoot || '', source);
+      const actual = await realpath(path).catch(() => undefined);
+      if (!actual) continue;
+      const file = projectPath(actual);
+      if (!file || file.split('/').includes('dist')) continue;
+      const info = await stat(actual);
+      if (!info.isFile() || info.size > 512 * 1024) continue;
+      // An old map or a changed source file can point the player at a line
+      // unrelated to the JavaScript that V8 actually executed.
+      if ((await readFile(actual, 'utf8')) !== expected) continue;
+      targets.set(source, {
+        file,
+        content: expected,
+        lines: expected.split(/\r?\n/),
+      });
+    }
+    if (!targets.size) return undefined;
+    return { map: new SourceMap(payload), targets };
   } catch {
     return undefined;
   }
-  const path = relative(root, filename);
-  const valid =
-    path !== '..' &&
-    !path.startsWith('..' + sep) &&
-    !isAbsolute(path) &&
-    !path
-      .split(sep)
-      .some((part) => ['node_modules', '.git', 'dist', '.venv'].includes(part));
-  script.checked = true;
-  if (!valid) return undefined;
-  const info = await stat(filename);
-  if (!info.isFile() || info.size > 512 * 1024)
-    throw new Error('Source exceeds 512 KiB budget: ' + path);
-  const file = path.split(sep).join('/');
-  script.file = file;
-  if (!sources.has(file)) {
-    // The debugger returns the source that V8 compiled, even if the file on disk
-    // changes while it is running. Do not substitute a newly read file.
+}
+
+async function projectSource(scriptId, location) {
+  const script = scripts.get(scriptId);
+  if (!script?.url.startsWith('file://')) return undefined;
+  if (!script.checked) {
+    script.checked = true;
+    const filename = await realpath(fileURLToPath(script.url)).catch(
+      () => undefined,
+    );
+    if (!filename) return undefined;
+    const file = projectPath(filename);
+    if (!file) return undefined;
+    const info = await stat(filename);
+    if (!info.isFile() || info.size > 512 * 1024)
+      throw new Error('Source exceeds 512 KiB budget: ' + file);
     const { scriptSource } = await request('Debugger.getScriptSource', {
       scriptId,
     });
+    script.file = file;
+    script.source = scriptSource;
     script.sourceLines = scriptSource.split(/\r?\n/);
-    sourceBytes += Buffer.byteLength(scriptSource);
-    if (sourceBytes > 2 * 1024 * 1024)
-      throw new Error('Source snapshots exceed 2 MiB budget');
-    send({ type: 'source', file, content: scriptSource });
-    sources.add(file);
+    script.sourceMap = await verifiedSourceMap(filename, scriptSource);
   }
-  return file;
+  if (!script.file) return undefined;
+  if (script.sourceMap) {
+    const mapping = script.sourceMap.map.findEntry(
+      location.lineNumber,
+      location.columnNumber,
+    );
+    const target = script.sourceMap.targets.get(mapping?.originalSource);
+    if (
+      target &&
+      mapping.generatedLine === location.lineNumber &&
+      Number.isInteger(mapping.originalLine) &&
+      mapping.originalLine >= 0 &&
+      mapping.originalLine < target.lines.length
+    ) {
+      await snapshotSource(target.file, target.content);
+      return {
+        file: target.file,
+        line: mapping.originalLine + 1,
+        generated: { file: script.file, line: location.lineNumber + 1 },
+      };
+    }
+  }
+  // Generated build output is displayed only with a verified original mapping.
+  // Other local JavaScript still uses the exact compiled text returned by V8.
+  if (script.file.split('/').includes('dist')) return undefined;
+  await snapshotSource(script.file, script.source);
+  return { file: script.file, line: location.lineNumber + 1 };
+}
+
+function sourceLocation(frame) {
+  return {
+    file: frame.file,
+    line: frame.line,
+    endLine: frame.line,
+    ...(frame.generated ? { generated: frame.generated } : {}),
+  };
 }
 
 async function remoteValue(object, depth = 0, seen = new Set()) {
@@ -364,10 +471,13 @@ async function invocationContext(frame, activeFrames) {
 
 async function breakpointAfterAwait(frame) {
   const lines = scripts.get(frame.raw.location.scriptId)?.sourceLines;
-  if (!lines || !/\bawait\b/.test(lines[frame.line - 1] || '')) return false;
+  if (!lines || !/\bawait\b/.test(lines[frame.generatedLine - 1] || ''))
+    return false;
   const next = lines.findIndex(
     (line, index) =>
-      index >= frame.line && line.trim() && !line.trim().startsWith('//'),
+      index >= frame.generatedLine &&
+      line.trim() &&
+      !line.trim().startsWith('//'),
   );
   if (next < 0) return false;
   const key = `${frame.raw.location.scriptId}:${next}`;
@@ -381,12 +491,12 @@ async function breakpointAfterAwait(frame) {
 }
 
 async function breakpointAtEntry(frame) {
-  const key = `${frame.raw.location.scriptId}:${frame.line - 1}`;
+  const key = `${frame.raw.location.scriptId}:${frame.generatedLine - 1}`;
   if (entryBreakpoints.has(key)) return;
   const { breakpointId } = await request('Debugger.setBreakpoint', {
     location: {
       scriptId: frame.raw.location.scriptId,
-      lineNumber: frame.line - 1,
+      lineNumber: frame.generatedLine - 1,
     },
   });
   entryBreakpoints.set(key, breakpointId);
@@ -395,16 +505,16 @@ async function breakpointAtEntry(frame) {
 async function paused(params) {
   const frames = [];
   for (const frame of [...params.callFrames].reverse()) {
-    const file = await projectFile(frame.location.scriptId);
-    if (!file) continue;
+    const source = await projectSource(frame.location.scriptId, frame.location);
+    if (!source) continue;
     const symbol = frame.functionName || '<module>';
     frames.push({
       raw: frame,
-      file,
-      line: frame.location.lineNumber + 1,
+      ...source,
+      generatedLine: frame.location.lineNumber + 1,
       symbol,
       signature: `${frame.location.scriptId}:${frame.functionLocation?.lineNumber ?? 0}:${symbol}`,
-      symbolId: `${file}:${symbol}`,
+      symbolId: `${source.file}:${symbol}`,
     });
   }
   const resumedContext = frames.at(-1)
@@ -417,10 +527,10 @@ async function paused(params) {
     stack[common].signature === frames[common].signature &&
     !(
       stack[common].awaiting &&
-      frames[common].line === stack[common].entryLine &&
+      frames[common].generatedLine === stack[common].entryLine &&
       params.hitBreakpoints?.includes(
         entryBreakpoints.get(
-          `${frames[common].raw.location.scriptId}:${frames[common].line - 1}`,
+          `${frames[common].raw.location.scriptId}:${frames[common].generatedLine - 1}`,
         ),
       )
     ) &&
@@ -446,7 +556,7 @@ async function paused(params) {
         callId: old.callId,
         ...(stack.at(-1) ? { parentCallId: stack.at(-1).callId } : {}),
         label: `await in ${old.symbol}`,
-        source: { file: old.file, line: old.line, endLine: old.line },
+        source: sourceLocation(old),
         values: { task: old.callId, thread: 'main' },
         stack: [...stack.map((frame) => frame.callId), old.callId],
         certainty: 'observed',
@@ -461,7 +571,7 @@ async function paused(params) {
       callId: old.callId,
       ...(stack.at(-1) ? { parentCallId: stack.at(-1).callId } : {}),
       label: `${observedReturn ? 'return' : 'exited'} ${old.symbol}`,
-      source: { file: old.file, line: old.line, endLine: old.line },
+      source: sourceLocation(old),
       values: { task: 'main', thread: 'main' },
       stack: stack.map((frame) => frame.callId),
       ...(observedReturn ? { result: old.observedReturn } : {}),
@@ -486,10 +596,12 @@ async function paused(params) {
       const resuming =
         index === frames.length - 1 &&
         suspension?.signature === current.signature &&
-        current.line > suspension.line;
+        current.generatedLine > suspension.generatedLine;
       current.resuming = resuming;
       current.callId = resuming ? suspension.callId : `call-${++nextCall}`;
-      current.entryLine = resuming ? suspension.entryLine : current.line;
+      current.entryLine = resuming
+        ? suspension.entryLine
+        : current.generatedLine;
       stack.push(current);
       if (resuming) {
         suspendedCalls.delete(current.callId);
@@ -498,11 +610,7 @@ async function paused(params) {
           symbolId: current.symbolId,
           callId: current.callId,
           label: `resume ${current.symbol}`,
-          source: {
-            file: current.file,
-            line: current.line,
-            endLine: current.line,
-          },
+          source: sourceLocation(current),
           values: { task: current.callId, thread: 'main' },
           stack: stack.map((frame) => frame.callId),
           certainty: 'observed',
@@ -515,6 +623,10 @@ async function paused(params) {
     } else {
       current.callId = stack[index].callId;
       stack[index].line = current.line;
+      stack[index].generatedLine = current.generatedLine;
+      stack[index].generated = current.generated;
+      stack[index].file = current.file;
+      stack[index].symbolId = current.symbolId;
     }
     snapshots[current.callId] = await locals(current.raw);
     // V8 exposes `returnValue` only at a debugger-observed return position.
@@ -529,11 +641,7 @@ async function paused(params) {
         callId: current.callId,
         ...(index ? { parentCallId: frames[index - 1].callId } : {}),
         label: `enter ${current.symbol}`,
-        source: {
-          file: current.file,
-          line: current.line,
-          endLine: current.line,
-        },
+        source: sourceLocation(current),
         inputs: snapshots[current.callId],
         values: { task: 'main', thread: 'main', phase: 'before' },
         stack: stack.slice(0, index + 1).map((frame) => frame.callId),
@@ -592,7 +700,7 @@ async function paused(params) {
       callId: active.callId,
       ...(frames.length > 1 ? { parentCallId: frames.at(-2).callId } : {}),
       label: `catch in ${active.symbol}`,
-      source: { file: active.file, line: active.line, endLine: active.line },
+      source: sourceLocation(active),
       values: { task: 'main', thread: 'main' },
       inputs: snapshots[active.callId],
       stack: lastFrame.stack,
@@ -611,7 +719,7 @@ async function paused(params) {
       callId: active.callId,
       ...(frames.length > 1 ? { parentCallId: frames.at(-2).callId } : {}),
       label: `statement ${active.symbol}`,
-      source: { file: active.file, line: active.line, endLine: active.line },
+      source: sourceLocation(active),
       values: { task: 'main', thread: 'main', phase: 'before' },
       stack: lastFrame.stack,
       locals: snapshots,
@@ -633,7 +741,7 @@ async function paused(params) {
       callId: active.callId,
       ...(frames.length > 1 ? { parentCallId: frames.at(-2).callId } : {}),
       label: `throw ${exception.className || exception.type || 'exception'}`,
-      source: { file: active.file, line: active.line, endLine: active.line },
+      source: sourceLocation(active),
       values: { task: 'main', thread: 'main' },
       stack: lastFrame.stack,
       locals: snapshots,
@@ -660,7 +768,7 @@ function output(data, stream) {
       symbolId: frame.symbolId,
       callId: frame.callId,
       label: `console ${frame.symbol}`,
-      source: { file: frame.file, line: frame.line, endLine: frame.line },
+      source: sourceLocation(frame),
       values: { task: 'main', thread: 'main', stream },
       stack: frame.stack,
       locals: frame.locals,

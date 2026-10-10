@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm, realpath } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import ts from 'typescript';
 import { RecordingService } from '../src/services/recording-service.js';
 import { FileSessionStore } from '../src/storage/file-session-store.js';
 import type { TraceEvent } from '../src/domain/trace.js';
@@ -10,8 +11,10 @@ import { traceSchema } from '../src/domain/trace.js';
 
 async function fixture(files: Record<string, string>) {
   const root = await mkdtemp(join(tmpdir(), 'code-anime-python-'));
-  for (const [name, content] of Object.entries(files))
+  for (const [name, content] of Object.entries(files)) {
+    await mkdir(dirname(join(root, name)), { recursive: true });
     await writeFile(join(root, name), content);
+  }
   const store = await FileSessionStore.open(tmpdir(), {
     ttlMs: 60000,
     maxSessionBytes: 10 * 1024 * 1024,
@@ -225,6 +228,121 @@ test('records observed JavaScript calls, source steps, loop values and output ac
     assert.equal(saved.provider, 'node-v8-inspector');
     assert.equal(saved.sourceFiles?.['main.cjs'], main);
     assert.match(saved.sourceFiles?.['helper.cjs'] ?? '', /function add/);
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript recording maps verified external and inline source maps to original TypeScript', async () => {
+  const original = [
+    'function add(a: number, b: number): number {',
+    '  const sum = a + b;',
+    '  return sum;',
+    '}',
+    'console.log(add(10, 20));',
+  ].join('\n');
+  const built = ts.transpileModule(original, {
+    fileName: 'entry.ts',
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      sourceMap: true,
+      inlineSources: true,
+    },
+  });
+  const map = JSON.parse(built.sourceMapText!);
+  map.sources = ['../src/entry.ts'];
+  const mapped = JSON.stringify(map);
+  for (const mode of ['external', 'inline'] as const) {
+    const compiled = built.outputText.replace(
+      /\/\/# sourceMappingURL=entry\.js\.map/,
+      mode === 'external'
+        ? '//# sourceMappingURL=entry.cjs.map'
+        : '//# sourceMappingURL=data:application/json;base64,' +
+            Buffer.from(mapped).toString('base64'),
+    );
+    const f = await fixture({
+      'src/entry.ts': original,
+      'dist/entry.cjs': compiled,
+      ...(mode === 'external' ? { 'dist/entry.cjs.map': mapped } : {}),
+    });
+    try {
+      const job = await f.service.run({
+        action: 'start',
+        language: 'javascript',
+        projectRoot: f.root,
+        entry: 'dist/entry.cjs',
+      });
+      const result = await wait(f.service, job.jobId);
+      assert.equal(result.complete, true, `${mode}: ${JSON.stringify(result)}`);
+      const { events } = await allEvents(f.store, result.sessionId!);
+      const statement = events.find(
+        (event) =>
+          event.kind === 'statement' &&
+          event.symbolId === 'src/entry.ts:add' &&
+          event.source?.line === 2,
+      );
+      assert.ok(statement, `${mode}: mapped TypeScript calculation`);
+      assert.equal(statement.source?.generated?.file, 'dist/entry.cjs');
+      assert.ok(statement.source?.generated?.line);
+      assert.equal(
+        events.find(
+          (event) =>
+            event.kind === 'return' && event.symbolId === 'src/entry.ts:add',
+        )?.result,
+        30,
+      );
+      assert.equal(
+        events
+          .filter((event) => event.kind === 'console')
+          .map((e) => e.output)
+          .join(''),
+        '30\n',
+      );
+      const trace = (await f.store.get(result.sessionId!))!.flow.trace!;
+      assert.equal(trace.sourceFiles?.['src/entry.ts'], original);
+      assert.equal(trace.sourceFiles?.['dist/entry.cjs'], undefined);
+      assert.equal(trace.recording?.complete, true);
+    } finally {
+      await f.close();
+    }
+  }
+});
+
+test('JavaScript recorder rejects stale source-map claims and preserves compiled source', async () => {
+  const original = 'const value: number = 2;\nconsole.log(value);';
+  const built = ts.transpileModule(original, {
+    fileName: 'entry.ts',
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      sourceMap: true,
+      inlineSources: true,
+    },
+  });
+  const compiled = built.outputText.replace(
+    'sourceMappingURL=entry.js.map',
+    'sourceMappingURL=entry.cjs.map',
+  );
+  const map = JSON.parse(built.sourceMapText!);
+  map.sources = ['src/entry.ts'];
+  const f = await fixture({
+    'src/entry.ts': original + '\n// changed after compilation',
+    'entry.cjs': compiled,
+    'entry.cjs.map': JSON.stringify(map),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'entry.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const trace = (await f.store.get(result.sessionId!))!.flow.trace!;
+    assert.equal(trace.sourceFiles?.['entry.cjs'], compiled);
+    assert.equal(trace.sourceFiles?.['src/entry.ts'], undefined);
+    assert.ok(trace.events.every((e) => !e.source?.generated));
   } finally {
     await f.close();
   }

@@ -3,6 +3,11 @@ export const sourceSchema = z.object({
   file: z.string(),
   line: z.number().int().positive(),
   endLine: z.number().int().positive(),
+  // When a verified source map rewrites V8's generated location, retain the
+  // debugger-observed generated position for provenance and troubleshooting.
+  generated: z
+    .object({ file: z.string(), line: z.number().int().positive() })
+    .optional(),
 });
 export const eventSchema = z.object({
   id: z.string(),

@@ -814,6 +814,9 @@ function renderSource(state, event) {
   const location = sourceEvent?.source;
   const sourceCode = location ? trace?.sourceFiles?.[location.file] : undefined;
   $('source').textContent = location?.file ?? 'No source location recorded';
+  $('source').title = location?.generated
+    ? `Original source mapped from V8 location ${location.generated.file}:${location.generated.line}; source-map content verified against the project file`
+    : '';
   $('source-line').textContent = location ? 'L' + location.line : '—';
   const sourceKey =
     sourceCode === undefined

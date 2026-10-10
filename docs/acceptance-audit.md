@@ -104,8 +104,20 @@ about future changes.
     `aria-current="location"`; enabled breakpoint buttons announce their line
     and whether activation sets or removes the breakpoint. A browser regression
     checks these announcements across keyboard activation and timeline seeks.
-    Complete language-specific grammar, source maps, and broad original-source
-    provenance remain incomplete or unverified.
+    The Node.js recorder now supports external and base64-inline V3 source maps
+    using Node's source-map decoder. A generated JavaScript pause is attributed
+    to the original TypeScript line only when the source-map reference is local,
+    the original path is inside the project, and embedded source content exactly
+    matches the original project file. The trace retains V8's generated file
+    and line alongside the original source location; the player exposes that
+    provenance in the source-header tooltip. Focused tests exercise both map
+    formats and reject stale mappings, and a real browser test verifies source
+    highlighting and console replay from a transpiled TypeScript fixture.
+    Unmapped generated files under `dist` remain excluded; other user JavaScript
+    files retain the exact text compiled by V8 when mapping is unavailable.
+    Complete language-specific grammar, advanced bundler mappings, generated
+    output without valid maps, and broad original-source provenance remain
+    incomplete or unverified.
 12. **Follow method execution — implemented, bounded verification.**
     Player and recording browser tests cover source transitions, returning caller
     state, and disabling follow. Source windows retain DOM nodes on adjacent
@@ -227,7 +239,10 @@ about future changes.
     regression verifies V8-reported Date, Map, Set, RegExp, Error, typed-array,
     and class-instance types without claiming their native internal state was
     captured. Snapshot depth and property counts remain bounded. The
-    optional real CodeGraph integration test previously passed against an
+    TypeScript-to-JavaScript source mapping has observed line highlighting
+    coverage for an externally mapped CommonJS entry and an inline map;
+    this does not add a TypeScript runtime tracing backend. The optional
+    real CodeGraph integration test previously passed against an
     indexed Kotlin fixture on Windows with the default npm CLI launcher.
     Structural analysis does not establish Kotlin runtime recording. Establish
     the full supported-language inventory and representative runtime evidence.
@@ -266,9 +281,9 @@ about future changes.
 
 ## Checkpoint verification
 
-- `npm run check`: typecheck, 109 core tests (108 passed, one optional live
+- `npm run check`: typecheck, 111 core tests (110 passed, one optional live
   CodeGraph integration test skipped), build, and Prettier passed.
-- `npm run test:browser`: 28 passed, including paired-call, recorded
+- `npm run test:browser`: 29 passed, including paired-call, recorded
   execution-path, separate console writes, overview rewind, and persisted
   five-session continuation-chain coverage.
   Browser coverage includes recorded nested disclosure,
@@ -279,6 +294,8 @@ about future changes.
   display, and reverse seeking without rewriting recorded stdout. The 27-test
   Playwright suite was rerun after the V8 Promise snapshot update.
   The additional browser test verifies source-line and breakpoint accessibility.
+  The latest browser regression records a transpiled TypeScript entry, verifies
+  its mapped original source line and V8 provenance tooltip, and replays output.
 - `npm run package:check`: packed CLI installation, MCP handshake, player assets,
   and stored flow API passed, including both Python and JavaScript observed
   recordings through the installed package.
