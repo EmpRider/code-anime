@@ -70,7 +70,6 @@ about future changes.
     Kotlin raw-string state across source windows. Lexical unit tests and a
     virtualized browser regression passed in CI on 2026-10-10. Full language
     grammar, rendering fidelity, and source-map scenarios remain unverified.
-    Full language grammar and source-map scenarios remain unverified.
 12. **Follow method execution — implemented, bounded verification.**
     Player and recording browser tests cover source transitions, returning caller
     state, and disabling follow. Source windows retain DOM nodes on adjacent
