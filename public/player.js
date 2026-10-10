@@ -1,4 +1,5 @@
 import { replayState } from './replay.js';
+import { tokenizeSourceLine, sourceLexicalStates } from './source-lexer.js';
 const $ = (id) => document.getElementById(id);
 let flow, originalFlow, timer, animation;
 let cursor = 0;
@@ -34,6 +35,7 @@ let inspectedSourceEvent;
 let lastConsoleText = '';
 const sourceLines = new Map();
 const sourceCache = new Map();
+const sourceLexCache = new Map();
 const consoleEvents = [];
 const frameSnapshots = new Map();
 const frameSources = new Map();
@@ -150,6 +152,7 @@ function buildNodes(preserveInspection = false) {
   }
   sourceLines.clear();
   sourceCache.clear();
+  sourceLexCache.clear();
   sourceBreakpointVersion++;
   consoleEvents.length = 0;
   frameSnapshots.clear();
@@ -662,30 +665,16 @@ function precedingFrameLocals(state, event, previousEvent) {
   return undefined;
 }
 // Token spans only decorate literal source text. Source code is never generated.
-function codeText(content, file = '') {
+function codeText(content, file = '', lexicalState = null) {
   const container = text('span', '', 'code-text');
-  const python = /\.(?:py|pyw|pyi)$/i.test(file);
-  const token = python
-    ? /#.*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b(?:False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b|\b\d+(?:\.\d+)?\b/g
-    : /\/\/.*|\/\*.*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b(?:class|function|fun|const|let|var|public|private|static|return|if|else|for|while|new|async|await|throw|import|export|void|int|String|number|boolean|true|false|null)\b|\b\d+(?:\.\d+)?\b/g;
-  let start = 0;
-  for (const match of content.matchAll(token)) {
-    if (match.index > start)
-      container.append(
-        document.createTextNode(content.slice(start, match.index)),
-      );
-    const kind = (python ? /^#/ : /^(?:\/\/|\/\*)/).test(match[0])
-      ? 'comment'
-      : /^["']/.test(match[0])
-        ? 'string'
-        : /^\d/.test(match[0])
-          ? 'number'
-          : 'keyword';
-    container.append(text('span', match[0], 'token-' + kind));
-    start = match.index + match[0].length;
+  for (const { value, kind } of tokenizeSourceLine(
+    content,
+    file,
+    lexicalState,
+  ).segments) {
+    if (kind) container.append(text('span', value, 'token-' + kind));
+    else container.append(document.createTextNode(value));
   }
-  if (start < content.length)
-    container.append(document.createTextNode(content.slice(start)));
   return container;
 }
 // Indices are built once per loaded trace and stay ordered across continuation
@@ -725,6 +714,10 @@ function renderSource(state, event) {
   if (sourceCode !== undefined && !sourceCache.has(location.file))
     sourceCache.set(location.file, sourceCode.split(/\r?\n/));
   const lines = sourceCode === undefined ? [] : sourceCache.get(location.file);
+  if (sourceCode !== undefined && !sourceLexCache.has(location.file))
+    sourceLexCache.set(location.file, sourceLexicalStates(lines, location.file));
+  const lexicalStates =
+    sourceCode === undefined ? [] : sourceLexCache.get(location.file);
   // Long files keep only the current source window in the DOM.
   let firstLine = 1;
   if (lines.length > 600) {
@@ -764,7 +757,10 @@ function renderSource(state, event) {
           ? 'Toggle breakpoint at line ' + i
           : 'No execution recorded on this line';
         gutter.disabled = !stepIndex;
-        row.append(gutter, codeText(lines[i - 1] ?? '', location.file));
+        row.append(
+          gutter,
+          codeText(lines[i - 1] ?? '', location.file, lexicalStates[i - 1]),
+        );
         fragment.append(row);
       }
       $('snippet').replaceChildren(fragment);
