@@ -1,7 +1,8 @@
 # Execution visualizer acceptance audit
 
-Checkpoint: 2026-10-10, last pushed baseline `0045a2a` with pending browser
-disclosure improvements.
+Checkpoint: 2026-10-10, baseline commit `c965405` with validated pending
+multiline source-coloring, JSDOM test-harness improvements, and targeted
+JavaScript template-interpolation and Rust raw-string fixes.
 
 Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
@@ -66,9 +67,16 @@ about future changes.
 11. **Live source editor — partial.**
     `renderSource()` displays captured source, line numbers, active arrow,
     breakpoint controls, and source-follow navigation. Python lexical coloring
-    now distinguishes floor division and comments. Multiline lexical context,
-    broader language syntax, and source-map scenarios remain incomplete or
-    unverified. Preserve exact source text when addressing these gaps.
+    now distinguishes floor division and comments. Stateful lexical preparation
+    preserves multiline Python strings, Kotlin nested comments and raw strings,
+    Rust raw strings and escaped quotes, and JavaScript/TypeScript multiline
+    comments across virtualized source windows. Interpolated JavaScript/TypeScript
+    template literals now distinguish embedded code across lines, including
+    nested templates and escaped interpolation markers. Single-line Rust raw
+    literals restore code highlighting after closing hashes. Browser regressions
+    verify exact original text, inert HTML-like source and active-line continuity.
+    Complete language-specific grammar, source maps, and broad original-source
+    provenance remain incomplete or unverified.
 12. **Follow method execution — implemented, bounded verification.**
     Player and recording browser tests cover source transitions, returning caller
     state, and disabling follow. Source windows retain DOM nodes on adjacent
@@ -108,8 +116,9 @@ about future changes.
     regression verifies unchanged packets on non-navigation updates. Connection
     rebuilds and broader timing/visual quality remain unverified.
 21. **No flicker/layout jumps — partial.**
-    Source-window reuse and cached timeline filtering reduce DOM work; the
-    large-trace browser regression protects source node identity. Inspector,
+    Source-window reuse, cached lexical state and cached timeline filtering
+    reduce DOM work; source-window browser regressions protect source node
+    identity during adjacent steps. Inspector,
     packet, and connection updates still need scrutiny for unnecessary rebuilds.
 22. **Immediate disclosure — implemented, incomplete scale evidence.**
     Disclosure uses prepared data; tests verify no request and cursor retention.
@@ -171,7 +180,8 @@ about future changes.
 35. **Ten functional acceptance scenarios — incomplete as a set.**
     Existing tests cover portions of each scenario, including deep recursion and
     safe unbounded execution. Recorded nested disclosure during playback is now
-    verified. Large real continuation performance and the representative
+    verified. Syntax-window tests cover 1,000 source lines and escaped/multiline
+    lexical boundaries. Large real continuation performance and the representative
     supported-language matrix remain unverified. Do not infer acceptance from counts.
 36. **UI acceptance — incomplete.**
     Responsive layout, packet stability, method disclosure, and source-state
@@ -183,15 +193,22 @@ about future changes.
 
 ## Checkpoint verification
 
-- `npm run check`: typecheck, build, Prettier, and 66 core tests passed; one
+- `npm run check`: typecheck, build, Prettier, and 74 core tests passed; one
   optional live CodeGraph integration test skipped (2026-10-10 candidate).
-- `npm run test:browser`: 18 passed, including recorded nested disclosure,
+- `npm run test:browser`: 21 passed, including recorded nested disclosure,
   repeated simulated invocations, recorded continuation preservation, deep
-  simulated recursion, keyboard pagination, source coloring, and mobile layouts.
+  simulated recursion, keyboard pagination, multiline lexical state, virtualized
+  source continuity, and mobile layouts.
 - `npm run package:check`: packed CLI installation, MCP handshake, player assets,
   and stored flow API passed for the current candidate.
+- Both JSDOM player suites exercise the module-imported stateful lexer; 26
+  player and continuation tests passed after updating the JSDOM import harness.
+- Additional focused lexer regressions cover multiline/nested JavaScript template
+  interpolations, escaped interpolation markers, single-line Rust raw strings,
+  and empty source windows. Browser coverage checks embedded code tokens and
+  subsequent statements; comprehensive syntax grammar remains unverified.
 - The 20,000-event synthetic single-invocation browser fixture reported seek
-  p50 12.8 ms and p95 23.3 ms, excluding paint and network. These figures do
+  p50 17.6 ms and p95 27.5 ms, excluding paint and network. These figures do
   not verify performance for broad or deep trees.
 - `git diff --check`: passed with no whitespace errors.
 
@@ -265,8 +282,9 @@ Large branching trees and broader visual acceptance still need focused checks.
    add panel controls/preferences and acceptance assertions for actual geometry.
 2. Prevent non-navigation updates from restarting packet animations; verify
    nested disclosure and state synchronization during playback.
-3. Complete multiline source coloring while preserving original text and source
-   window performance, then verify the source execution reference visually.
+3. Expand language-specific syntax coverage, test source-map provenance and
+   verify the source execution reference visually. Multiline source coloring
+   across virtualized windows now has explicit regressions.
 4. Exercise real stored large traces, deep trees and language scenarios; close
    remaining correctness and accessibility gaps with focused tests.
 5. Revisit every item here with final evidence and run full delivery gates.

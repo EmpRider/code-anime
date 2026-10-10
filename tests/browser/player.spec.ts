@@ -464,6 +464,179 @@ test('Python source colors comments and floor division without changing literal 
   );
 });
 
+test('multiline Python strings and nested Kotlin comments retain lexical context without altering source', async ({
+  page,
+}) => {
+  const python = [
+    'def example():',
+    '    description = """',
+    '    return # appears inside string',
+    '    <img src=x onerror=alert(1)>',
+    '    """',
+    '    return 30 # actual comment',
+  ];
+  const kotlin = [
+    'fun main() {',
+    '  /* outer block',
+    '    /* nested return */',
+    '    public class // still inside comment',
+    '  */',
+    '  val message = """',
+    '  class // inside raw string',
+    '  """',
+    '  return',
+    '}',
+  ];
+  for (const [file, lines, activeLine] of [
+    ['example.py', python, 6],
+    ['example.kt', kotlin, 9],
+  ] as const) {
+    await page.route('**/api/flow/*', async (route) => {
+      const response = await route.fetch();
+      const flow = await response.json();
+      flow.trace.sourceFiles = { [file]: lines.join('\n') };
+      flow.trace.events.forEach((event: TraceEvent) => {
+        event.source = { file, line: activeLine, endLine: activeLine };
+      });
+      await route.fulfill({ json: flow });
+    });
+    await page.goto(url);
+    await page.locator('#next').click();
+    await expect(page.locator('.code-text')).toHaveText(lines);
+    await expect(page.locator('.executing-line')).toHaveAttribute(
+      'data-line',
+      String(activeLine),
+    );
+    if (file === 'example.py') {
+      await expect(page.locator('.token-string')).toHaveText([
+        '"""',
+        '    return # appears inside string',
+        '    <img src=x onerror=alert(1)>',
+        '    """',
+      ]);
+      await expect(page.locator('.token-comment')).toHaveText([
+        '# actual comment',
+      ]);
+      await expect(page.locator('.token-keyword')).toHaveText([
+        'def',
+        'return',
+      ]);
+    } else {
+      await expect(page.locator('.token-comment')).toHaveText([
+        '/* outer block',
+        '    /* nested return */',
+        '    public class // still inside comment',
+        '  */',
+      ]);
+      await expect(page.locator('.token-string')).toHaveText([
+        '"""',
+        '  class // inside raw string',
+        '  """',
+      ]);
+      await expect(page.locator('.token-keyword')).toHaveText([
+        'fun',
+        'val',
+        'return',
+      ]);
+    }
+    await expect(page.locator('#snippet img')).toHaveCount(0);
+    await page.unrouteAll();
+  }
+});
+
+test('JavaScript template interpolation and Rust raw strings preserve visible source and following code', async ({
+  page,
+}) => {
+  const cases = [
+    {
+      file: 'example.ts',
+      lines: [
+        'const text = `start ${',
+        '  ({ value: 2 }).value + (true ? 3 : 4)',
+        '} end`;',
+        'const after = 5; // outside',
+      ],
+      line: 2,
+      keyword: 'true',
+      number: '5',
+      comment: '// outside',
+    },
+    {
+      file: 'example.rs',
+      lines: [
+        'let text = r#"// literal"#; let result = 12; // outside',
+        'let next = 3;',
+      ],
+      line: 1,
+      keyword: 'let',
+      number: '12',
+      comment: '// outside',
+    },
+  ];
+  for (const { file, lines, line, keyword, number, comment } of cases) {
+    await page.route('**/api/flow/*', async (route) => {
+      const response = await route.fetch();
+      const flow = await response.json();
+      flow.trace.sourceFiles = { [file]: lines.join('\n') };
+      flow.trace.events.forEach((event: TraceEvent) => {
+        event.source = { file, line, endLine: line };
+      });
+      await route.fulfill({ json: flow });
+    });
+    await page.goto(url);
+    await page.locator('#next').click();
+    await expect(page.locator('.code-text')).toHaveText(lines);
+    await expect(page.locator('.token-keyword')).toContainText([keyword]);
+    await expect(page.locator('.token-number')).toContainText([number]);
+    await expect(page.locator('.token-comment')).toHaveText(comment);
+    await expect(page.locator('.executing-line')).toHaveAttribute(
+      'data-line',
+      String(line),
+    );
+    await page.unrouteAll();
+  }
+});
+
+test('virtual source windows inherit earlier multiline syntax and retain source nodes while stepping', async ({
+  page,
+}) => {
+  const lines = Array.from({ length: 1000 }, (_, index) => {
+    if (index === 0) return '/* opening block';
+    if (index === 800) return '*/ const finished = 1;';
+    return 'const ignored = "plain"; // inside block';
+  });
+  await page.route('**/api/flow/*', async (route) => {
+    const response = await route.fetch();
+    const flow = await response.json();
+    flow.trace.sourceFiles = { 'large.ts': lines.join('\n') };
+    flow.trace.events.forEach((event: TraceEvent, index: number) => {
+      event.source = {
+        file: 'large.ts',
+        line: index === 0 ? 700 : 701,
+        endLine: index === 0 ? 700 : 701,
+      };
+    });
+    await route.fulfill({ json: flow });
+  });
+  await page.goto(url);
+  await page.locator('#next').click();
+  const row = page.locator('.code-row[data-line="700"]');
+  await expect(row.locator('.token-comment')).toHaveText(
+    'const ignored = "plain"; // inside block',
+  );
+  await expect(row.locator('.token-keyword')).toHaveCount(0);
+  const originalRow = await row.elementHandle();
+  await page.locator('#next').click();
+  expect(await originalRow!.evaluate((node) => node.isConnected)).toBe(true);
+  await expect(page.locator('.executing-line')).toHaveAttribute(
+    'data-line',
+    '701',
+  );
+  await expect(
+    page.locator('.code-row[data-line="801"] .token-keyword'),
+  ).toHaveText('const');
+});
+
 test('desktop layout resizes, focuses and remembers preferences without moving playback', async ({
   page,
 }) => {

@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { JSDOM } from 'jsdom';
 import { replayState } from '../public/replay.js';
+import { prepareSourceHighlighting } from '../public/source-highlighter.js';
 
 const sources = {
   'A.ts':
@@ -92,6 +93,7 @@ async function createPlayer(loadContinuation, first = initial()) {
   const get = (id) => window.document.getElementById(id);
   let continuationRequests = 0;
   window.replayState = replayState;
+  window.prepareSourceHighlighting = prepareSourceHighlighting;
   window.matchMedia = () => ({ matches: true });
   window.HTMLElement.prototype.scrollIntoView = () => {};
   window.fetch = async (url) => {
@@ -104,7 +106,7 @@ async function createPlayer(loadContinuation, first = initial()) {
       json: () => (loadContinuation ? loadContinuation(url) : continuation()),
     };
   };
-  window.eval(js.replace(/^import .*;\r?\n/, ''));
+  window.eval(js.replace(/^import .*;\r?\n/gm, ''));
   await waitFor(
     () => get('progress').textContent === '0 / ' + first.steps.length,
     'initial chunk did not load',
