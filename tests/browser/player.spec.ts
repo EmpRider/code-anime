@@ -546,10 +546,15 @@ test('desktop layout resizes, focuses and remembers preferences without moving p
   await expect(page.locator('.inspector')).toBeVisible();
   await page.locator('#console-panel summary').click();
   await expect(page.locator('#console-output')).toBeVisible();
+  const savedConsole = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('code-anime-layout') ?? '{}').console,
+  );
+  expect(savedConsole).toBe(true);
   await expect(page.locator('#progress')).toHaveText('70 / 100');
   await page.reload();
   await expect(page.locator('#progress')).toHaveText('0 / 100');
   await expect(page.locator('.inspector')).toBeVisible();
+  await expect(page.locator('#console-panel')).toHaveAttribute('open', '');
   await expect(page.locator('#console-output')).toBeVisible();
   await expect(divider).toHaveAttribute('aria-valuenow', String(width));
 });
