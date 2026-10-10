@@ -1,7 +1,7 @@
 # Execution visualizer acceptance audit
 
-Checkpoint: 2026-10-10, last pushed baseline `0045a2a` with pending browser
-disclosure improvements.
+Checkpoint: 2026-10-10, validated feature-branch baseline `c965405`.
+Multiline source coloring is being verified on a separate branch.
 
 Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
@@ -65,10 +65,11 @@ about future changes.
     tests do not establish fidelity to the requested source execution experience.
 11. **Live source editor — partial.**
     `renderSource()` displays captured source, line numbers, active arrow,
-    breakpoint controls, and source-follow navigation. Python lexical coloring
-    now distinguishes floor division and comments. Multiline lexical context,
-    broader language syntax, and source-map scenarios remain incomplete or
-    unverified. Preserve exact source text when addressing these gaps.
+    breakpoint controls, and source-follow navigation. A multiline-aware lexer
+    now carries Python triple-string, JavaScript block-comment/template, and
+    Kotlin raw-string state across source windows. Lexical unit tests and a
+    virtualized browser regression passed in CI on 2026-10-10. Full language
+    grammar, rendering fidelity, and source-map scenarios remain unverified.
 12. **Follow method execution — implemented, bounded verification.**
     Player and recording browser tests cover source transitions, returning caller
     state, and disabling follow. Source windows retain DOM nodes on adjacent
@@ -194,6 +195,11 @@ about future changes.
   p50 12.8 ms and p95 23.3 ms, excluding paint and network. These figures do
   not verify performance for broad or deep trees.
 - `git diff --check`: passed with no whitespace errors.
+- The `codex/multiline-source-lexing` branch passed 70 core tests with one
+  optional real-CodeGraph integration skip; 19 Chromium browser tests passed,
+  including multiline virtualized windows and immediate console persistence.
+  Core, formatting, build, and package gates passed on Ubuntu and Windows
+  with Node 22 and 24 (2026-10-10, commit `550d5b6`).
 
 ## Next implementation order
 
@@ -265,8 +271,8 @@ Large branching trees and broader visual acceptance still need focused checks.
    add panel controls/preferences and acceptance assertions for actual geometry.
 2. Prevent non-navigation updates from restarting packet animations; verify
    nested disclosure and state synchronization during playback.
-3. Complete multiline source coloring while preserving original text and source
-   window performance, then verify the source execution reference visually.
+3. Verify multiline source coloring across long virtualized files, preserve
+   original source text, then inspect the source execution experience visually.
 4. Exercise real stored large traces, deep trees and language scenarios; close
    remaining correctness and accessibility gaps with focused tests.
 5. Revisit every item here with final evidence and run full delivery gates.

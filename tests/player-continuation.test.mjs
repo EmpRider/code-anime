@@ -4,6 +4,10 @@ import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { JSDOM } from 'jsdom';
 import { replayState } from '../public/replay.js';
+import {
+  sourceLexicalStates,
+  tokenizeSourceLine,
+} from '../public/source-lexer.js';
 
 const sources = {
   'A.ts':
@@ -92,6 +96,8 @@ async function createPlayer(loadContinuation, first = initial()) {
   const get = (id) => window.document.getElementById(id);
   let continuationRequests = 0;
   window.replayState = replayState;
+  window.sourceLexicalStates = sourceLexicalStates;
+  window.tokenizeSourceLine = tokenizeSourceLine;
   window.matchMedia = () => ({ matches: true });
   window.HTMLElement.prototype.scrollIntoView = () => {};
   window.fetch = async (url) => {
@@ -104,7 +110,7 @@ async function createPlayer(loadContinuation, first = initial()) {
       json: () => (loadContinuation ? loadContinuation(url) : continuation()),
     };
   };
-  window.eval(js.replace(/^import .*;\r?\n/, ''));
+  window.eval(js.replace(/^import .*;\r?\n/gm, ''));
   await waitFor(
     () => get('progress').textContent === '0 / ' + first.steps.length,
     'initial chunk did not load',

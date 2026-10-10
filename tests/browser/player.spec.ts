@@ -464,6 +464,43 @@ test('Python source colors comments and floor division without changing literal 
   );
 });
 
+test('multiline source syntax survives virtualized windows and playback', async ({
+  page,
+}) => {
+  const source = Array.from({ length: 710 }, (_, index) => 'line ' + index);
+  source[1] = 'description = """start';
+  source[674] = 'def fake(): # literal <svg onload=alert(1)>';
+  source[680] = 'end""" # actual comment';
+  source[684] = 'return 7 # outside';
+  await page.route('**/api/flow/*', async (route) => {
+    const response = await route.fetch();
+    const flow = await response.json();
+    flow.trace.sourceFiles = { 'large.py': source.join('\n') };
+    flow.trace.events.forEach((event: TraceEvent, index: number) => {
+      const line = index === 0 ? 675 : 685;
+      event.source = { file: 'large.py', line, endLine: line };
+    });
+    await route.fulfill({ json: flow });
+  });
+  await page.goto(url);
+  await page.locator('#next').click();
+  const literal = page.locator('.code-row[data-line="675"]');
+  await expect(literal.locator('.code-text')).toHaveText(source[674]!);
+  await expect(literal.locator('.token-string')).toHaveText(source[674]!);
+  await expect(literal.locator('.token-comment')).toHaveCount(0);
+  const after = page.locator('.code-row[data-line="685"]');
+  await expect(after.locator('.token-keyword')).toHaveText('return');
+  await expect(after.locator('.token-comment')).toHaveText('# outside');
+  await expect(page.locator('#snippet svg')).toHaveCount(0);
+  const row = await literal.elementHandle();
+  await page.locator('#next').click();
+  expect(await row!.evaluate((element) => element.isConnected)).toBe(true);
+  await expect(page.locator('.executing-line')).toHaveAttribute(
+    'data-line',
+    '685',
+  );
+});
+
 test('desktop layout resizes, focuses and remembers preferences without moving playback', async ({
   page,
 }) => {
@@ -509,10 +546,15 @@ test('desktop layout resizes, focuses and remembers preferences without moving p
   await expect(page.locator('.inspector')).toBeVisible();
   await page.locator('#console-panel summary').click();
   await expect(page.locator('#console-output')).toBeVisible();
+  const savedConsole = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('code-anime-layout') ?? '{}').console,
+  );
+  expect(savedConsole).toBe(true);
   await expect(page.locator('#progress')).toHaveText('70 / 100');
   await page.reload();
   await expect(page.locator('#progress')).toHaveText('0 / 100');
   await expect(page.locator('.inspector')).toBeVisible();
+  await expect(page.locator('#console-panel')).toHaveAttribute('open', '');
   await expect(page.locator('#console-output')).toBeVisible();
   await expect(divider).toHaveAttribute('aria-valuenow', String(width));
 });
