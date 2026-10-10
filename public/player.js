@@ -63,57 +63,151 @@ const changed = (event) =>
   ['assign', 'mutate', 'transform'].includes(event?.kind) ||
   (event?.before !== undefined &&
     valueText(event.before) !== valueText(event.after));
-function fieldRows(parent, after, before, prefix = '') {
-  for (const key of new Set([
-    ...Object.keys(before ?? {}),
-    ...Object.keys(after ?? {}),
-  ])) {
-    const next = after?.[key],
-      prior = before?.[key];
-    const path = prefix ? prefix + '.' + key : key;
-    const sample = next ?? prior;
+const FIELD_PAGE_SIZE = 60;
+const fieldDisclosures = new Map();
+const fieldPageCounts = new Map();
+let inspectedFields;
+// Trace values are JSON snapshots. Check only on demand so filtering a large
+// object does not require constructing its entire DOM tree first.
+function valueHasChanged(after, before) {
+  const pending = [[after, before]];
+  while (pending.length) {
+    const [next, prior] = pending.pop();
+    if (Object.is(next, prior)) continue;
     if (
-      sample &&
-      typeof sample === 'object' &&
-      (next === undefined || typeof next === 'object') &&
-      (prior === undefined || typeof prior === 'object')
+      !next ||
+      !prior ||
+      typeof next !== 'object' ||
+      typeof prior !== 'object' ||
+      Array.isArray(next) !== Array.isArray(prior)
     ) {
-      const child = document.createElement('details');
-      child.className = 'object-fields';
-      child.open = true;
-      child.append(
-        text('summary', path + (Array.isArray(sample) ? ' []' : ' {}')),
-      );
-      fieldRows(
-        child,
-        next ?? {},
-        before === undefined ? undefined : (prior ?? {}),
-        path,
-      );
-      if (Object.keys(sample).length === 0)
-        child.append(text('span', valueText(sample), 'field'));
-      parent.append(child);
-    } else {
-      const row = text('div', '', 'field');
-      const isChanged =
-        before !== undefined && valueText(prior) !== valueText(next);
-      row.classList.toggle('changed', isChanged);
-      row.append(text('span', path + ': ', 'field-key'));
-      if (isChanged)
-        row.append(
-          text('span', valueText(prior), 'field-before'),
-          text('span', ' → ', 'field-arrow'),
-        );
-      row.append(
-        text(
-          'span',
-          valueText(next),
-          isChanged ? 'field-after' : 'field-value',
-        ),
-      );
-      parent.append(row);
+      if (valueText(next) !== valueText(prior)) return true;
+      continue;
+    }
+    const nextKeys = Object.keys(next);
+    const priorKeys = Object.keys(prior);
+    if (nextKeys.length !== priorKeys.length) return true;
+    for (const key of nextKeys) {
+      if (!Object.hasOwn(prior, key)) return true;
+      pending.push([next[key], prior[key]]);
     }
   }
+  return false;
+}
+function fieldRows(
+  parent,
+  after,
+  before,
+  prefix = '',
+  depth = 0,
+  root = parent.id || 'packet',
+  segments = [],
+) {
+  const onlyChanged = root === 'fields' && $('changes-only').checked;
+  const keys = [
+    ...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]),
+  ].filter(
+    (key) =>
+      !onlyChanged ||
+      (before !== undefined && valueHasChanged(after?.[key], before?.[key])),
+  );
+  const pageKey = JSON.stringify([root, onlyChanged, ...segments]);
+  let visible = 0;
+  const more = text('button', '', 'value-more');
+  more.type = 'button';
+  const appendPage = (end) => {
+    const fragment = document.createDocumentFragment();
+    for (const key of keys.slice(visible, end)) {
+      const next = after?.[key],
+        prior = before?.[key];
+      const path = prefix ? prefix + '.' + key : key;
+      const sample = next ?? prior;
+      if (
+        sample &&
+        typeof sample === 'object' &&
+        (next === undefined || typeof next === 'object') &&
+        (prior === undefined || typeof prior === 'object')
+      ) {
+        const child = document.createElement('details');
+        child.className = 'object-fields';
+        const childSegments = [...segments, key];
+        const childKey = JSON.stringify([root, ...childSegments]);
+        const defaultOpen = depth < 2 && Object.keys(sample).length <= 6;
+        child.open = fieldDisclosures.get(childKey) ?? defaultOpen;
+        if (onlyChanged) child.classList.add('has-changes');
+        child.append(
+          text('summary', path + (Array.isArray(sample) ? ' []' : ' {}')),
+        );
+        const load = () => {
+          if (child.dataset.loaded) return;
+          child.dataset.loaded = 'true';
+          fieldRows(
+            child,
+            next ?? {},
+            before === undefined ? undefined : (prior ?? {}),
+            path,
+            depth + 1,
+            root,
+            childSegments,
+          );
+          if (Object.keys(sample).length === 0)
+            child.append(text('span', valueText(sample), 'field'));
+        };
+        if (child.open) load();
+        child.addEventListener('toggle', () => {
+          fieldDisclosures.set(childKey, child.open);
+          if (child.open) load();
+        });
+        fragment.append(child);
+      } else {
+        const row = text('div', '', 'field');
+        const isChanged =
+          before !== undefined && valueText(prior) !== valueText(next);
+        row.classList.toggle('changed', isChanged);
+        row.append(text('span', path + ': ', 'field-key'));
+        if (isChanged)
+          row.append(
+            text('span', valueText(prior), 'field-before'),
+            text('span', ' → ', 'field-arrow'),
+          );
+        row.append(
+          text(
+            'span',
+            valueText(next),
+            isChanged ? 'field-after' : 'field-value',
+          ),
+        );
+        fragment.append(row);
+      }
+    }
+    parent.insertBefore(fragment, more.parentNode === parent ? more : null);
+    visible = end;
+    fieldPageCounts.set(pageKey, visible);
+    const remaining = keys.length - visible;
+    if (remaining) {
+      more.textContent = `Show ${Math.min(FIELD_PAGE_SIZE, remaining)} more (${remaining} remaining)`;
+      more.setAttribute(
+        'aria-label',
+        `Show more fields under ${prefix || root}`,
+      );
+      if (more.parentNode !== parent) parent.append(more);
+    } else {
+      more.remove();
+    }
+  };
+  more.onclick = () =>
+    appendPage(Math.min(keys.length, visible + FIELD_PAGE_SIZE));
+  appendPage(
+    Math.min(
+      keys.length,
+      Math.max(FIELD_PAGE_SIZE, fieldPageCounts.get(pageKey) ?? 0),
+    ),
+  );
+}
+function renderInspectedFields() {
+  $('fields').replaceChildren();
+  if (inspectedFields)
+    fieldRows($('fields'), inspectedFields.after, inspectedFields.before);
 }
 function pause() {
   // Invalidate playback and any asynchronous navigation started earlier.
@@ -145,6 +239,8 @@ function buildNodes(preserveInspection = false) {
   if (!preserveInspection) selectedMethod = undefined;
   if (!preserveInspection) {
     expandedCalls.clear();
+    fieldDisclosures.clear();
+    fieldPageCounts.clear();
     pinnedCallId = undefined;
     inspectedSourceEvent = undefined;
     shownSource = '';
@@ -1054,6 +1150,7 @@ function render() {
     ? 'STEP ' + String(cursor).padStart(2, '0')
     : 'NO STEP SELECTED';
   if (!cursor) {
+    inspectedFields = undefined;
     shownSource = '';
     sourceRows.clear();
     highlightedSourceRow = undefined;
@@ -1119,7 +1216,8 @@ function render() {
       event.objectId,
       cursor - 1,
     )?.after;
-  fieldRows($('fields'), after, before);
+  inspectedFields = { after, before };
+  renderInspectedFields();
   $('operation').textContent = event
     ? [
         event.kind ? event.kind + ' · frame ' + event.callId : '',
@@ -1555,8 +1653,10 @@ $('center-view').onclick = () => {
     );
   }
 };
-$('changes-only').onchange = () =>
+$('changes-only').onchange = () => {
   $('fields').classList.toggle('changes-only', $('changes-only').checked);
+  renderInspectedFields();
+};
 $('help').onclick = () => {
   $('help-panel').hidden = !$('help-panel').hidden;
 };

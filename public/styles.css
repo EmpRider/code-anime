@@ -762,6 +762,23 @@ main {
   cursor: pointer;
   overflow-wrap: anywhere;
 }
+.value-more {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+  padding: 7px 9px;
+  border: 1px dashed #465f68;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mint);
+  font: 11px/1.4 monospace;
+  text-align: left;
+  cursor: pointer;
+}
+.value-more:hover,
+.value-more:focus-visible {
+  background: #68d8ab14;
+}
 .operation {
   font-size: 10px;
   color: #b4a6dc;
@@ -937,7 +954,7 @@ summary {
 .changes-only .field:not(.changed) {
   display: none;
 }
-.changes-only .object-fields:not(:has(.changed)) {
+.changes-only .object-fields:not(.has-changes):not(:has(.changed)) {
   display: none;
 }
 @media (min-width: 1600px) {

@@ -135,7 +135,14 @@ about future changes.
 23. **Contextual variable inspection — implemented, bounded verification.**
     Collapsible inspector shows locals, arguments, object changes, and returns.
     Player tests check historical values and per-invocation async differences.
-    Large/deep object inspection usability remains unverified.
+    Large/deep values now use lazy nested disclosure and 60-field progressive
+    pages in the state, change, and flow-packet inspectors, with expanded paths
+    and page counts restored across
+    historical seeks. Changes-only mode can find a modified property past the
+    initial page without creating unrelated rows. A JSDOM regression covers
+    1,500 wide fields, 900 nested levels, safe HTML-like values, and zero fresh
+    requests during navigation. Real-browser rendering and accessibility remain
+    unverified for large objects.
 24. **User navigation control — implemented, bounded verification.**
     Timeline rows, stack buttons, follow toggle, and source breakpoints provide
     navigation. The recorded nested browser scenario verifies diagram selection,
@@ -165,6 +172,10 @@ about future changes.
     Measure memory, many methods, larger trees, long stacks, large objects,
     large output,
     multiple files, and real stored continuation chains before accepting this.
+    Value-tree DOM creation is now bounded to visible pages and explicitly
+    expanded branches; the large-value regression verifies lazy construction,
+    filtering, and replay state. Paint, heap, and real-project profiling are
+    still required.
 28. **No repeated AI processing — implemented by architecture.**
     Player HTTP requests retrieve stored flows. Backend analysis is separate.
     Extend request assertions to all ordinary controls for behavioral acceptance.
@@ -210,7 +221,7 @@ about future changes.
 
 ## Checkpoint verification
 
-- `npm run check`: typecheck, build, Prettier, and 76 core tests passed; one
+- `npm run check`: typecheck, build, Prettier, and 77 core tests passed; one
   optional live CodeGraph integration test skipped (2026-10-10 candidate).
 - `npm run test:browser`: 24 passed, including the five-session persisted
   continuation-chain fixture. Browser coverage includes recorded nested disclosure,
@@ -244,6 +255,9 @@ about future changes.
   p50 12.8 ms and p95 19.0 ms, excluding paint and network. These figures do
   not verify performance for broad or deep trees.
 - `git diff --check`: passed with no whitespace errors.
+- The value-inspector change passed focused JSDOM tests. The complete browser
+  suite has not been rerun for this change; its attempted execution was blocked
+  by automatic tool approval review, so browser-level acceptance remains open.
 
 ## Next implementation order
 
