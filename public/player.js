@@ -1516,11 +1516,14 @@ $('console-panel')
       saveLayout();
     });
   });
-$('console-panel').addEventListener('toggle', () => {
+function persistConsoleLayout() {
   if (window.innerWidth <= 650) return;
   layout.console = $('console-panel').open;
   saveLayout();
-});
+}
+$('console-panel').addEventListener('toggle', persistConsoleLayout);
+// A queued toggle event may not run before an immediate reload.
+window.addEventListener('pagehide', persistConsoleLayout);
 window.addEventListener('resize', applyLayout);
 applyLayout();
 for (const button of document.querySelectorAll('.mobile-views button')) {
