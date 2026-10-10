@@ -1608,6 +1608,10 @@ main {
   main[data-mobile-view='code'] .trace-panel,
   main[data-mobile-view='code'] .inspector,
   main[data-mobile-view='code'] .console-panel,
+  main[data-mobile-view='flow'] .trace-panel,
+  main[data-mobile-view='flow'] .inspector,
+  main[data-mobile-view='flow'] .source-panel,
+  main[data-mobile-view='flow'] .console-panel,
   main[data-mobile-view='trace'] .center-column,
   main[data-mobile-view='trace'] .inspector,
   main[data-mobile-view='state'] .center-column,
@@ -1618,6 +1622,19 @@ main {
     display: none;
   }
   .workspace #flow-panel {
+    display: none;
+  }
+  main[data-mobile-view='flow'] .workspace #flow-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  main[data-mobile-view='flow'] #canvas {
+    flex: 1;
+    min-height: 0;
+  }
+  #maximize-flow {
     display: none;
   }
   .workspace #toggle-flow {

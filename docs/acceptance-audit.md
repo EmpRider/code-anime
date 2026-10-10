@@ -204,6 +204,16 @@ reduced-motion preferences. All 26 player/continuation tests and typecheck pass.
 This addresses the packet restart defect in items 20–21; broader nested visual
 acceptance and avoiding unrelated inspector/connection rebuilds remain open.
 
+### Mobile flow follow-up
+
+Mobile navigation now includes Flow and Steps separately. Flow fills the selected
+mobile workspace and is available even when the saved desktop diagram setting is
+hidden. A browser regression checks packet bounds, forward stepping, returning to
+the matching source line, preserved cursor, no extra requests, and no page overflow
+at 390x844. That rendered flow view was visually inspected. The existing mobile
+layout/keyboard scenarios, 26 player tests, and typecheck also pass. This resolves
+the missing mobile flow access in item 26; deeper nested-flow acceptance remains.
+
 1. Correct default desktop source/flow layout, preserve compact mobile switching,
    add panel controls/preferences and acceptance assertions for actual geometry.
 2. Prevent non-navigation updates from restarting packet animations; verify

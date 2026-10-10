@@ -1344,6 +1344,8 @@ for (const button of document.querySelectorAll('.mobile-views button')) {
     if (button.dataset.mobileView === 'console') $('console-panel').open = true;
     if (button.dataset.mobileView === 'state')
       activateTab(document.querySelector('[data-tab="state"]'));
+    // Reposition the existing packet after its previously hidden panel is laid out.
+    if (button.dataset.mobileView === 'flow') render();
   };
 }
 $('search').oninput = filterList;

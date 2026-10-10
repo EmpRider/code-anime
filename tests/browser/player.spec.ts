@@ -485,6 +485,7 @@ for (const viewport of [
     expect(play!.y + play!.height).toBeLessThanOrEqual(viewport.height);
     if (viewport.width < 650) {
       for (const [view, panel] of [
+        ['flow', '#flow-panel'],
         ['trace', '.trace-panel'],
         ['state', '.inspector'],
         ['console', '.console-panel'],
@@ -537,4 +538,40 @@ test('mobile state, search, console and keyboard shortcuts preserve the selected
   await page.keyboard.press('Escape');
   await expect(page.locator('#help-panel')).toBeHidden();
   await expect(page.locator('#progress')).toHaveText('70 / 100');
+});
+
+test('mobile flow remains available with a hidden desktop diagram and preserves replay state', async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      'code-anime-layout',
+      JSON.stringify({ diagram: false }),
+    ),
+  );
+  await page.goto(url);
+  await page.locator('#timeline').fill('70');
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  await page.getByRole('button', { name: 'Flow', exact: true }).click();
+  await expect(page.locator('#flow-panel')).toBeVisible();
+  await expect(page.locator('.source-panel')).toBeHidden();
+  await expect(page.locator('.trace-panel')).toBeHidden();
+  await expect(page.locator('.packet')).toContainText('Line 70');
+  const canvas = (await page.locator('#canvas').boundingBox())!;
+  const packet = (await page.locator('.packet').boundingBox())!;
+  expect(packet.x).toBeGreaterThanOrEqual(canvas.x);
+  expect(packet.x + packet.width).toBeLessThanOrEqual(canvas.x + canvas.width);
+  await page.locator('#next').click();
+  await expect(page.locator('.packet')).toContainText('Line 71');
+  await page.screenshot({ path: testInfo.outputPath('mobile-flow.png') });
+  await page.getByRole('button', { name: 'Code', exact: true }).click();
+  await expect(page.locator('#source-line')).toHaveText('L71');
+  await page.getByRole('button', { name: 'Flow', exact: true }).click();
+  await expect(page.locator('#progress')).toHaveText('71 / 100');
+  expect(requests).toEqual([]);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
 });
