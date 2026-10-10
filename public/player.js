@@ -1506,7 +1506,7 @@ divider.onkeydown = (event) => {
   render();
 };
 $('console-panel').open = layout.console;
-$('console-panel summary').addEventListener('click', () => {
+$('console-panel').querySelector('summary').addEventListener('click', () => {
   // The native toggle event is queued; save the choice before a fast reload.
   queueMicrotask(() => {
     if (window.innerWidth <= 650) return;
