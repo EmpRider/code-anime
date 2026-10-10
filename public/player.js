@@ -18,6 +18,10 @@ const invocations = new Map();
 const expandedCalls = new Set();
 let shownSource = '';
 let shownFirstLine = 1;
+const sourceRows = new Map();
+let highlightedSourceRow;
+let sourceBreakpointVersion = 0;
+let shownBreakpointVersion = -1;
 let pinnedCallId;
 let inspectedSourceEvent;
 let lastConsoleText = '';
@@ -134,6 +138,7 @@ function buildNodes(preserveInspection = false) {
   }
   sourceLines.clear();
   sourceCache.clear();
+  sourceBreakpointVersion++;
   consoleEvents.length = 0;
   frameSnapshots.clear();
   frameSources.clear();
@@ -201,6 +206,36 @@ let listCursor = -1;
 let listSignature = '';
 let searchQuery;
 let searchMatches = [];
+let filterRevision = 0;
+let cachedFilterKey = '';
+let baseVisible = [];
+const essentialKinds = new Set([
+  'enter',
+  'call',
+  'return',
+  'await',
+  'yield',
+  'resume',
+  'console',
+  'throw',
+  'catch',
+  'unresolved',
+  'plan',
+]);
+const eventGroups = {
+  changes: ['assign', 'mutate', 'transform'],
+  calls: [
+    'enter',
+    'call',
+    'return',
+    'await',
+    'yield',
+    'resume',
+    'throw',
+    'catch',
+  ],
+  control: ['branch', 'loop'],
+};
 function createEventRow(index) {
   const { event, step } = rows[index];
   const container = text('div', '', 'event-item');
@@ -224,6 +259,7 @@ function createEventRow(index) {
       expandedCalls.has(event.callId)
         ? expandedCalls.delete(event.callId)
         : expandedCalls.add(event.callId);
+      filterRevision++;
       filterList();
       // Filtering can replace this page. Keep keyboard focus on its disclosure.
       for (const control of $('event-list').querySelectorAll(
@@ -254,6 +290,9 @@ function createEventRow(index) {
 function buildList() {
   rows.length = 0;
   listSignature = '';
+  listCursor = -1;
+  filterRevision++;
+  cachedFilterKey = '';
   searchQuery = undefined;
   flow.steps.forEach((step, index) => {
     const event = flow.trace?.events[index];
@@ -276,73 +315,70 @@ function filterList() {
   const kind = $('kind-filter').value;
   const onlyBookmarks =
     $('bookmarks-only').getAttribute('aria-pressed') === 'true';
-  const groups = {
-    changes: ['assign', 'mutate', 'transform'],
-    calls: [
-      'enter',
-      'call',
-      'return',
-      'await',
-      'yield',
-      'resume',
-      'throw',
-      'catch',
-    ],
-    control: ['branch', 'loop'],
-  };
-  const visible = [];
-  rows.forEach(({ event }, i) => {
-    const essential = [
-      'enter',
-      'call',
-      'return',
-      'await',
-      'yield',
-      'resume',
-      'console',
-      'throw',
-      'catch',
-      'unresolved',
-      'plan',
-    ];
-    const collapsed =
-      event &&
-      !essential.includes(event.kind) &&
-      (!expandedCalls.has(event.callId) ||
-        (invocations.get(event.callId)?.stack ?? []).some(
-          (callId) => invocations.has(callId) && !expandedCalls.has(callId),
-        ));
-    const matches =
-      kind === 'all' ||
-      (kind === 'changes' && changed(event)) ||
-      groups[kind]?.includes(event?.kind) ||
-      (kind === 'uncertain' &&
-        ['assumed', 'unresolved', 'proposed'].includes(event?.certainty));
-    if (
-      matches &&
-      (!query || searchMatches[i]) &&
-      (!onlyBookmarks || bookmarks.has(i + 1)) &&
-      !(
-        collapsed &&
-        kind === 'all' &&
-        !query &&
-        !onlyBookmarks &&
-        cursor !== i + 1
+  const filterKey = [query, kind, onlyBookmarks, filterRevision].join('\0');
+  const filterChanged = filterKey !== cachedFilterKey;
+  if (filterChanged) {
+    cachedFilterKey = filterKey;
+    // Playback changes only the selected step, not the prepared filter result.
+    // Keep one sorted index and inject a collapsed selected step on demand.
+    baseVisible = [];
+    rows.forEach(({ event }, i) => {
+      const collapsed =
+        event &&
+        !essentialKinds.has(event.kind) &&
+        (!expandedCalls.has(event.callId) ||
+          (invocations.get(event.callId)?.stack ?? []).some(
+            (callId) => invocations.has(callId) && !expandedCalls.has(callId),
+          ));
+      const matches =
+        kind === 'all' ||
+        (kind === 'changes' && changed(event)) ||
+        eventGroups[kind]?.includes(event?.kind) ||
+        (kind === 'uncertain' &&
+          ['assumed', 'unresolved', 'proposed'].includes(event?.certainty));
+      if (
+        matches &&
+        (!query || searchMatches[i]) &&
+        (!onlyBookmarks || bookmarks.has(i + 1)) &&
+        !(collapsed && kind === 'all' && !query && !onlyBookmarks)
       )
-    )
-      visible.push(i);
-  });
-  if (listCursor !== cursor) {
-    const active = visible.indexOf(cursor - 1);
-    if (active >= 0) listPage = Math.floor(active / LIST_PAGE_SIZE);
+        baseVisible.push(i);
+    });
+    // A changed filter must reposition the selected step even if the cursor
+    // stayed still, and refresh rows even if the new page has the same IDs.
+    listSignature = '';
+  }
+  const selected = cursor - 1;
+  let low = 0;
+  let high = baseVisible.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (baseVisible[middle] < selected) low = middle + 1;
+    else high = middle;
+  }
+  const isListed = baseVisible[low] === selected;
+  const insertSelected =
+    cursor > 0 &&
+    selected < rows.length &&
+    kind === 'all' &&
+    !query &&
+    !onlyBookmarks &&
+    !isListed;
+  const count = baseVisible.length + Number(insertSelected);
+  if (listCursor !== cursor || filterChanged) {
+    if (isListed || insertSelected) listPage = Math.floor(low / LIST_PAGE_SIZE);
     listCursor = cursor;
   }
-  const pages = Math.max(1, Math.ceil(visible.length / LIST_PAGE_SIZE));
+  const pages = Math.max(1, Math.ceil(count / LIST_PAGE_SIZE));
   listPage = Math.min(listPage, pages - 1);
-  const page = visible.slice(
-    listPage * LIST_PAGE_SIZE,
-    (listPage + 1) * LIST_PAGE_SIZE,
-  );
+  const page = [];
+  const start = listPage * LIST_PAGE_SIZE;
+  for (let i = start; i < Math.min(count, start + LIST_PAGE_SIZE); i++)
+    page.push(
+      insertSelected && i === low
+        ? selected
+        : baseVisible[i - Number(insertSelected && i > low)],
+    );
   const signature = [listPage, pages, ...page].join(',');
   if (signature !== listSignature) {
     const fragment = document.createDocumentFragment();
@@ -388,7 +424,6 @@ function filterList() {
       (expanded ? 'Collapse ' : 'Expand ') + (event.label ?? event.symbolId),
     );
   }
-  const count = visible.length;
   $('trace-count').textContent = count + ' / ' + rows.length;
   $('no-events').hidden = count > 0;
 }
@@ -506,13 +541,20 @@ function renderSource(state, event) {
     sourceCache.set(location.file, sourceCode.split(/\r?\n/));
   const lines = sourceCode === undefined ? [] : sourceCache.get(location.file);
   // Long files keep only the current source window in the DOM.
-  const firstLine =
-    lines.length > 600
-      ? Math.min(
-          Math.max(1, (location?.line ?? 1) - 150),
-          Math.max(1, lines.length - 300),
-        )
-      : 1;
+  let firstLine = 1;
+  if (lines.length > 600) {
+    const line = location?.line ?? 1;
+    // Retain the existing window while the active line stays inside it.
+    // Re-centering on every adjacent line rebuilt hundreds of DOM nodes per
+    // playback step, making long files lag even with a virtualized timeline.
+    const withinWindow =
+      shownSource === sourceKey &&
+      line >= shownFirstLine &&
+      line <= shownFirstLine + 300;
+    firstLine = withinWindow
+      ? shownFirstLine
+      : Math.min(Math.max(1, line - 150), Math.max(1, lines.length - 300));
+  }
   const endLine =
     lines.length > 600 ? Math.min(lines.length, firstLine + 300) : lines.length;
   const needsBuild =
@@ -522,11 +564,14 @@ function renderSource(state, event) {
   if (needsBuild) {
     shownSource = sourceKey;
     shownFirstLine = firstLine;
+    sourceRows.clear();
+    highlightedSourceRow = undefined;
     if (sourceCode !== undefined) {
       const fragment = document.createDocumentFragment();
       for (let i = firstLine; i <= endLine; i++) {
         const row = text('div', '', 'code-row');
         row.dataset.line = String(i);
+        sourceRows.set(i, row);
         const gutter = text('button', String(i), 'code-gutter');
         const stepIndex = sourceLines.get(location.file + ':' + i);
         gutter.type = 'button';
@@ -543,42 +588,45 @@ function renderSource(state, event) {
   $('source-empty').hidden = Boolean(
     sourceCode !== undefined || sourceEvent?.snippet,
   );
-  for (const old of $('snippet').querySelectorAll('.executing-line'))
-    old.classList.remove('executing-line');
-  for (const row of $('snippet').querySelectorAll('.code-row')) {
-    const key = location.file + ':' + row.dataset.line;
-    const index = sourceLines.get(key);
-    const gutter = row.querySelector('.code-gutter');
-    gutter.disabled = !index;
-    gutter.title = index
-      ? 'Toggle breakpoint at line ' + row.dataset.line
-      : 'No execution recorded on this line';
-    gutter.onclick = index
-      ? () => {
-          sourceBreakpoints.has(key)
-            ? sourceBreakpoints.delete(key)
-            : sourceBreakpoints.add(key);
-          render();
-        }
-      : null;
-    row.classList.toggle(
-      'has-breakpoint',
-      sourceBreakpoints.has(key) || breakpoints.has(index),
-    );
-    gutter.setAttribute(
-      'aria-pressed',
-      String(sourceBreakpoints.has(key) || breakpoints.has(index)),
-    );
+  if (needsBuild || shownBreakpointVersion !== sourceBreakpointVersion) {
+    shownBreakpointVersion = sourceBreakpointVersion;
+    for (const [line, row] of sourceRows) {
+      const key = location.file + ':' + line;
+      const index = sourceLines.get(key);
+      const gutter = row.querySelector('.code-gutter');
+      gutter.disabled = !index;
+      gutter.title = index
+        ? 'Toggle breakpoint at line ' + line
+        : 'No execution recorded on this line';
+      gutter.onclick = index
+        ? () => {
+            sourceBreakpoints.has(key)
+              ? sourceBreakpoints.delete(key)
+              : sourceBreakpoints.add(key);
+            sourceBreakpointVersion++;
+            render();
+          }
+        : null;
+      row.classList.toggle(
+        'has-breakpoint',
+        sourceBreakpoints.has(key) || breakpoints.has(index),
+      );
+      gutter.setAttribute(
+        'aria-pressed',
+        String(sourceBreakpoints.has(key) || breakpoints.has(index)),
+      );
+    }
   }
+  highlightedSourceRow?.classList.remove('executing-line');
+  highlightedSourceRow = undefined;
   const isExecuting =
     sourceEvent?.callId === event?.callId &&
     location?.file === event?.source?.file;
   const active =
-    isExecuting &&
-    event?.source &&
-    $('snippet').querySelector(`[data-line="${event.source.line}"]`);
+    isExecuting && event?.source && sourceRows.get(event.source.line);
   if (active) {
     active.classList.add('executing-line');
+    highlightedSourceRow = active;
     if (
       $('follow').checked &&
       (active.offsetTop < $('snippet').scrollTop ||
@@ -824,6 +872,8 @@ function render() {
     : 'NO STEP SELECTED';
   if (!cursor) {
     shownSource = '';
+    sourceRows.clear();
+    highlightedSourceRow = undefined;
     $('snippet').replaceChildren();
     $('source-stack').replaceChildren();
     $('source').textContent = 'Select a step to inspect its source';
@@ -1015,11 +1065,13 @@ function tick(version) {
 function toggleBookmark() {
   if (!cursor) return;
   bookmarks.has(cursor) ? bookmarks.delete(cursor) : bookmarks.add(cursor);
+  filterRevision++;
   render();
 }
 function toggleBreakpoint(index = cursor) {
   if (!index) return;
   breakpoints.has(index) ? breakpoints.delete(index) : breakpoints.add(index);
+  sourceBreakpointVersion++;
   render();
 }
 $('play').onclick = () => {
