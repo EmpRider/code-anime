@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 import { replayState } from '../public/replay.js';
+import {
+  sourceLexicalStates,
+  tokenizeSourceLine,
+} from '../public/source-lexer.js';
 
 test('player renders evidence safely and Previous/seek restore local state', async () => {
   const html = await readFile(
@@ -14,7 +18,7 @@ test('player renders evidence safely and Previous/seek restore local state', asy
   )
     // Exercise Windows line endings even when this test runs on Linux CI.
     .replace(/\r?\n/g, '\r\n')
-    .replace(/^import .*;\r?\n/, '');
+    .replace(/^import .*;\r?\n/gm, '');
   const flow = {
     endpoint: '<img src=x onerror=alert(1)>',
     steps: [
@@ -74,6 +78,8 @@ test('player renders evidence safely and Previous/seek restore local state', asy
   try {
     const { window } = dom;
     window.replayState = replayState;
+  window.sourceLexicalStates = sourceLexicalStates;
+  window.tokenizeSourceLine = tokenizeSourceLine;
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
