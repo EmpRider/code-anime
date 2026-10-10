@@ -201,7 +201,6 @@ about future changes.
   Core, formatting, build, and package gates passed on Ubuntu and Windows
   with Node 22 and 24 (2026-10-10, commit `550d5b6`).
 
-
 ## Next implementation order
 
 ### Desktop layout follow-up
