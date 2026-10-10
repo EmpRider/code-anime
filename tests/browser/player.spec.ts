@@ -54,6 +54,90 @@ test.afterAll(async () => {
   await runtime?.close();
 });
 
+test('recorded nested calls retain independent disclosure during playback and return exact values', async ({
+  page,
+}) => {
+  const recorder = new RecordingService(
+    runtime.store,
+    runtime.baseUrl,
+    realpath,
+  );
+  try {
+    const started = await recorder.run({
+      action: 'start',
+      language: 'python',
+      projectRoot: fileURLToPath(
+        new URL('../fixtures/runtime/', import.meta.url),
+      ),
+      entry: 'nested.py',
+    });
+    let status = started;
+    await expect
+      .poll(async () => {
+        status = await recorder.run({ action: 'status', jobId: started.jobId });
+        return status.status;
+      })
+      .toBe('ready');
+    expect(status.complete).toBe(true);
+    const session = await runtime.store.get(status.sessionId!);
+    const events = session!.flow.trace!.events;
+    const inner = events.find(
+      (event) =>
+        event.kind === 'enter' &&
+        event.source?.file === 'helper.py' &&
+        event.stack.length >= 4,
+    )!;
+    expect(inner).toBeTruthy();
+    expect(inner.stack.length).toBeGreaterThanOrEqual(4);
+    const parents = inner.stack.slice(0, -1);
+    const detailIndex = events.findIndex(
+      (event) => event.callId === inner.callId && event.kind === 'statement',
+    );
+    expect(detailIndex).toBeGreaterThan(0);
+    const innerReturn = events.findIndex(
+      (event) => event.callId === inner.callId && event.kind === 'return',
+    );
+    expect(events[innerReturn]!.result).toBe(30);
+    await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+    await page.clock.pauseAt(new Date('2026-01-01T00:00:00Z'));
+    await page.goto(status.url!);
+    await expect(page.locator('#progress')).toHaveText(`0 / ${events.length}`);
+    const requests: string[] = [];
+    page.on('request', (request) => requests.push(request.url()));
+    for (const id of [...parents, inner.callId]) {
+      await page.locator(`[data-call-id="${id}"]`).click();
+    }
+    const detail = page.locator(`.event-row[data-index="${detailIndex + 1}"]`);
+    await expect(detail).toBeVisible();
+    await page.locator('#play').click();
+    await page.clock.runFor(1);
+    const position = await page.locator('#progress').textContent();
+    const parent = page.locator(`[data-call-id="${parents.at(-1)}"]`);
+    await parent.click();
+    await expect(detail).toHaveCount(0);
+    await expect(page.locator('#play')).toHaveAttribute('data-playing', 'true');
+    await expect(page.locator('#progress')).toHaveText(position!);
+    await parent.click();
+    await expect(detail).toBeVisible();
+    await expect(
+      page.locator(`[data-call-id="${inner.callId}"]`),
+    ).toHaveAttribute('aria-expanded', 'true');
+    await page.locator('#play').click();
+    await page.locator('#timeline').fill(String(innerReturn + 1));
+    await expect(page.locator('.packet')).toContainText('Return: 30');
+    await expect(page.locator('#source')).toHaveText('helper.py');
+    await page.locator('#next').click();
+    await expect(page.locator('#source')).toHaveText('nested.py');
+    await page.locator('#timeline').fill(String(events.length));
+    await expect(page.locator('#console-output')).toHaveText('30\n');
+    await page.locator('#timeline').fill(String(innerReturn + 1));
+    await expect(page.locator('#console-output')).toHaveText('');
+    expect(requests).toEqual([]);
+  } finally {
+    await recorder.close();
+  }
+});
+
 test('inspection changes preserve the current packet without replaying its animation', async ({
   page,
 }) => {

@@ -214,6 +214,19 @@ at 390x844. That rendered flow view was visually inspected. The existing mobile
 layout/keyboard scenarios, 26 player tests, and typecheck also pass. This resolves
 the missing mobile flow access in item 26; deeper nested-flow acceptance remains.
 
+### Recorded nested disclosure follow-up
+
+A real Python fixture now records `outer -> middle -> add` across two source
+files. The browser test expands the invocation ancestors, collapses the middle
+method while playback is active, verifies its child's statement details disappear,
+and reopens it with the child's expansion state retained. A controlled browser
+clock proves disclosure preserves playback state and cursor rather than merely
+observing a paused replay. The test also verifies return value 30, source navigation
+back to the caller, final console output, reverse console restoration, and no
+additional requests. This supplies stronger evidence for items 8–9 and the nested
+part of item 35. Diagram-entity disclosure and large deep-tree performance are
+still separate open requirements.
+
 1. Correct default desktop source/flow layout, preserve compact mobile switching,
    add panel controls/preferences and acceptance assertions for actual geometry.
 2. Prevent non-navigation updates from restarting packet animations; verify
