@@ -883,6 +883,95 @@ test('actual Python recording replays across chunks with exact output and revers
   }
 });
 
+test('recorded five-iteration loop revisits original lines and restores each historical sum', async ({
+  page,
+}) => {
+  const recorder = new RecordingService(
+    runtime.store,
+    runtime.baseUrl,
+    realpath,
+  );
+  try {
+    const started = await recorder.run({
+      action: 'start',
+      language: 'python',
+      projectRoot: fileURLToPath(
+        new URL('../fixtures/runtime/', import.meta.url),
+      ),
+      entry: 'five-iterations.py',
+    });
+    let status = started;
+    await expect
+      .poll(async () => {
+        status = await recorder.run({ action: 'status', jobId: started.jobId });
+        return status.status;
+      })
+      .toBe('ready');
+    expect(status.complete).toBe(true);
+    const stored = await runtime.store.get(status.sessionId!);
+    const trace = stored!.flow.trace!;
+    expect(trace.recording).toBeDefined();
+    expect(trace.events.every((event) => event.certainty === 'observed')).toBe(
+      true,
+    );
+    const body = trace.events
+      .map((event, index) => ({ event, step: index + 1 }))
+      .filter(
+        ({ event }) =>
+          event.kind === 'statement' &&
+          event.source?.file === 'five-iterations.py' &&
+          event.source.line === 3,
+      );
+    expect(body).toHaveLength(5);
+    expect(
+      body.map(({ event }) => {
+        const locals = event.locals?.[event.callId] as {
+          i: number;
+          sum: number;
+        };
+        return [locals.i, locals.sum];
+      }),
+    ).toEqual([
+      [1, 0],
+      [2, 1],
+      [3, 3],
+      [4, 6],
+      [5, 10],
+    ]);
+    await page.goto(status.url!);
+    await expect(page.locator('#evidence-mode')).toHaveText(
+      'Recorded execution',
+    );
+    const requests: string[] = [];
+    page.on('request', (request) => requests.push(request.url()));
+    for (const { event, step } of body) {
+      await page.locator('#timeline').fill(String(step));
+      await expect(page.locator('#source')).toHaveText('five-iterations.py');
+      await expect(page.locator('.executing-line')).toHaveAttribute(
+        'data-line',
+        '3',
+      );
+      const locals = event.locals![event.callId] as { sum: number };
+      await expect(page.locator('#local-tree')).toContainText(
+        `sum: ${locals.sum}`,
+      );
+      await expect(page.locator('#console-output')).toHaveText('');
+    }
+    await page.locator('#timeline').fill(String(trace.events.length));
+    await expect(page.locator('#console-output')).toHaveText('15\n');
+    await page.locator('#timeline').fill(String(body[2]!.step));
+    await expect(page.locator('#local-tree')).toContainText('sum: 3');
+    await expect(page.locator('.executing-line')).toHaveAttribute(
+      'data-line',
+      '3',
+    );
+    await expect(page.locator('#console-output')).toHaveText('');
+    expect(requests).toEqual([]);
+  } finally {
+    recorder.close();
+  }
+});
+
 test('recorded interleaved asyncio tasks preserve per-invocation mutations in browser replay', async ({
   page,
 }) => {

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { startRuntime } from '../../src/runtime.js';
 import { readConfig } from '../../src/config.js';
 import { randomUUID } from 'node:crypto';
+import { traceToFlow } from '../../src/analysis/contract.js';
 
 test('20,000 prepared events support responsive seeking, filtering, and nested detail navigation', async ({
   page,
@@ -105,6 +106,141 @@ test('20,000 prepared events support responsive seeking, filtering, and nested d
       'data-index',
       '19000',
     );
+  } finally {
+    await runtime.close();
+  }
+});
+
+test('stored branching trace supports paged method disclosure and seeks without reanalysis', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const runtime = await startRuntime({ ...readConfig({}), port: 0 });
+  try {
+    const events: Array<Record<string, unknown>> = [];
+    const add = (event: Record<string, unknown>) => {
+      events.push({
+        id: `event-${events.length + 1}`,
+        certainty: 'mock',
+        values: {},
+        ...event,
+      });
+    };
+    const entry = {
+      kind: 'enter',
+      callId: 'call-main',
+      symbolId: 'main',
+      label: 'main()',
+      stack: ['call-main'],
+      locals: { 'call-main': { result: 0 } },
+      source: { file: 'branches.ts', line: 1, endLine: 1 },
+    };
+    add(entry);
+    // One persisted session has a 2,000-event limit; larger traces use linked
+    // continuations. Keep this fixture within one session to isolate branching.
+    for (let i = 0; i < 300; i++) {
+      const callId = `call-${i}`;
+      const common = {
+        callId,
+        parentCallId: 'call-main',
+        symbolId: `worker_${i % 120}`,
+        stack: ['call-main', callId],
+        source: {
+          file: 'branches.ts',
+          line: (i % 700) + 2,
+          endLine: (i % 700) + 2,
+        },
+        locals: { [callId]: { input: i, result: i * 2 } },
+      };
+      add({
+        ...common,
+        kind: 'enter',
+        label: `worker(${i})`,
+        inputs: { input: i },
+      });
+      for (let j = 0; j < 3; j++)
+        add({
+          ...common,
+          kind: 'assign',
+          label: `compute ${i}:${j}`,
+          after: { result: i * 2 + j },
+        });
+      add({
+        ...common,
+        kind: 'return',
+        label: `return ${i * 2}`,
+        result: i * 2,
+      });
+    }
+    add({ ...entry, kind: 'return', label: 'main returns', result: 2_398 });
+    const session = await runtime.store.create(
+      traceToFlow(
+        {
+          version: 2,
+          provider: 'browser-branching-fixture',
+          projectRoot: 'fixture',
+          sourceHash: 'branching-fixture',
+          target: 'main',
+          scenario: {},
+          events: events as never[],
+          diagnostics: ['Synthetic branching performance fixture'],
+          truncated: false,
+          filesAnalyzed: 1,
+          cacheHits: 0,
+          sourceFiles: {
+            'branches.ts': Array.from({ length: 750 }, (_, i) =>
+              i === 0 ? 'function main() {' : `  const value${i} = ${i};`,
+            ).join('\n'),
+          },
+        },
+        'main',
+      ),
+    );
+    let flowRequests = 0;
+    await page.route('**/api/flow/*', async (route) => {
+      flowRequests++;
+      await route.continue();
+    });
+    await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+    await expect(page.locator('#progress')).toHaveText('0 / 1502', {
+      timeout: 30_000,
+    });
+    const initialRequests = flowRequests;
+
+    const seekTimes = await page.evaluate(() => {
+      const timeline = document.querySelector<HTMLInputElement>('#timeline')!;
+      return Array.from({ length: 25 }, (_, i) => {
+        timeline.value = String(1_000 + i);
+        const start = performance.now();
+        timeline.dispatchEvent(new Event('input', { bubbles: true }));
+        return performance.now() - start;
+      }).sort((a, b) => a - b);
+    });
+    console.log(`branching trace seek p95=${seekTimes[23]!.toFixed(1)}ms`);
+    expect(seekTimes[23]).toBeLessThan(350);
+    await expect(page.locator('#progress')).toHaveText('1024 / 1502');
+
+    await page.locator('#view-mode').selectOption('map');
+    await page.getByRole('button', { name: 'Inspect method main' }).click();
+    const methodRoot = page.locator(
+      '#method-details details[data-invocation="call-main"]',
+    );
+    await expect(methodRoot).toHaveAttribute('open', '');
+    await expect(methodRoot.locator('.more-method-events')).toHaveCount(1);
+    const child = methodRoot.locator('details[data-invocation="call-0"]');
+    await expect(child).toHaveCount(1);
+    await child.locator('summary').click();
+    await expect(child.locator('.method-event')).toHaveCount(5);
+    await methodRoot.locator('.more-method-events').first().click();
+    await expect(
+      methodRoot.locator('details[data-invocation="call-50"]'),
+    ).toHaveCount(1);
+    await methodRoot.locator('summary').first().click();
+    await expect(methodRoot).not.toHaveAttribute('open', '');
+    await methodRoot.locator('summary').first().click();
+    await expect(methodRoot).toHaveAttribute('open', '');
+    await expect(page.locator('#progress')).toHaveText('1024 / 1502');
+    expect(flowRequests).toBe(initialRequests);
   } finally {
     await runtime.close();
   }

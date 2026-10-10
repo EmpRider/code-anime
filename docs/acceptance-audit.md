@@ -1,8 +1,8 @@
 # Execution visualizer acceptance audit
 
-Checkpoint: 2026-10-10, baseline commit `c965405` with validated pending
-multiline source-coloring, JSDOM test-harness improvements, and targeted
-JavaScript template-interpolation and Rust raw-string fixes.
+Checkpoint: 2026-10-10, branch `codex/execution-visualizer-improvements`.
+Multilingual source highlighting, a persisted branching-tree performance
+fixture, and a recorded five-iteration Python loop are covered by tests.
 
 Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
@@ -82,10 +82,13 @@ about future changes.
     state, and disabling follow. Source windows retain DOM nodes on adjacent
     steps. Deep cross-file source-follow acceptance needs explicit coverage.
 13. **Animate loops — implemented for tested recordings.**
-    `tests/recording.test.ts` checks repeated line visits and loop values;
-    browser replay checks reversible source/console state. Add the exact
-    five-iteration sum example to connect iteration values, highlighting, and
-    final output in one acceptance scenario.
+    `tests/recording.test.ts` checks repeated line visits and loop values.
+    The browser test recording `five-iterations.py` verifies five visits to the
+    original loop-body line, the exact historical `i` and `sum` values,
+    reverse navigation, and final console output `15` from observed execution.
+    Runtime event snapshots here describe values _before_ executing each line;
+    the updated sum appears on the following event. Broader loop semantics
+    across supported languages remain unverified.
 14. **Playback/debugger controls — implemented, bounded verification.**
     Player tests cover reverse, seek, step-over/out, breakpoints, continuation,
     and async invocation semantics. Browser tests cover playback controls.
@@ -123,8 +126,9 @@ about future changes.
 22. **Immediate disclosure — implemented, incomplete scale evidence.**
     Disclosure uses prepared data; tests verify no request and cursor retention.
     Deep simulated recursion (45 invocations) and keyboard pagination (100 events)
-    pass; the 20,000-event fixture has one invocation, so large branching-tree
-    performance remains unverified.
+    pass. A persisted 1,502-event fixture now tests 300 sibling invocations,
+    paged nested disclosure, position retention and no extra HTTP flow requests.
+    Multi-chunk, larger branching-tree performance remains unverified.
 23. **Contextual variable inspection — implemented, bounded verification.**
     Collapsible inspector shows locals, arguments, object changes, and returns.
     Player tests check historical values and per-invocation async differences.
@@ -149,6 +153,9 @@ about future changes.
     and source reuse. Its synchronous handler timings exclude paint and network.
     A separate 45-level simulated recursion verifies nested visibility after
     collapse/reopen; proportional indentation avoids collapsing its usable width.
+    The persisted 300-child/1,502-event browser fixture measures seek performance
+    and checks paged expansion without restarting analysis. It does not exercise
+    more than one stored session.
     Measure memory, many methods, larger trees, long stacks, large objects,
     large output,
     multiple files, and real stored continuation chains before accepting this.
@@ -179,10 +186,11 @@ about future changes.
     batch. Recheck all gates for the final candidate before pushing.
 35. **Ten functional acceptance scenarios — incomplete as a set.**
     Existing tests cover portions of each scenario, including deep recursion and
-    safe unbounded execution. Recorded nested disclosure during playback is now
-    verified. Syntax-window tests cover 1,000 source lines and escaped/multiline
-    lexical boundaries. Large real continuation performance and the representative
-    supported-language matrix remain unverified. Do not infer acceptance from counts.
+    safe unbounded execution. Recorded nested disclosure and five-iteration
+    reversible playback are verified. Syntax-window tests cover 1,000 source
+    lines and escaped/multiline lexical boundaries. Large real continuation
+    performance and the representative supported-language matrix remain
+    unverified. Do not infer acceptance from counts.
 36. **UI acceptance — incomplete.**
     Responsive layout, packet stability, method disclosure, and source-state
     regressions pass, but full rendered visual review and keyboard/screen-reader
@@ -195,10 +203,10 @@ about future changes.
 
 - `npm run check`: typecheck, build, Prettier, and 74 core tests passed; one
   optional live CodeGraph integration test skipped (2026-10-10 candidate).
-- `npm run test:browser`: 21 passed, including recorded nested disclosure,
+- `npm run test:browser`: 23 passed, including recorded nested disclosure,
   repeated simulated invocations, recorded continuation preservation, deep
   simulated recursion, keyboard pagination, multiline lexical state, virtualized
-  source continuity, and mobile layouts.
+  source continuity, real five-iteration loop playback, and mobile layouts.
 - `npm run package:check`: packed CLI installation, MCP handshake, player assets,
   and stored flow API passed for the current candidate.
 - Both JSDOM player suites exercise the module-imported stateful lexer; 26
@@ -207,8 +215,12 @@ about future changes.
   interpolations, escaped interpolation markers, single-line Rust raw strings,
   and empty source windows. Browser coverage checks embedded code tokens and
   subsequent statements; comprehensive syntax grammar remains unverified.
+- A separate persisted branching browser trace uses 300 child invocations and
+  1,502 events, with independent nested disclosure and paged expansion; its
+  seek fixture reported p95 17.4 ms, excluding paint and network. This is
+  bounded evidence for one stored session, not long continuation chains.
 - The 20,000-event synthetic single-invocation browser fixture reported seek
-  p50 17.6 ms and p95 27.5 ms, excluding paint and network. These figures do
+  p50 13.9 ms and p95 20.4 ms, excluding paint and network. These figures do
   not verify performance for broad or deep trees.
 - `git diff --check`: passed with no whitespace errors.
 
