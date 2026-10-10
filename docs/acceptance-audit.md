@@ -47,8 +47,11 @@ about future changes.
    events are represented by one row, active from the original call site, with
    the real input values and return transfer. Unpaired calls remain visible.
    A/B browser tests verify paging, shared seeking and exact source following;
-   recorded Python nested calls verify observed return values. Broader flow
-   quality and visual comparison with VisualJS remain open.
+   recorded Python nested calls verify observed return values. Consecutive
+   console fragments now merge only on a known shared source line before a
+   newline, keeping separate statements individually seekable. Returning to
+   cursor zero restores the first overview page when Follow is enabled.
+   Broader flow quality and visual comparison with VisualJS remain open.
 7. **Expandable methods — implemented, bounded verification.**
    Timeline invocation disclosure and clickable diagram method buttons share
    one nested recorded-event inspector. Browser tests cover source lines,
@@ -228,22 +231,23 @@ about future changes.
 
 ## Checkpoint verification
 
-- `npm run check`: typecheck and 84 core tests passed with one optional live
-  CodeGraph integration test skipped; build completed. The final format-check
-  exit was not observed after an automatic status-poll rejection. Formatting
-  is separately verified before committing.
-- `npm run test:browser`: 25 passed, including the new paired-call and recorded
-  execution-path browser coverage and the five-session persisted
+- `npm run check`: typecheck, 85 core tests, build, and Prettier passed;
+  one optional live CodeGraph integration test skipped.
+- `npm run test:browser`: 26 passed, including paired-call, recorded
+  execution-path, separate console writes, overview rewind, and persisted
+  five-session continuation-chain coverage.
   continuation-chain fixture. Browser coverage includes recorded nested disclosure,
   repeated simulated invocations, recorded continuation preservation, deep
   simulated recursion, keyboard pagination, multiline lexical state, virtualized
   source continuity, real five-iteration loop playback, and mobile layouts.
 - `npm run package:check`: packed CLI installation, MCP handshake, player assets,
   and stored flow API passed for the current candidate.
-- `tests/flow-overview.test.mjs`: seven focused cases verify event-to-overview
+- `tests/flow-overview.test.mjs`: eight focused cases verify event-to-overview
   transitions, input and return values, nesting, caller call-site timing,
   independently recorded Python task console streams, and rejecting misleading
-  adjacent entries from another async task.
+  adjacent entries from another async task. The added case checks distinct
+  source-line output and newline-terminated writes. Two focused Playwright
+  scenarios verify console-row seeking, rewind to page one and paired calls.
 - The opt-in real CodeGraph integration test passed against a temporary indexed
   Kotlin project using npm-installed CodeGraph 0.9.9 on Windows. The test first
   confirmed rejection without an index, then verified PATH-discovered CLI

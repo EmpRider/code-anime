@@ -42,6 +42,7 @@ test('overview follows invocation identities, real inputs, returns and output', 
       callId: 'a-1',
       symbolId: 'A.m',
       output: '30',
+      source: { file: 'A.ts', line: 5 },
       values: { stream: 'stdout' },
       certainty: 'observed',
     },
@@ -50,6 +51,7 @@ test('overview follows invocation identities, real inputs, returns and output', 
       callId: 'a-1',
       symbolId: 'A.m',
       output: '\n',
+      source: { file: 'A.ts', line: 5 },
       values: { stream: 'stdout' },
       certainty: 'observed',
     },
@@ -150,6 +152,7 @@ test('stdout from different tasks is not merged even for the same frame', () => 
       symbolId: 'worker',
       callId: 'shared',
       output: 'A',
+      source: { file: 'worker.py', line: 10 },
       values: { stream: 'stdout', taskId: 'first' },
     },
     {
@@ -157,6 +160,7 @@ test('stdout from different tasks is not merged even for the same frame', () => 
       symbolId: 'worker',
       callId: 'shared',
       output: 'B',
+      source: { file: 'worker.py', line: 10 },
       values: { stream: 'stdout', taskId: 'second' },
     },
     {
@@ -164,6 +168,7 @@ test('stdout from different tasks is not merged even for the same frame', () => 
       symbolId: 'worker',
       callId: 'shared',
       output: '\n',
+      source: { file: 'worker.py', line: 10 },
       values: { stream: 'stdout', taskId: 'second' },
     },
   ]);
@@ -282,6 +287,7 @@ test('console writes from different recorded Python tasks remain separate', () =
       callId: 'shared',
       symbolId: 'run',
       output: 'A',
+      source: { file: 'worker.py', line: 20 },
       values: { stream: 'stdout', task: 'task-1', thread: 'main' },
     },
     {
@@ -289,6 +295,7 @@ test('console writes from different recorded Python tasks remain separate', () =
       callId: 'shared',
       symbolId: 'run',
       output: 'B',
+      source: { file: 'worker.py', line: 20 },
       values: { stream: 'stdout', task: 'task-2', thread: 'main' },
     },
     {
@@ -296,11 +303,38 @@ test('console writes from different recorded Python tasks remain separate', () =
       callId: 'shared',
       symbolId: 'run',
       output: '\n',
+      source: { file: 'worker.py', line: 20 },
       values: { stream: 'stdout', task: 'task-2', thread: 'main' },
     },
   ]);
   assert.deepEqual(
     transitions.map((item) => item.output),
     ['A', 'B\n'],
+  );
+});
+
+test('each console statement stays independently navigable in the overview', () => {
+  const events = [
+    ['first', 10],
+    ['second', 11],
+    ['third\n', 12],
+    ['fourth', 12],
+    ['no location', undefined],
+  ].map(([output, line]) => ({
+    kind: 'console',
+    callId: 'main',
+    symbolId: 'main',
+    output,
+    values: { task: 'main', stream: 'stdout' },
+    ...(line && { source: { file: 'main.py', line } }),
+  }));
+  const transitions = buildFlowOverview(events);
+  assert.deepEqual(
+    transitions.map((item) => item.output),
+    events.map((event) => event.output),
+  );
+  assert.deepEqual(
+    transitions.map((item) => item.index),
+    [1, 2, 3, 4, 5],
   );
 });

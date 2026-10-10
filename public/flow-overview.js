@@ -56,12 +56,20 @@ export function buildFlowOverview(events = []) {
         : undefined;
     const previous = transitions.at(-1);
     // Python print and many streams emit text and a newline separately.
-    // Combine only consecutive writes from the same invocation and stream.
+    // Combine fragments of one print statement, not unrelated writes from
+    // subsequent lines. Without a source location the grouping is unknown.
+    const sameSource =
+      previous?.source &&
+      event.source &&
+      previous.source.file === event.source.file &&
+      previous.source.line === event.source.line;
     if (
       event.kind === 'console' &&
       previous?.kind === 'console' &&
       previous.callId === event.callId &&
       previous.stream === event.values?.stream &&
+      sameSource &&
+      !/[\r\n]$/.test(previous.output) &&
       previous.index === offset &&
       previous.taskId ===
         (event.values?.task ?? event.values?.taskId ?? event.taskId) &&

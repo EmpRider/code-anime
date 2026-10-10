@@ -1092,13 +1092,9 @@ function renderFlowOverview() {
   if (!overviewItems.length) return false;
   const activePosition = activeOverviewPosition();
   const maxPage = Math.ceil(overviewItems.length / OVERVIEW_PAGE_SIZE) - 1;
-  if (
-    overviewLastCursor !== cursor &&
-    cursor > 0 &&
-    $('follow').checked &&
-    activePosition >= 0
-  )
-    overviewPage = Math.floor(activePosition / OVERVIEW_PAGE_SIZE);
+  if (overviewLastCursor !== cursor && $('follow').checked)
+    overviewPage =
+      activePosition >= 0 ? Math.floor(activePosition / OVERVIEW_PAGE_SIZE) : 0;
   overviewLastCursor = cursor;
   overviewPage = Math.min(overviewPage, maxPage);
   let panel = $('canvas').querySelector('.flow-overview');

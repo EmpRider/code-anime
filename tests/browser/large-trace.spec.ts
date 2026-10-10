@@ -90,7 +90,9 @@ test('20,000 prepared events support responsive seeking, filtering, and nested d
     await expect(gutter).toHaveAttribute('aria-pressed', 'false');
 
     await page.locator('#restart').click();
-    const disclosure = page.locator('[data-call-id="call-main"]');
+    const disclosure = page.locator(
+      '.call-disclosure[data-call-id="call-main"]',
+    );
     await disclosure.click();
     await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('.event-row')).toHaveCount(150);

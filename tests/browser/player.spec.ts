@@ -54,6 +54,36 @@ test.afterAll(async () => {
   await runtime?.close();
 });
 
+test('separate console source lines remain seekable in the default execution path', async ({
+  page,
+}) => {
+  await page.goto(url);
+  await expect(page.locator('#view-mode')).toHaveValue('path');
+  await expect(page.locator('.overview-step')).toHaveCount(6);
+  await expect(
+    page.locator('.overview-step[data-event-index="2"]'),
+  ).toContainText('output 1');
+  await expect(
+    page.locator('.overview-step[data-event-index="3"]'),
+  ).toContainText('output 2');
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  await page.locator('.overview-step[data-event-index="3"]').click();
+  await expect(page.locator('#progress')).toHaveText('3 / 100');
+  await expect(page.locator('#source-line')).toHaveText('L3');
+  await page.locator('#timeline').fill('70');
+  await expect(page.locator('.overview-step.current')).toHaveAttribute(
+    'data-event-index',
+    '70',
+  );
+  await page.locator('#timeline').fill('0');
+  await expect(
+    page.locator('.overview-step[data-event-index="1"]'),
+  ).toBeVisible();
+  await expect(page.locator('.overview-step.current')).toHaveCount(0);
+  expect(requests).toEqual([]);
+});
+
 test('execution path stays synchronized across paging, seeking and view changes', async ({
   page,
 }) => {
