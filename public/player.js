@@ -1,5 +1,6 @@
 import { replayState } from './replay.js';
 import { prepareSourceHighlighting } from './source-highlighter.js';
+import { buildFlowOverview, describeFlowTransition } from './flow-overview.js';
 const $ = (id) => document.getElementById(id);
 let flow, originalFlow, timer, animation;
 let cursor = 0;
@@ -40,6 +41,11 @@ const consoleEvents = [];
 const frameSnapshots = new Map();
 const frameSources = new Map();
 const objectHistory = new Map();
+let overviewItems = [];
+let overviewPage = 0;
+let overviewRenderedPage = -1;
+let overviewLastCursor = -1;
+const OVERVIEW_PAGE_SIZE = 6;
 let flowHasMock = false;
 let navigationVersion = 0;
 const continuationStates = new WeakMap();
@@ -238,6 +244,8 @@ function buildNodes(preserveInspection = false) {
   renderedMethod = undefined;
   if (!preserveInspection) selectedMethod = undefined;
   if (!preserveInspection) {
+    overviewPage = 0;
+    overviewLastCursor = -1;
     expandedCalls.clear();
     fieldDisclosures.clear();
     fieldPageCounts.clear();
@@ -260,6 +268,12 @@ function buildNodes(preserveInspection = false) {
       ['mock', 'assumed', 'proposed'].includes(e.certainty),
     ),
   );
+  overviewItems = buildFlowOverview(flow.trace?.events);
+  overviewRenderedPage = -1;
+  // Older, agent-authored flows contain diagram steps but no execution events.
+  // Keep their original diagram usable rather than displaying an empty path.
+  if (!overviewItems.length && $('view-mode').value === 'path')
+    $('view-mode').value = 'focus';
   for (const [index, event] of (flow.trace?.events ?? []).entries())
     if (event.kind === 'enter') {
       if (invocations.has(event.callId)) continue;
@@ -1063,6 +1077,148 @@ function drawConnection(from, to) {
   svg.append(path);
   $('canvas').append(svg);
 }
+function activeOverviewPosition() {
+  if (!cursor) return -1;
+  let low = 0;
+  let high = overviewItems.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (overviewItems[middle].startIndex <= cursor) low = middle + 1;
+    else high = middle;
+  }
+  return low - 1;
+}
+function renderFlowOverview() {
+  if (!overviewItems.length) return false;
+  const activePosition = activeOverviewPosition();
+  const maxPage = Math.ceil(overviewItems.length / OVERVIEW_PAGE_SIZE) - 1;
+  if (
+    overviewLastCursor !== cursor &&
+    cursor > 0 &&
+    $('follow').checked &&
+    activePosition >= 0
+  )
+    overviewPage = Math.floor(activePosition / OVERVIEW_PAGE_SIZE);
+  overviewLastCursor = cursor;
+  overviewPage = Math.min(overviewPage, maxPage);
+  let panel = $('canvas').querySelector('.flow-overview');
+  if (!panel || overviewRenderedPage !== overviewPage) {
+    panel?.remove();
+    panel = text('section', '', 'flow-overview');
+    panel.setAttribute('aria-label', 'Prepared execution overview');
+    const heading = text('div', '', 'overview-heading');
+    heading.append(
+      text('strong', 'Execution path'),
+      text('span', `${overviewItems.length} transitions · select to inspect`),
+    );
+    panel.append(heading);
+    const list = text('div', '', 'overview-list');
+    const start = overviewPage * OVERVIEW_PAGE_SIZE;
+    for (const [offset, item] of overviewItems
+      .slice(start, start + OVERVIEW_PAGE_SIZE)
+      .entries()) {
+      const entry = text('div', '', 'overview-entry');
+      const button = text('button', '', 'overview-step');
+      button.type = 'button';
+      button.dataset.overviewPosition = String(start + offset);
+      button.dataset.eventIndex = String(item.index);
+      button.style.setProperty(
+        '--overview-depth',
+        String(Math.min(5, item.depth ?? 0)),
+      );
+      button.append(
+        text('span', String(item.index), 'overview-index'),
+        text('span', describeFlowTransition(item), 'overview-description'),
+        text('span', item.certainty ?? 'unverified', 'overview-evidence'),
+      );
+      button.title = describeFlowTransition(item);
+      button.onclick = () => seek(item.index);
+      entry.append(button);
+      // The method inspector already owns the nested, paged execution tree.
+      // Open it directly from the overview without changing playback position.
+      if (item.kind === 'enter' && invocations.has(item.callId)) {
+        const disclosure = text('button', '', 'overview-disclosure');
+        const expanded = selectedMethod === item.callId;
+        disclosure.type = 'button';
+        disclosure.dataset.callId = item.callId;
+        disclosure.textContent = expanded ? '▾' : '▸';
+        disclosure.setAttribute('aria-controls', 'method-details');
+        disclosure.setAttribute('aria-expanded', String(expanded));
+        disclosure.setAttribute(
+          'aria-label',
+          (expanded ? 'Close details for ' : 'Inspect ') +
+            item.symbol +
+            ' invocation',
+        );
+        disclosure.onclick = () => {
+          selectedMethod = expanded ? undefined : item.callId;
+          if (selectedMethod) expandedCalls.add(selectedMethod);
+          filterRevision++;
+          filterList();
+          renderMethodDetails();
+          overviewRenderedPage = -1;
+          renderFlowOverview();
+          $('canvas')
+            .querySelector(
+              `.overview-disclosure[data-call-id="${item.callId}"]`,
+            )
+            ?.focus({ preventScroll: true });
+        };
+        entry.append(disclosure);
+      }
+      list.append(entry);
+    }
+    panel.append(list);
+    if (maxPage > 0) {
+      const footer = text('div', '', 'overview-pages');
+      const previous = text('button', '← Earlier', 'quiet-button');
+      previous.disabled = overviewPage === 0;
+      previous.onclick = () => {
+        overviewPage--;
+        renderFlowOverview();
+      };
+      const next = text('button', 'Later →', 'quiet-button');
+      next.disabled = overviewPage === maxPage;
+      next.onclick = () => {
+        overviewPage++;
+        renderFlowOverview();
+      };
+      footer.append(
+        previous,
+        text('span', `${overviewPage + 1} / ${maxPage + 1}`),
+        next,
+      );
+      panel.append(footer);
+    }
+    $('canvas').append(panel);
+    overviewRenderedPage = overviewPage;
+  }
+  // Only the active-row state changes during normal replay. Reuse the DOM and
+  // let the source editor, stack, and console follow the same replay cursor.
+  for (const button of panel.querySelectorAll('.overview-step')) {
+    const isCurrent =
+      Number(button.dataset.overviewPosition) === activePosition;
+    button.classList.toggle('current', isCurrent);
+    if (isCurrent) button.setAttribute('aria-current', 'step');
+    else button.removeAttribute('aria-current');
+  }
+  return true;
+}
+function followSelectedEventRow() {
+  if (!$('follow').checked) return;
+  const list = $('event-list');
+  const row = list.querySelector(`.event-row[data-index="${cursor}"]`);
+  if (!row) return;
+  const top =
+    row.getBoundingClientRect().top -
+    list.getBoundingClientRect().top +
+    list.scrollTop;
+  if (
+    top < list.scrollTop ||
+    top + row.offsetHeight > list.scrollTop + list.clientHeight
+  )
+    list.scrollTop = Math.max(0, top - list.clientHeight / 2);
+}
 function render() {
   if (!flow) return;
   const positionChanged = renderedFlow !== flow || renderedCursor !== cursor;
@@ -1087,6 +1243,9 @@ function render() {
   $('canvas')
     .querySelectorAll('.connections,.canvas-empty')
     .forEach((e) => e.remove());
+  const pathView = $('view-mode').value === 'path' && overviewItems.length;
+  if (!pathView) $('canvas').querySelector('.flow-overview')?.remove();
+  if (pathView) $('canvas').querySelector('.packet')?.remove();
   for (const node of nodes.values())
     node.classList.remove('active', 'destination');
   $('canvas').className = $('view-mode').value;
@@ -1163,13 +1322,16 @@ function render() {
     $('event-kind').textContent = 'READY';
     $('playback-label').textContent = 'Ready when you are';
     $('active-path').textContent = 'Your execution, one step at a time';
-    const empty = text('div', '', 'canvas-empty');
-    empty.append(
-      text('span', '▷', 'empty-icon'),
-      text('strong', 'See your code in motion'),
-      text('small', 'Press Play or choose a step from the execution trace'),
-    );
-    $('canvas').append(empty);
+    if (pathView) renderFlowOverview();
+    else if (!nodes.size) {
+      const empty = text('div', '', 'canvas-empty');
+      empty.append(
+        text('span', '▷', 'empty-icon'),
+        text('strong', 'See your code in motion'),
+        text('small', 'Press Play or choose a step from the execution trace'),
+      );
+      $('canvas').append(empty);
+    }
     return;
   }
   const state = replayState(flow.trace?.events ?? [], cursor);
@@ -1235,6 +1397,11 @@ function render() {
         .map(([key, origin]) => key + ' ← ' + origin)
         .join('\n')
     : 'No origin metadata recorded';
+  followSelectedEventRow();
+  if (pathView) {
+    renderFlowOverview();
+    return;
+  }
   const from = nodes.get(step.from),
     to = nodes.get(step.to);
   from.classList.add('active');
@@ -1269,21 +1436,6 @@ function render() {
   if ($('follow').checked) {
     if ($('view-mode').value === 'map')
       $('canvas').scrollLeft = Math.max(0, to.offsetLeft - 30);
-    const row = $('event-list').querySelector(
-      `.event-row[data-index="${cursor}"]`,
-    );
-    if (row) {
-      const list = $('event-list');
-      const top =
-        row.getBoundingClientRect().top -
-        list.getBoundingClientRect().top +
-        list.scrollTop;
-      if (
-        top < list.scrollTop ||
-        top + row.offsetHeight > list.scrollTop + list.clientHeight
-      )
-        list.scrollTop = Math.max(0, top - list.clientHeight / 2);
-    }
   }
   if (
     positionChanged &&
@@ -1630,7 +1782,10 @@ $('bookmarks-only').onclick = () => {
   );
   filterList();
 };
-$('view-mode').onchange = render;
+$('view-mode').onchange = () => {
+  if ($('view-mode').value === 'path') overviewLastCursor = -1;
+  render();
+};
 $('toggle-flow').onclick = () => {
   layout.diagram = !layout.diagram;
   applyLayout();
@@ -1641,6 +1796,7 @@ $('follow').onchange = () => {
   if ($('follow').checked) {
     pinnedCallId = undefined;
     inspectedSourceEvent = undefined;
+    overviewLastCursor = -1;
   } else pinnedCallId = inspectedSourceEvent?.callId;
   render();
 };

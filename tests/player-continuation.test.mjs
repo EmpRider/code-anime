@@ -5,6 +5,10 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { JSDOM } from 'jsdom';
 import { replayState } from '../public/replay.js';
 import { prepareSourceHighlighting } from '../public/source-highlighter.js';
+import {
+  buildFlowOverview,
+  describeFlowTransition,
+} from '../public/flow-overview.js';
 
 const sources = {
   'A.ts':
@@ -94,6 +98,8 @@ async function createPlayer(loadContinuation, first = initial()) {
   let continuationRequests = 0;
   window.replayState = replayState;
   window.prepareSourceHighlighting = prepareSourceHighlighting;
+  window.buildFlowOverview = buildFlowOverview;
+  window.describeFlowTransition = describeFlowTransition;
   window.matchMedia = () => ({ matches: true });
   window.HTMLElement.prototype.scrollIntoView = () => {};
   window.fetch = async (url) => {

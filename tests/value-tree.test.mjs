@@ -2,6 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
+import {
+  buildFlowOverview,
+  describeFlowTransition,
+} from '../public/flow-overview.js';
 import { replayState } from '../public/replay.js';
 import { prepareSourceHighlighting } from '../public/source-highlighter.js';
 
@@ -58,6 +62,8 @@ test('large object inspectors load bounded pages and retain disclosure through h
     const get = (id) => window.document.getElementById(id);
     window.replayState = replayState;
     window.prepareSourceHighlighting = prepareSourceHighlighting;
+    window.buildFlowOverview = buildFlowOverview;
+    window.describeFlowTransition = describeFlowTransition;
     let requests = 0;
     window.fetch = async () => {
       requests++;

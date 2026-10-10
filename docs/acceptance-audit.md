@@ -41,11 +41,14 @@ about future changes.
    evidence data. Async task identity is carried in event values. Array order
    supplies sequence; immutable snapshots support backward navigation.
    `tests/replay.test.mjs` and player tests verify historical state restoration.
-6. **High-level default view — partial.**
-   `filterList()` hides internal statement details until disclosure, and the
-   diagram now opens alongside source on desktop. Verify the initial diagram
-   communicates caller, arguments, return transfer, and output in the requested
-   A/B example before accepting the default overview.
+6. **High-level default view — implemented for tested scenarios, visual acceptance open.**
+   The default Execution Path summarizes prepared enter, call, return, throw,
+   and console events in compact paged rows. Adjacent caller-call and callee-entry
+   events are represented by one row, active from the original call site, with
+   the real input values and return transfer. Unpaired calls remain visible.
+   A/B browser tests verify paging, shared seeking and exact source following;
+   recorded Python nested calls verify observed return values. Broader flow
+   quality and visual comparison with VisualJS remain open.
 7. **Expandable methods — implemented, bounded verification.**
    Timeline invocation disclosure and clickable diagram method buttons share
    one nested recorded-event inspector. Browser tests cover source lines,
@@ -60,7 +63,10 @@ about future changes.
 9. **Synchronize detail levels — implemented, bounded verification.**
    Disclosure and inspector derive from the same cursor. Browser tests verify
    position preservation while a recorded nested trace is playing, including
-   diagram selection and source navigation. Broader multi-task scenarios remain.
+   diagram selection and source navigation. The default path shares the cursor,
+   follow state and method inspector. Task/thread identity now prevents
+   mismatched adjacent async calls from being paired or merging console output;
+   broader multi-task browser scenarios remain.
 10. **VisualJS interaction reference — unverified.**
     A direct visual/interaction comparison is still required. Existing layout
     tests do not establish fidelity to the requested source execution experience.
@@ -216,20 +222,28 @@ about future changes.
     regressions pass, but full rendered visual review and keyboard/screen-reader
     validation are still required.
 37. **Integrated implementation and final delivery — in progress.**
-    Changes are integrated and pushed on `codex/execution-visualizer-improvements`.
-    Completion requires closing the gaps above and rerunning applicable gates.
+    Implementation remains on `codex/execution-visualizer-improvements`.
+    Final delivery requires closing the gaps above and revalidating every
+    supported language and primary interaction, including rendered visual review.
 
 ## Checkpoint verification
 
-- `npm run check`: typecheck, build, Prettier, and 77 core tests passed; one
-  optional live CodeGraph integration test skipped (2026-10-10 candidate).
-- `npm run test:browser`: 24 passed, including the five-session persisted
+- `npm run check`: typecheck and 84 core tests passed with one optional live
+  CodeGraph integration test skipped; build completed. The final format-check
+  exit was not observed after an automatic status-poll rejection. Formatting
+  is separately verified before committing.
+- `npm run test:browser`: 25 passed, including the new paired-call and recorded
+  execution-path browser coverage and the five-session persisted
   continuation-chain fixture. Browser coverage includes recorded nested disclosure,
   repeated simulated invocations, recorded continuation preservation, deep
   simulated recursion, keyboard pagination, multiline lexical state, virtualized
   source continuity, real five-iteration loop playback, and mobile layouts.
 - `npm run package:check`: packed CLI installation, MCP handshake, player assets,
   and stored flow API passed for the current candidate.
+- `tests/flow-overview.test.mjs`: seven focused cases verify event-to-overview
+  transitions, input and return values, nesting, caller call-site timing,
+  independently recorded Python task console streams, and rejecting misleading
+  adjacent entries from another async task.
 - The opt-in real CodeGraph integration test passed against a temporary indexed
   Kotlin project using npm-installed CodeGraph 0.9.9 on Windows. The test first
   confirmed rejection without an index, then verified PATH-discovered CLI
@@ -255,9 +269,8 @@ about future changes.
   p50 12.8 ms and p95 19.0 ms, excluding paint and network. These figures do
   not verify performance for broad or deep trees.
 - `git diff --check`: passed with no whitespace errors.
-- The value-inspector change passed focused JSDOM tests. The complete browser
-  suite has not been rerun for this change; its attempted execution was blocked
-  by automatic tool approval review, so browser-level acceptance remains open.
+- Large object inspector behavior also passed the full 25-test browser suite;
+  broader rendered accessibility and memory profiling remain open.
 
 ## Next implementation order
 

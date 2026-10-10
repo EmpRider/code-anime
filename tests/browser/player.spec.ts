@@ -54,6 +54,175 @@ test.afterAll(async () => {
   await runtime?.close();
 });
 
+test('execution path stays synchronized across paging, seeking and view changes', async ({
+  page,
+}) => {
+  const sequence = [
+    ['enter', 'A.m', 'a', ['a'], 'A.ts', 2, {}],
+    ['call', 'A.m', 'a', ['a'], 'A.ts', 3, { inputs: { x: 10, y: 20 } }],
+    [
+      'enter',
+      'B.m2',
+      'b',
+      ['a', 'b'],
+      'B.ts',
+      2,
+      { parentCallId: 'a', inputs: { x: 10, y: 20 } },
+    ],
+    [
+      'return',
+      'B.m2',
+      'b',
+      ['a'],
+      'B.ts',
+      3,
+      { parentCallId: 'a', result: 30 },
+    ],
+    ['assign', 'A.m', 'a', ['a'], 'A.ts', 4, { after: { ret: 30 } }],
+    ['console', 'A.m', 'a', ['a'], 'A.ts', 5, { output: '30\n' }],
+    ['call', 'A.m', 'a', ['a'], 'A.ts', 3, { inputs: { x: 20, y: 20 } }],
+    [
+      'enter',
+      'B.m2',
+      'b2',
+      ['a', 'b2'],
+      'B.ts',
+      2,
+      { parentCallId: 'a', inputs: { x: 20, y: 20 } },
+    ],
+    [
+      'return',
+      'B.m2',
+      'b2',
+      ['a'],
+      'B.ts',
+      3,
+      { parentCallId: 'a', result: 40 },
+    ],
+    ['console', 'A.m', 'a', ['a'], 'A.ts', 5, { output: '40\n' }],
+    ['return', 'A.m', 'a', [], 'A.ts', 6, { result: 40 }],
+  ] as const;
+  const events: TraceEvent[] = sequence.map(
+    ([kind, symbolId, callId, stack, file, line, values], index) => ({
+      id: `path-${index + 1}`,
+      kind,
+      symbolId,
+      callId,
+      stack: [...stack],
+      source: { file, line, endLine: line },
+      values: {},
+      locals: {},
+      certainty: 'mock',
+      label: `${kind} ${symbolId}`,
+      ...values,
+    }),
+  );
+  const session = await runtime.store.create(
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'browser-path-test',
+        projectRoot: 'fixture',
+        sourceHash: 'path-fixture',
+        target: 'A.m',
+        scenario: {},
+        events,
+        diagnostics: [],
+        truncated: false,
+        filesAnalyzed: 2,
+        cacheHits: 0,
+        sourceFiles: {
+          'A.ts':
+            'class A {\n  m() {\n    B.m2(10, 20);\n    const ret = 30;\n    console.log(ret);\n  }\n}',
+          'B.ts': 'class B {\n  m2(x, y) {\n    return x + y;\n  }\n}',
+        },
+      },
+      'A.m',
+    ),
+  );
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await expect(page.locator('#progress')).toHaveText('0 / 11');
+  await expect(page.locator('#view-mode')).toHaveValue('path');
+  await expect(page.locator('.flow-overview')).toBeVisible();
+  await expect(page.locator('.overview-step')).toHaveCount(6);
+  const firstDisclosure = page.locator(
+    '.overview-disclosure[data-call-id="a"]',
+  );
+  await expect(firstDisclosure).toHaveAttribute('aria-expanded', 'false');
+  await firstDisclosure.click();
+  await expect(firstDisclosure).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#method-details')).toBeVisible();
+  await expect(page.locator('#method-details')).toContainText('A.m');
+  await expect(page.locator('#progress')).toHaveText('0 / 11');
+  await firstDisclosure.click();
+  await expect(page.locator('#method-details')).toBeHidden();
+  await expect(page.locator('#progress')).toHaveText('0 / 11');
+  await expect(
+    page.locator('.overview-step[data-event-index="3"]'),
+  ).toContainText('A.m → B.m2');
+  // Paired call/entry events use one row, but the caller's call-site event
+  // still activates that row before playback enters B.m2.
+  await page.locator('#timeline').fill('2');
+  await expect(page.locator('.overview-step.current')).toHaveAttribute(
+    'data-event-index',
+    '3',
+  );
+  await expect(page.locator('#source')).toHaveText('A.ts');
+
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  await page.locator('.overview-step[data-event-index="3"]').click();
+  await expect(page.locator('#progress')).toHaveText('3 / 11');
+  await expect(page.locator('#source')).toHaveText('B.ts');
+  await expect(page.locator('.executing-line')).toHaveAttribute(
+    'data-line',
+    '2',
+  );
+  await expect(page.locator('.overview-step.current')).toHaveAttribute(
+    'data-event-index',
+    '3',
+  );
+  const nestedDisclosure = page.locator(
+    '.overview-disclosure[data-call-id="b"]',
+  );
+  await nestedDisclosure.click();
+  await expect(nestedDisclosure).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#method-details')).toContainText('return x + y;');
+  await expect(page.locator('#progress')).toHaveText('3 / 11');
+  await expect(nestedDisclosure).toBeFocused();
+
+  await page.getByRole('button', { name: 'Later →' }).click();
+  await expect(
+    page.locator('.overview-step[data-event-index="10"]'),
+  ).toBeVisible();
+  await page.locator('.overview-step[data-event-index="10"]').click();
+  await expect(page.locator('#progress')).toHaveText('10 / 11');
+  await expect(page.locator('#console-output')).toHaveText('30\n40\n');
+  await expect(page.locator('.overview-step.current')).toHaveAttribute(
+    'data-event-index',
+    '10',
+  );
+
+  await page.locator('#follow').uncheck();
+  await page.locator('#timeline').fill('3');
+  await expect(
+    page.locator('.overview-step[data-event-index="3"]'),
+  ).toHaveCount(0);
+  await page.locator('#follow').check();
+  await expect(page.locator('.overview-step.current')).toHaveAttribute(
+    'data-event-index',
+    '3',
+  );
+  await page.locator('#view-mode').selectOption('map');
+  await expect(page.locator('.flow-overview')).toHaveCount(0);
+  await page.locator('#view-mode').selectOption('path');
+  await expect(page.locator('.overview-step.current')).toHaveAttribute(
+    'data-event-index',
+    '3',
+  );
+  expect(requests).toEqual([]);
+});
+
 test('recorded nested calls retain independent disclosure during playback and return exact values', async ({
   page,
 }) => {
@@ -102,17 +271,34 @@ test('recorded nested calls retain independent disclosure during playback and re
     await page.clock.pauseAt(new Date('2026-01-01T00:00:00Z'));
     await page.goto(status.url!);
     await expect(page.locator('#progress')).toHaveText(`0 / ${events.length}`);
+    await expect(page.locator('#view-mode')).toHaveValue('path');
     const requests: string[] = [];
     page.on('request', (request) => requests.push(request.url()));
+    const innerEnter = events.findIndex(
+      (event) => event.callId === inner.callId && event.kind === 'enter',
+    );
+    await page.locator('#timeline').fill(String(innerEnter + 1));
+    await expect(page.locator('.overview-step.current')).toContainText(
+      inner.symbolId,
+    );
+    await expect(page.locator('.overview-step.current')).toContainText(
+      'observed',
+    );
+    await expect(page.locator('#source')).toHaveText('helper.py');
+    await page.locator('#timeline').fill(String(innerReturn + 1));
+    await expect(page.locator('.overview-step.current')).toContainText('→ 30');
+    await page.locator('#timeline').fill('0');
     for (const id of [...parents, inner.callId]) {
-      await page.locator(`[data-call-id="${id}"]`).click();
+      await page.locator(`.call-disclosure[data-call-id="${id}"]`).click();
     }
     const detail = page.locator(`.event-row[data-index="${detailIndex + 1}"]`);
     await expect(detail).toBeVisible();
     await page.locator('#play').click();
     await page.clock.runFor(1);
     const position = await page.locator('#progress').textContent();
-    const parent = page.locator(`[data-call-id="${parents.at(-1)}"]`);
+    const parent = page.locator(
+      `.call-disclosure[data-call-id="${parents.at(-1)}"]`,
+    );
     await parent.click();
     await expect(detail).toHaveCount(0);
     await expect(page.locator('#play')).toHaveAttribute('data-playing', 'true');
@@ -120,9 +306,12 @@ test('recorded nested calls retain independent disclosure during playback and re
     await parent.click();
     await expect(detail).toBeVisible();
     await expect(
-      page.locator(`[data-call-id="${inner.callId}"]`),
+      page.locator(`.call-disclosure[data-call-id="${inner.callId}"]`),
     ).toHaveAttribute('aria-expanded', 'true');
     await page.locator('#play').click();
+    // The default path is the compact overview; packet assertions exercise
+    // the retained detailed Focus view.
+    await page.locator('#view-mode').selectOption('focus');
     await page.locator('#timeline').fill(String(innerReturn + 1));
     await expect(page.locator('.packet')).toContainText('Return: 30');
     await expect(page.locator('#source')).toHaveText('helper.py');
@@ -399,6 +588,7 @@ test('inspection changes preserve the current packet without replaying its anima
 }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto(url);
+  await page.locator('#view-mode').selectOption('focus');
   await page.locator('#next').click();
   const packet = await page.locator('.packet').elementHandle();
   const animation = await packet!.evaluateHandle(
@@ -644,15 +834,21 @@ test('desktop layout resizes, focuses and remembers preferences without moving p
   await page.goto(url);
   await expect(page.locator('#progress')).toHaveText('0 / 100');
   await page.locator('#timeline').fill('70');
-  const activeRowIsVisible = await page.evaluate(() => {
-    const row = document.querySelector('.event-row.current');
-    const list = document.getElementById('event-list');
-    if (!row || !list) return false;
-    const selected = row.getBoundingClientRect();
-    const viewport = list.getBoundingClientRect();
-    return selected.top >= viewport.top && selected.bottom <= viewport.bottom;
-  });
-  expect(activeRowIsVisible).toBe(true);
+  await expect(page.locator('#progress')).toHaveText('70 / 100');
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const row = document.querySelector('.event-row.current');
+        const list = document.getElementById('event-list');
+        if (!row || !list) return false;
+        const selected = row.getBoundingClientRect();
+        const viewport = list.getBoundingClientRect();
+        return (
+          selected.top >= viewport.top && selected.bottom <= viewport.bottom
+        );
+      }),
+    )
+    .toBe(true);
   await expect(page.locator('.inspector')).toBeHidden();
   await expect(page.locator('#console-panel')).not.toHaveAttribute('open', '');
   const divider = page.getByRole('separator', {
@@ -1175,6 +1371,7 @@ test('mobile flow remains available with a hidden desktop diagram and preserves 
   const requests: string[] = [];
   page.on('request', (request) => requests.push(request.url()));
   await page.getByRole('button', { name: 'Flow', exact: true }).click();
+  await page.locator('#view-mode').selectOption('focus');
   await expect(page.locator('#flow-panel')).toBeVisible();
   await expect(page.locator('.source-panel')).toBeHidden();
   await expect(page.locator('.trace-panel')).toBeHidden();
