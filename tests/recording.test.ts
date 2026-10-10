@@ -234,6 +234,7 @@ test('JavaScript stderr preserves trailing fragments, spacing and application no
   const messages = [
     'alpha  \r\n',
     'For help, see: application docs\n',
+    'For help, see: https://nodejs.org/learn/getting-started/debugging\n',
     'Debugger ending on ws://example.invalid/not-the-inspector\n',
     'Debugger attached. application notice\n',
     'final fragment  ',

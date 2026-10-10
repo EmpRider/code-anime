@@ -100,6 +100,10 @@ about future changes.
     nested templates and escaped interpolation markers. Single-line Rust raw
     literals restore code highlighting after closing hashes. Browser regressions
     verify exact original text, inert HTML-like source and active-line continuity.
+    Current source rows additionally mark the executing line with
+    `aria-current="location"`; enabled breakpoint buttons announce their line
+    and whether activation sets or removes the breakpoint. A browser regression
+    checks these announcements across keyboard activation and timeline seeks.
     Complete language-specific grammar, source maps, and broad original-source
     provenance remain incomplete or unverified.
 12. **Follow method execution — implemented, bounded verification.**
@@ -177,6 +181,8 @@ about future changes.
     Keyboard shortcuts, native disclosure buttons, focus styles, and reduced
     motion exist. Browser tests cover disclosure focus, invocation-selector
     focus preservation, pagination focus, mobile controls, and keyboard resizing.
+    A focused browser regression checks source-line `aria-current` and
+    stateful breakpoint names/pressed state after keyboard activation and seeks.
     Screen-reader behavior and all focus paths remain unverified.
 26. **Responsive workspace — partial.**
     Browser tests cover 1440x900, 820x1180, and 390x844, panel switching, playback
@@ -262,7 +268,7 @@ about future changes.
 
 - `npm run check`: typecheck, 109 core tests (108 passed, one optional live
   CodeGraph integration test skipped), build, and Prettier passed.
-- `npm run test:browser`: 27 passed, including paired-call, recorded
+- `npm run test:browser`: 28 passed, including paired-call, recorded
   execution-path, separate console writes, overview rewind, and persisted
   five-session continuation-chain coverage.
   Browser coverage includes recorded nested disclosure,
@@ -272,6 +278,7 @@ about future changes.
   JavaScript recording also verifies source, local values, ANSI-decorated output
   display, and reverse seeking without rewriting recorded stdout. The 27-test
   Playwright suite was rerun after the V8 Promise snapshot update.
+  The additional browser test verifies source-line and breakpoint accessibility.
 - `npm run package:check`: packed CLI installation, MCP handshake, player assets,
   and stored flow API passed, including both Python and JavaScript observed
   recordings through the installed package.
@@ -292,6 +299,11 @@ about future changes.
   still-pending Promise without predicting later settlement. JavaScript
   event-budget and cancellation regressions passed after adding the Windows
   `taskkill` nonzero-exit fallback.
+  An additional stderr regression writes the current Node.js Inspector help
+  URL from application code. The recorder now filters that URL when Node.js
+  emits it as an Inspector startup notice, while preserving a subsequent
+  identical application-written line. This fixes a Node.js v26.8.1 failure
+  that otherwise appended the startup notice to recorded output.
 - `tests/flow-overview.test.mjs`: eight focused cases verify event-to-overview
   transitions, input and return values, nesting, caller call-site timing,
   independently recorded Python task console streams, and rejecting misleading
@@ -325,7 +337,7 @@ about future changes.
   p50 14.0 ms and p95 17.6 ms, excluding paint and network. These figures do
   not verify performance for broad or deep trees.
 - `git diff --check`: passed with no whitespace errors.
-- Large object inspector behavior also passed the full 27-test browser suite;
+- Large object inspector behavior also passed the full 28-test browser suite;
   broader rendered accessibility and memory profiling remain open.
 
 ## Next implementation order

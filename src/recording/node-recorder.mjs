@@ -721,9 +721,11 @@ function stderrLine(text) {
   } else if (
     inspectorUrl &&
     !inspectorHelpSeen &&
-    line === 'For help, see: https://nodejs.org/en/docs/inspector'
+    (line === 'For help, see: https://nodejs.org/en/docs/inspector' ||
+      line ===
+        'For help, see: https://nodejs.org/learn/getting-started/debugging')
   ) {
-    // Node emits this after its initial listening notice.
+    // Node's Inspector help URL differs across supported Node versions.
     inspectorHelpSeen = true;
   } else {
     applicationStderr(text);

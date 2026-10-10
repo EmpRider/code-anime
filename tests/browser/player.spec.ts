@@ -85,6 +85,43 @@ test('separate console source lines remain seekable in the default execution pat
   expect(requests).toEqual([]);
 });
 
+test('source announces the current line and accessible breakpoint state across seeks', async ({
+  page,
+}) => {
+  await page.goto(url);
+  await page.locator('#timeline').fill('12');
+  await expect(page.locator('#source-line')).toHaveText('L12');
+  await expect(page.locator('.code-row[aria-current="location"]')).toHaveCount(
+    1,
+  );
+  await expect(
+    page.locator('.code-row[aria-current="location"]'),
+  ).toHaveAttribute('data-line', '12');
+  const breakpoint = page
+    .locator('.code-row[data-line="12"]')
+    .locator('.code-gutter');
+  await expect(breakpoint).toHaveAccessibleName('Set breakpoint at line 12');
+  await breakpoint.focus();
+  await page.keyboard.press('Enter');
+  await expect(breakpoint).toHaveAttribute('aria-pressed', 'true');
+  await expect(breakpoint).toHaveAccessibleName('Remove breakpoint at line 12');
+  await page.locator('#timeline').fill('13');
+  await expect(page.locator('.code-row[aria-current="location"]')).toHaveCount(
+    1,
+  );
+  await expect(
+    page.locator('.code-row[aria-current="location"]'),
+  ).toHaveAttribute('data-line', '13');
+  await expect(breakpoint).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#timeline').fill('12');
+  await expect(page.locator('.code-row[aria-current="location"]')).toHaveCount(
+    1,
+  );
+  await expect(
+    page.locator('.code-row[aria-current="location"]'),
+  ).toHaveAttribute('data-line', '12');
+});
+
 test('execution path stays synchronized across paging, seeking and view changes', async ({
   page,
 }) => {

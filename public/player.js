@@ -865,6 +865,12 @@ function renderSource(state, event) {
         gutter.title = stepIndex
           ? 'Toggle breakpoint at line ' + i
           : 'No execution recorded on this line';
+        gutter.setAttribute(
+          'aria-label',
+          stepIndex
+            ? 'Set breakpoint at line ' + i
+            : 'Line ' + i + ': no recorded execution',
+        );
         gutter.disabled = !stepIndex;
         row.append(gutter, codeText(sourceSyntaxCache.get(location.file)(i)));
         fragment.append(row);
@@ -885,6 +891,14 @@ function renderSource(state, event) {
       gutter.title = index
         ? 'Toggle breakpoint at line ' + line
         : 'No execution recorded on this line';
+      gutter.setAttribute(
+        'aria-label',
+        !index
+          ? `Line ${line}: no recorded execution`
+          : sourceBreakpoints.has(key) || breakpoints.has(index)
+            ? `Remove breakpoint at line ${line}`
+            : `Set breakpoint at line ${line}`,
+      );
       gutter.onclick = index
         ? () => {
             sourceBreakpoints.has(key)
@@ -905,6 +919,7 @@ function renderSource(state, event) {
     }
   }
   highlightedSourceRow?.classList.remove('executing-line');
+  highlightedSourceRow?.removeAttribute('aria-current');
   highlightedSourceRow = undefined;
   const isExecuting =
     sourceEvent?.callId === event?.callId &&
@@ -913,6 +928,7 @@ function renderSource(state, event) {
     isExecuting && event?.source && sourceRows.get(event.source.line);
   if (active) {
     active.classList.add('executing-line');
+    active.setAttribute('aria-current', 'location');
     highlightedSourceRow = active;
     if (
       $('follow').checked &&
