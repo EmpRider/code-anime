@@ -85,7 +85,10 @@ realistic paint/heap performance acceptance requirements.
    `src/analysis/native-codegraph.ts` defaults to unlimited call depth and reports
    event/provider boundaries. `tests/native-codegraph.test.ts` covers more than
    30 calls; `tests/recording.test.ts` covers recursion, linked chunks, timeout,
-   cancellation, and infinite execution. Runtime recursion still obeys Python's
+   cancellation, and infinite execution. A real multi-file Python browser trace
+   now verifies 47 nested recorded calls (46 recursive edges), accurate parent
+   invocation identity, and return values from the root and leaf. Runtime
+   recursion still obeys Python's
    runtime limit. These tests do not prove arbitrary unbounded execution.
 2. **Focus on user code — implemented for tested Python and JavaScript scope.**
    Recorded fixtures cross user files; the JavaScript V8 Inspector adapter
@@ -210,8 +213,10 @@ realistic paint/heap performance acceptance requirements.
    Timeline invocation disclosure and clickable diagram method buttons share
    one nested recorded-event inspector. Browser tests cover source lines,
    annotation separation, and event selection; a 45-level simulated recursion
-   verifies that deeply nested user calls remain inspectable. Broader visual
-   review and real deeply recursive frontend recordings remain open.
+   verifies that deeply nested user calls remain inspectable. An additional
+   recorded 47-invocation Python recursion expands every nested method in the
+   diagram inspector and verifies accurate leaf/root returns. Broader visual
+   review and deeper cross-language recordings remain open.
 8. **Independent nested expansion — implemented, bounded verification.**
    `expandedCalls` preserves invocation-specific state and cursor position.
    A recorded `outer -> middle -> add` scenario verifies independent collapse,
@@ -412,16 +417,20 @@ realistic paint/heap performance acceptance requirements.
     restoration, and exactly one retrieval per prepared session. These synthetic
     tests exclude browser paint, broad real-project behavior, and heap profiling.
     An additional **actual recorded** Python program exercises two user source
-    files, loops, 482 observed method entries, console output, and 4,116 trace
-    events stored across multiple prepared sessions. A browser regression loads
+    files, loops, 47-level recursion, 529 observed method entries, console
+    output, and 4,308 trace events stored across multiple prepared sessions.
+    The regression verifies each recursive parent link, the deepest stack, exact
+    root and leaf returns, source following, and independent nested collapse and
+    re-expansion without moving the playback cursor. It loads
     all sessions and measures 24 seeks across two animation-frame boundaries, plus
-    Chromium DevTools heap and layout counters. The initial local sample
-    reported paint-inclusive p95 53.1 ms, JavaScript heap 7 to 6 MiB, and 79
-    additional layout operations. Historical replay remained correct, the DOM
+    Chromium DevTools heap and layout counters. One local sample after adding
+    recursion reported a two-frame seek p95 of 85.6 ms, JavaScript heap 13 to
+    7 MiB, and 76 additional layout operations. Historical replay remained correct, the DOM
     stayed bounded, and seeking sent no new flow requests. This is one local
     performance sample; the full 40-test browser suite passed after adding the
-    benchmark. It does not establish performance for arbitrary projects.
-    Continue measuring deeper trees, long stacks, large objects, substantially
+    original benchmark, prior to the recursion extension. It does not establish
+    performance for arbitrary projects or directly measure per-frame paint time.
+    Continue measuring longer stacks, large objects, substantially
     larger recorded output, and diverse real applications before accepting this.
     Value-tree DOM creation is now bounded to visible pages and explicitly
     expanded branches; the large-value regression verifies lazy construction,

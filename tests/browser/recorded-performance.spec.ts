@@ -2,10 +2,11 @@ import { expect, test } from '@playwright/test';
 import { realpath } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { readConfig } from '../../src/config.js';
+import type { TraceEvent } from '../../src/domain/trace.js';
 import { startRuntime } from '../../src/runtime.js';
 import { RecordingService } from '../../src/services/recording-service.js';
 
-test('large recorded Python call tree remains navigable after loading prepared continuations', async ({
+test('wide and deeply recursive recorded Python calls remain navigable across prepared continuations', async ({
   page,
 }) => {
   test.setTimeout(150_000);
@@ -45,10 +46,12 @@ test('large recorded Python call tree remains navigable after loading prepared c
     expect(result.chunks).toBeGreaterThan(1);
 
     const symbols = new Set<string>();
+    const recordedEvents: TraceEvent[] = [];
     let observedCalls = 0;
     let cursor = await runtime.store.get(result.sessionId!);
     while (cursor) {
       for (const event of cursor.flow.trace!.events) {
+        recordedEvents.push(event);
         if (event.kind !== 'enter') continue;
         expect(event.certainty).toBe('observed');
         symbols.add(event.symbolId);
@@ -63,6 +66,36 @@ test('large recorded Python call tree remains navigable after loading prepared c
     expect([...symbols].some((symbol) => symbol.includes('process'))).toBe(
       true,
     );
+    const recursiveEntries = recordedEvents.filter(
+      (event) =>
+        event.kind === 'enter' && event.symbolId.includes('deep_chain'),
+    );
+    expect(recursiveEntries).toHaveLength(47);
+    expect(new Set(recursiveEntries.map((event) => event.callId)).size).toBe(
+      47,
+    );
+    for (let i = 1; i < recursiveEntries.length; i++)
+      expect(recursiveEntries[i]!.parentCallId).toBe(
+        recursiveEntries[i - 1]!.callId,
+      );
+    expect(
+      recursiveEntries.at(-1)!.stack.length - recursiveEntries[0]!.stack.length,
+    ).toBe(46);
+    const recursiveRoot = recursiveEntries[0]!;
+    const recursiveLeaf = recursiveEntries.at(-1)!;
+    const recursiveRootIndex = recordedEvents.findIndex(
+      (event) => event === recursiveRoot,
+    );
+    const rootReturn = recordedEvents.find(
+      (event) =>
+        event.kind === 'return' && event.callId === recursiveRoot.callId,
+    );
+    const leafReturn = recordedEvents.find(
+      (event) =>
+        event.kind === 'return' && event.callId === recursiveLeaf.callId,
+    );
+    expect(rootReturn?.result).toBe(46);
+    expect(leafReturn?.result).toBe(0);
 
     await page.setViewportSize({ width: 1440, height: 900 });
     const errors: string[] = [];
@@ -88,6 +121,45 @@ test('large recorded Python call tree remains navigable after loading prepared c
     await expect(page.locator('#console-output')).toContainText(
       'complete 87000',
     );
+    await expect(page.locator('#console-output')).toContainText('depth 46');
+
+    await page.locator('#timeline').fill(String(recursiveRootIndex + 1));
+    await expect(page.locator('#source')).toHaveText('performance_workers.py');
+    await expect(page.locator('#snippet')).toContainText(
+      'return 1 + deep_chain(depth - 1)',
+    );
+    await page.locator('#view-mode').selectOption('map');
+    await page
+      .getByRole('button', { name: `Inspect method ${recursiveRoot.symbolId}` })
+      .click();
+    const details = page.locator('#method-details');
+    const rootDetails = details.locator(
+      `details[data-invocation="${recursiveRoot.callId}"]`,
+    );
+    await expect(rootDetails).toBeVisible();
+    for (const child of recursiveEntries.slice(1)) {
+      const nested = details.locator(
+        `details[data-invocation="${child.callId}"]`,
+      );
+      await nested.locator(':scope > summary').click();
+      await expect(nested).toHaveAttribute('open', '');
+    }
+    const leafDetails = details.locator(
+      `details[data-invocation="${recursiveLeaf.callId}"]`,
+    );
+    await expect(leafDetails).toContainText('Return: 0');
+    await expect(rootDetails).toContainText('Return: 46');
+    const innerDetails = details.locator(
+      `details[data-invocation="${recursiveEntries[10]!.callId}"]`,
+    );
+    await innerDetails.locator(':scope > summary').click();
+    await expect(leafDetails).toBeHidden();
+    await innerDetails.locator(':scope > summary').click();
+    await expect(leafDetails).toBeVisible();
+    await expect(page.locator('#progress')).toHaveText(
+      `${recursiveRootIndex + 1} / ${result.eventCount}`,
+    );
+    await page.locator('#view-mode').selectOption('path');
 
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Performance.enable');
@@ -132,7 +204,7 @@ test('large recorded Python call tree remains navigable after loading prepared c
     const layoutAfter = after.LayoutCount ?? NaN;
     console.log(
       `recorded performance: ${result.eventCount} events, ${observedCalls} observed calls, ` +
-        `paint-inclusive seek p95=${p95.toFixed(1)}ms, ` +
+        `two-frame seek p95=${p95.toFixed(1)}ms, ` +
         `JS heap ${Math.round(heapBefore / 1024 / 1024)}→${Math.round(heapAfter / 1024 / 1024)} MiB, ` +
         `layouts +${(layoutAfter - layoutBefore).toFixed(0)}`,
     );

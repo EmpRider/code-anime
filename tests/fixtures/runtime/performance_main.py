@@ -1,4 +1,4 @@
-from performance_workers import process
+from performance_workers import deep_chain, process
 
 total = 0
 for index in range(240):
@@ -7,3 +7,4 @@ for index in range(240):
         print(f"checkpoint {index}: {total}")
 
 print(f"complete {total}")
+print(f"depth {deep_chain(46)}")
