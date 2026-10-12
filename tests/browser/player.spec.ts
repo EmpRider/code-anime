@@ -1806,6 +1806,122 @@ test('normal playback, inspection, and layout controls reuse the prepared trace'
   expect(requests).toEqual([]);
 });
 
+test('large inspector trees retain disclosure and nodes during layout changes, but update for a new frame or step', async ({
+  page,
+}) => {
+  const wide = Object.fromEntries(
+    Array.from({ length: 135 }, (_, index) => [`value${index}`, index]),
+  );
+  const events: TraceEvent[] = [
+    {
+      id: 'event-1',
+      kind: 'enter',
+      callId: 'parent',
+      symbolId: 'A.m',
+      label: 'A.m',
+      stack: ['parent'],
+      locals: { parent: { label: 'caller', nested: wide } },
+      values: {},
+      source: { file: 'example.js', line: 1, endLine: 1 },
+      certainty: 'mock',
+    },
+    {
+      id: 'event-2',
+      kind: 'enter',
+      callId: 'child',
+      parentCallId: 'parent',
+      symbolId: 'B.m2',
+      label: 'B.m2',
+      stack: ['parent', 'child'],
+      locals: {
+        parent: { label: 'caller', nested: wide },
+        child: { label: 'callee', nested: wide },
+      },
+      after: { packet: wide },
+      values: {},
+      source: { file: 'example.js', line: 2, endLine: 2 },
+      certainty: 'mock',
+    },
+    {
+      id: 'event-3',
+      kind: 'assign',
+      callId: 'child',
+      symbolId: 'B.m2',
+      label: 'update packet',
+      stack: ['parent', 'child'],
+      locals: {
+        parent: { label: 'caller', nested: wide },
+        child: { label: 'callee', nested: wide },
+      },
+      after: { packet: { ...wide, value0: -1 } },
+      values: {},
+      source: { file: 'example.js', line: 3, endLine: 3 },
+      certainty: 'mock',
+    },
+  ];
+  const session = await runtime.store.create(
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'browser-test',
+        projectRoot: 'fixture',
+        sourceHash: 'wide-inspector',
+        target: 'A.m',
+        scenario: {},
+        events,
+        diagnostics: [],
+        truncated: false,
+        filesAnalyzed: 1,
+        cacheHits: 0,
+        sourceFiles: {
+          'example.js': 'function m() {\n  m2();\n  return 3;\n}',
+        },
+      },
+      'A.m',
+    ),
+  );
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await page.locator('#timeline').fill('2');
+  await page.locator('#toggle-inspector').click();
+  const nestedPacket = page.locator('#fields .object-fields').first();
+  await nestedPacket.locator('summary').click();
+  await expect(nestedPacket.locator('.field')).toHaveCount(60);
+  await nestedPacket.locator('.value-more').click();
+  await expect(nestedPacket.locator('.field')).toHaveCount(120);
+  const valueRow = await nestedPacket.locator('.field').first().elementHandle();
+  const more = await nestedPacket.locator('.value-more').elementHandle();
+  expect(valueRow).not.toBeNull();
+  expect(more).not.toBeNull();
+
+  await page.locator('#view-mode').selectOption('map');
+  await page.locator('#follow').uncheck();
+  await page.locator('#toggle-flow').click();
+  await page.setViewportSize({ width: 1100, height: 800 });
+  expect(await valueRow!.evaluate((node) => node.isConnected)).toBe(true);
+  await expect(nestedPacket).toHaveAttribute('open', '');
+  await expect(nestedPacket.locator('.field')).toHaveCount(120);
+  await more!.focus();
+  await page.setViewportSize({ width: 1120, height: 810 });
+  expect(await more!.evaluate((node) => document.activeElement === node)).toBe(
+    true,
+  );
+
+  await page.locator('#tab-state').click();
+  await expect(page.locator('#local-tree')).toContainText('callee');
+  const localRow = await page
+    .locator('#local-tree .field')
+    .first()
+    .elementHandle();
+  await page.locator('#frame-list .stack-link').first().click();
+  await expect(page.locator('#local-tree')).toContainText('caller');
+  expect(await localRow!.evaluate((node) => node.isConnected)).toBe(false);
+  expect(await valueRow!.evaluate((node) => node.isConnected)).toBe(true);
+
+  await page.locator('#timeline').fill('3');
+  expect(await valueRow!.evaluate((node) => node.isConnected)).toBe(false);
+  await expect(page.locator('#fields')).toContainText('packet');
+});
+
 for (const viewport of [
   { width: 1440, height: 900 },
   { width: 820, height: 1180 },

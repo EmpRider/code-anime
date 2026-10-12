@@ -213,8 +213,13 @@ about future changes.
     adjacent-step reuse, same-depth sibling replacement, stack contraction,
     and reset. Source following now scrolls only the editor when the active line
     leaves its viewport; a browser regression checks that adjacent lines do not
-    scroll and page scroll remains stable. Inspector values, packet, and
-    connection updates still need scrutiny for unnecessary rebuilds.
+    scroll and page scroll remains stable. The inspector now retains its value
+    and object trees and immutable replay snapshot during layout-only changes;
+    changing the inspected call frame refreshes only the local tree. Trace
+    continuation, scenario changes and cursor movement invalidate those caches.
+    A real-browser regression verifies retained expansion, 120 paged fields,
+    focus and DOM identity, and necessary replacement on a new frame or step.
+    Flow packets and connections still need scrutiny for unnecessary rebuilds.
 22. **Immediate disclosure — implemented, incomplete scale evidence.**
     Disclosure uses prepared data; tests verify no request and cursor retention.
     Deep simulated recursion (45 invocations) and keyboard pagination (100 events)
@@ -233,8 +238,10 @@ about future changes.
     historical seeks. Changes-only mode can find a modified property past the
     initial page without creating unrelated rows. A JSDOM regression covers
     1,500 wide fields, 900 nested levels, safe HTML-like values, and zero fresh
-    requests during navigation. Real-browser rendering and accessibility remain
-    unverified for large objects.
+    requests during navigation. A browser test now verifies a 135-field object,
+    60-field paging, retained focus and disclosure during resize, and correct
+    updates when changing inspected frame and step. Broader real-browser
+    accessibility and rendering for deeply nested objects remain unverified.
 24. **User navigation control — implemented, bounded verification.**
     Timeline rows, stack buttons, follow toggle, and source breakpoints provide
     navigation. The recorded nested browser scenario verifies diagram selection,

@@ -7,6 +7,10 @@ let flow, originalFlow, timer, animation;
 let cursor = 0;
 let renderedFlow;
 let renderedCursor = -1;
+let traceRevision = 0;
+let renderedInspectorRevision = -1;
+let inspectedFrame;
+let inspectedState;
 const nodes = new Map();
 const bookmarks = new Set();
 const breakpoints = new Set();
@@ -242,6 +246,7 @@ function traceSteps(trace) {
   }));
 }
 function buildNodes(preserveInspection = false) {
+  traceRevision++;
   nodes.clear();
   invocations.clear();
   invocationPositions.clear();
@@ -1306,8 +1311,11 @@ function followSelectedEventRow() {
 function render() {
   if (!flow) return;
   const positionChanged = renderedFlow !== flow || renderedCursor !== cursor;
+  const inspectorChanged =
+    positionChanged || renderedInspectorRevision !== traceRevision;
   renderedFlow = flow;
   renderedCursor = cursor;
+  renderedInspectorRevision = traceRevision;
   const recording = flow.trace?.recording;
   const isMock = flowHasMock;
   const evidenceLabel = recording
@@ -1377,8 +1385,12 @@ function render() {
   );
   filterList();
   renderMethodDetails();
-  for (const id of ['fields', 'local-tree', 'object-tree'])
-    $(id).replaceChildren();
+  if (inspectorChanged && !cursor) {
+    for (const id of ['fields', 'local-tree', 'object-tree'])
+      $(id).replaceChildren();
+    inspectedFrame = undefined;
+    inspectedState = undefined;
+  }
   for (const id of [
     'operation',
     'origins',
@@ -1423,9 +1435,14 @@ function render() {
     }
     return;
   }
-  const state = replayState(flow.trace?.events ?? [], cursor);
+  // Layout and inspection-only changes do not alter an immutable snapshot.
+  // Keep the prepared snapshot to avoid cloning large state trees on resize.
+  if (inspectorChanged || !inspectedState)
+    inspectedState = replayState(flow.trace?.events ?? [], cursor);
+  const state = inspectedState;
   const event = state.event,
     step = flow.steps[cursor - 1];
+  const currentFrame = activeFrame(state, event);
   $('stack').textContent = JSON.stringify(state.stack, null, 2);
   $('locals').textContent = JSON.stringify(state.locals, null, 2);
   $('objects').textContent = JSON.stringify(state.objects, null, 2);
@@ -1450,12 +1467,19 @@ function render() {
     });
     $('frame-list').replaceChildren(fragment);
   }
-  fieldRows(
-    $('local-tree'),
-    frameLocals(state, event),
-    precedingFrameLocals(state, event, flow.trace?.events[cursor - 2]),
-  );
-  fieldRows($('object-tree'), state.objects);
+  if (inspectorChanged || inspectedFrame !== currentFrame) {
+    inspectedFrame = currentFrame;
+    $('local-tree').replaceChildren();
+    fieldRows(
+      $('local-tree'),
+      frameLocals(state, event),
+      precedingFrameLocals(state, event, flow.trace?.events[cursor - 2]),
+    );
+  }
+  if (inspectorChanged) {
+    $('object-tree').replaceChildren();
+    fieldRows($('object-tree'), state.objects);
+  }
   $('certainty').textContent = event
     ? [event.certainty, event.note].filter(Boolean).join(' · ')
     : 'Agent-authored mock data';
@@ -1476,7 +1500,7 @@ function render() {
       cursor - 1,
     )?.after;
   inspectedFields = { after, before };
-  renderInspectedFields();
+  if (inspectorChanged) renderInspectedFields();
   $('operation').textContent = event
     ? [
         event.kind ? event.kind + ' · frame ' + event.callId : '',
