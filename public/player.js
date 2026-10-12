@@ -290,9 +290,20 @@ function buildNodes(preserveInspection = false) {
     ),
   );
   overviewItems = buildFlowOverview(flow.trace?.events, preparedOutput);
+  // Legacy agent-authored flows have ordered handoffs but no recorded runtime
+  // events. Present that known structure immediately, with explicit evidence
+  // labels, instead of hiding every node in an empty Focus view at step zero.
+  if (!overviewItems.length && !flow.trace?.events?.length)
+    overviewItems = flow.steps.map((step, index) => ({
+      startIndex: index + 1,
+      index: index + 1,
+      kind: 'structural',
+      label: `${step.from} → ${step.to}: ${step.dtoName}`,
+      certainty: 'unverified',
+      depth: 0,
+    }));
   overviewRenderedPage = -1;
-  // Older, agent-authored flows contain diagram steps but no execution events.
-  // Keep their original diagram usable rather than displaying an empty path.
+  // The Focus diagram remains available for a trace without overview events.
   if (!overviewItems.length && $('view-mode').value === 'path')
     $('view-mode').value = 'focus';
   for (const [index, event] of (flow.trace?.events ?? []).entries())
@@ -1227,9 +1238,16 @@ function renderFlowOverview() {
     panel = text('section', '', 'flow-overview');
     panel.setAttribute('aria-label', 'Prepared execution overview');
     const heading = text('div', '', 'overview-heading');
+    const structural = overviewItems[0]?.kind === 'structural';
     heading.append(
-      text('strong', 'Execution path'),
-      text('span', `${overviewItems.length} transitions · select to inspect`),
+      text(
+        'strong',
+        structural ? 'Structural path · unverified' : 'Execution path',
+      ),
+      text(
+        'span',
+        `${overviewItems.length} transitions · ${structural ? 'no runtime observations' : 'select to inspect'}`,
+      ),
     );
     panel.append(heading);
     const list = text('div', '', 'overview-list');

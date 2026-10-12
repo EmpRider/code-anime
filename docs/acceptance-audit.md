@@ -32,7 +32,7 @@ verification remains outstanding. Detailed evidence follows in the checklist.
 | 7   | Expand method execution                   | Bounded     | Validate real deep, heavily branching traces.                                                              |
 | 8   | Independent nested disclosure             | Bounded     | Extend real branching and accessibility coverage.                                                          |
 | 9   | Synchronized overview and detail          | Bounded     | Validate complex interleaved tasks.                                                                        |
-| 10  | VisualJS reference behaviors              | Unverified  | Perform direct visual and interaction comparison.                                                          |
+| 10  | VisualJS reference behaviors              | Partial     | Complete recorded-trace interaction comparison after initial visual review.                                |
 | 11  | Live original-source editor               | Partial     | Verify full source-map and syntax-language coverage.                                                       |
 | 12  | Automatic source following                | Bounded     | Test deep cross-file jumps and return behavior.                                                            |
 | 13  | Real loop execution order                 | Bounded     | Verify wider runtime loop semantics.                                                                       |
@@ -66,6 +66,17 @@ against the VisualJS interaction reference (items 10, 15–21, and 36), then
 exercise a real large branching trace with paint/heap measurements (item 27).
 The current keyboard work is bounded evidence for item 25 and does not establish
 screen-reader acceptance across browsers and assistive technologies.
+
+### Verification of the legacy first-load overview correction
+
+After the structural-overview change, the full verification on 2026-10-12
+reported 129 passing core tests, one optional CodeGraph integration skip, a
+successful TypeScript typecheck and production build, and 39 passing Playwright
+browser tests. The package check passed for the installed CLI, MCP handshake,
+player assets, and flow API. Prettier and `git diff --check` passed after
+formatting this audit. These results confirm the tested behavior; they do not
+close the outstanding runtime-language, manual accessibility, visual, or
+realistic paint/heap performance acceptance requirements.
 
 ## Requirement checklist
 
@@ -186,6 +197,13 @@ screen-reader acceptance across browsers and assistive technologies.
    console fragments now merge only on a known shared source line before a
    newline, keeping separate statements individually seekable. Returning to
    cursor zero restores the first overview page when Follow is enabled.
+   Legacy agent-authored sessions with structural handoffs but no runtime events
+   now show their prepared transition path from cursor zero. These rows are
+   labeled `unverified` and the heading explicitly states there are no runtime
+   observations. Previously the player switched those sessions to Focus at
+   initialization and displayed an empty execution overview. A desktop/mobile
+   browser regression checks all prepared handoffs, seeking, restart, preserved
+   evidence labels, and no subsequent network requests for those interactions.
    Broader flow quality and visual comparison with VisualJS remain open.
 7. **Expandable methods — implemented, bounded verification.**
    Timeline invocation disclosure and clickable diagram method buttons share
@@ -205,9 +223,14 @@ screen-reader acceptance across browsers and assistive technologies.
    follow state and method inspector. Task/thread identity now prevents
    mismatched adjacent async calls from being paired or merging console output;
    broader multi-task browser scenarios remain.
-10. **VisualJS interaction reference — unverified.**
-    A direct visual/interaction comparison is still required. Existing layout
-    tests do not establish fidelity to the requested source execution experience.
+10. **VisualJS interaction reference — partial.**
+    The actual VisualJS page and the Code Anime desktop/mobile player were
+    inspected visually (1440x900 desktop and 390x844 mobile). This identified
+    an empty first-load overview for a legacy session with four structural
+    handoffs, corrected under item 6 above. A complete hands-on comparison of
+    source-line stepping, call/return visualization, variables, and playback
+    using representative _recorded_ programs remains unverified. Existing
+    layout regressions alone do not establish interaction fidelity.
 11. **Live source editor — partial.**
     `renderSource()` displays captured source, line numbers, active arrow,
     breakpoint controls, and source-follow navigation. Python lexical coloring

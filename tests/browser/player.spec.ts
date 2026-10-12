@@ -58,6 +58,54 @@ test.afterAll(async () => {
   await runtime?.close();
 });
 
+test('legacy handoffs show an unverified overview before playback on desktop and mobile', async ({
+  page,
+}) => {
+  const session = await runtime.store.create({
+    endpoint: 'Legacy prepared handoffs',
+    steps: [
+      { from: 'Controller', to: 'Service', dtoName: 'Request', dtoFields: {} },
+      { from: 'Service', to: 'Repository', dtoName: 'Lookup', dtoFields: {} },
+      { from: 'Repository', to: 'Service', dtoName: 'Result', dtoFields: {} },
+    ],
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await expect(page.locator('#progress')).toHaveText('0 / 3');
+  await expect(page.locator('#view-mode')).toHaveValue('path');
+  await expect(page.locator('.flow-overview')).toContainText(
+    'Structural path · unverified',
+  );
+  await expect(page.locator('.flow-overview')).toContainText(
+    'no runtime observations',
+  );
+  await expect(page.locator('.overview-step')).toHaveCount(3);
+  await expect(page.locator('.overview-step').first()).toContainText(
+    'Controller → Service: Request',
+  );
+  await expect(page.locator('.overview-step').first()).toContainText(
+    'unverified',
+  );
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  await page.locator('.overview-step[data-event-index="2"]').click();
+  await expect(page.locator('#progress')).toHaveText('2 / 3');
+  await expect(page.locator('.overview-step.current')).toHaveAttribute(
+    'data-event-index',
+    '2',
+  );
+  await expect(page.locator('#evidence-mode')).toHaveText(
+    'Static / unverified evidence',
+  );
+  await page.locator('#restart').click();
+  await expect(page.locator('.overview-step.current')).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('button[data-mobile-view="flow"]').click();
+  await expect(page.locator('.flow-overview')).toBeVisible();
+  await expect(page.locator('.overview-step')).toHaveCount(3);
+  expect(requests).toEqual([]);
+});
+
 test('mobile console history navigates every saved page without changing playback', async ({
   page,
 }) => {
