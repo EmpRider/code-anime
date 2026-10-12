@@ -1361,13 +1361,10 @@ test('observed JavaScript recording replays actual source lines, locals and outp
     });
     let status = started;
     await expect
-      .poll(
-        async () => {
-          status = await recorder.run({ action: 'status', jobId: started.jobId });
-          return status.status;
-        },
-        { timeout: 20_000 },
-      )
+      .poll(async () => {
+        status = await recorder.run({ action: 'status', jobId: started.jobId });
+        return status.status;
+      })
       .toBe('ready');
     expect(status.complete).toBe(true);
     const recorded = (await runtime.store.get(status.sessionId!))!.flow.trace!;
@@ -1479,13 +1476,10 @@ test('verified TypeScript source map follows the original lines in real browser 
     });
     let status = started;
     await expect
-      .poll(
-        async () => {
-          status = await recorder.run({ action: 'status', jobId: started.jobId });
-          return status.status;
-        },
-        { timeout: 20_000 },
-      )
+      .poll(async () => {
+        status = await recorder.run({ action: 'status', jobId: started.jobId });
+        return status.status;
+      })
       .toBe('ready');
     expect(status.complete).toBe(true);
     const recorded = (await runtime.store.get(status.sessionId!))!.flow.trace!;
