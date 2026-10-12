@@ -173,6 +173,35 @@ test('separate console source lines remain seekable in the default execution pat
   expect(requests).toEqual([]);
 });
 
+test('tall desktop flow uses available height and keeps paging accessible', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(url);
+  const entries = page.locator('.overview-step');
+  const count = await entries.count();
+  expect(count).toBeGreaterThan(6);
+  expect(count).toBeLessThanOrEqual(24);
+  const pageLabel = page.locator('.overview-pages span');
+  await expect(pageLabel).toContainText('1 /');
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  const later = page.getByRole('button', { name: 'Later →' });
+  await later.focus();
+  await page.keyboard.press('Enter');
+  await expect(later).toBeFocused();
+  await expect(pageLabel).toContainText('2 /');
+  await expect(entries.first()).not.toHaveAttribute('data-event-index', '1');
+  await page.getByRole('button', { name: '← Earlier' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(later).toBeFocused();
+  await expect(pageLabel).toContainText('1 /');
+  await page.setViewportSize({ width: 1440, height: 740 });
+  await expect(entries).toHaveCount(6);
+  await expect(page.locator('#progress')).toHaveText('0 / 100');
+  expect(requests).toEqual([]);
+});
+
 test('source announces the current line and accessible breakpoint state across seeks', async ({
   page,
 }) => {

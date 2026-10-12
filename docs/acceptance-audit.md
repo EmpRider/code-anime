@@ -172,7 +172,10 @@ about future changes.
 15. **Reduce wasted viewport — partial.**
     CSS makes headers smaller, inspector collapsible, and console compact.
     Desktop source and diagram are side by side with a persisted resize handle.
-    Viewport allocations and visual quality still need broader measurement.
+    The overview now uses more of the available height on tall desktop screens,
+    paging up to 24 prepared transitions; smaller windows retain six rows.
+    A browser regression is added for viewport-dependent density and paging.
+    Rendered visual acceptance and performance verification are still open.
 16. **Content-first progressive disclosure — partial.**
     Inspector, console, and method details are disclosed on demand. The desktop
     source/flow arrangement is implemented. Default overview clarity and visual
@@ -236,7 +239,9 @@ about future changes.
     reachable while retaining the execution cursor and making no new requests.
 25. **Keyboard/accessibility — partial.**
     Keyboard shortcuts, native disclosure buttons, focus styles, and reduced
-    motion exist. Browser tests cover disclosure focus, invocation-selector
+    motion exist. Overview-page navigation now restores keyboard focus to an
+    enabled paging control after replacing the visible page. A browser regression
+    for keyboard paging has been added; broad screen-reader behavior remains open. Browser tests cover disclosure focus, invocation-selector
     focus preservation, pagination focus, mobile controls, and keyboard resizing.
     A focused browser regression checks source-line `aria-current` and
     stateful breakpoint names/pressed state after keyboard activation and seeks.

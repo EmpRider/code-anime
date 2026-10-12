@@ -51,6 +51,7 @@ let overviewPage = 0;
 let overviewRenderedPage = -1;
 let overviewLastCursor = -1;
 const OVERVIEW_PAGE_SIZE = 6;
+let overviewRenderedPageSize = OVERVIEW_PAGE_SIZE;
 let flowHasMock = false;
 let navigationVersion = 0;
 const continuationStates = new WeakMap();
@@ -1153,13 +1154,27 @@ function activeOverviewPosition() {
   }
   return low - 1;
 }
+function overviewPageSize() {
+  if (window.innerWidth < 1101 || window.innerHeight < 800)
+    return OVERVIEW_PAGE_SIZE;
+  return Math.max(
+    OVERVIEW_PAGE_SIZE,
+    Math.min(24, Math.floor(($('canvas').clientHeight - 82) / 36)),
+  );
+}
 function renderFlowOverview() {
   if (!overviewItems.length) return false;
+  const pageSize = overviewPageSize();
+  if (pageSize !== overviewRenderedPageSize) {
+    overviewPage = Math.floor((overviewPage * overviewRenderedPageSize) / pageSize);
+    overviewRenderedPageSize = pageSize;
+    overviewRenderedPage = -1;
+  }
   const activePosition = activeOverviewPosition();
-  const maxPage = Math.ceil(overviewItems.length / OVERVIEW_PAGE_SIZE) - 1;
+  const maxPage = Math.ceil(overviewItems.length / pageSize) - 1;
   if (overviewLastCursor !== cursor && $('follow').checked)
     overviewPage =
-      activePosition >= 0 ? Math.floor(activePosition / OVERVIEW_PAGE_SIZE) : 0;
+      activePosition >= 0 ? Math.floor(activePosition / pageSize) : 0;
   overviewLastCursor = cursor;
   overviewPage = Math.min(overviewPage, maxPage);
   let panel = $('canvas').querySelector('.flow-overview');
@@ -1174,9 +1189,9 @@ function renderFlowOverview() {
     );
     panel.append(heading);
     const list = text('div', '', 'overview-list');
-    const start = overviewPage * OVERVIEW_PAGE_SIZE;
+    const start = overviewPage * pageSize;
     for (const [offset, item] of overviewItems
-      .slice(start, start + OVERVIEW_PAGE_SIZE)
+      .slice(start, start + pageSize)
       .entries()) {
       const entry = text('div', '', 'overview-entry');
       const button = text('button', '', 'overview-step');
@@ -1234,16 +1249,20 @@ function renderFlowOverview() {
       const footer = text('div', '', 'overview-pages');
       const previous = text('button', '← Earlier', 'quiet-button');
       previous.disabled = overviewPage === 0;
-      previous.onclick = () => {
-        overviewPage--;
+      const movePage = (delta) => {
+        overviewPage += delta;
         renderFlowOverview();
+        const buttons = [...$('canvas').querySelectorAll('.overview-pages button')];
+        const preferred = delta < 0 ? buttons[0] : buttons.at(-1);
+        const focusTarget = preferred?.disabled
+          ? buttons.find((button) => !button.disabled)
+          : preferred;
+        focusTarget?.focus({ preventScroll: true });
       };
+      previous.onclick = () => movePage(-1);
       const next = text('button', 'Later →', 'quiet-button');
       next.disabled = overviewPage === maxPage;
-      next.onclick = () => {
-        overviewPage++;
-        renderFlowOverview();
-      };
+      next.onclick = () => movePage(1);
       footer.append(
         previous,
         text('span', `${overviewPage + 1} / ${maxPage + 1}`),
