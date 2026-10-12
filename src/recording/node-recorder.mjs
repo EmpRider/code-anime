@@ -9,6 +9,7 @@ import { SourceMap } from 'node:module';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'acorn';
+import { createInspectorStderrHandler } from './inspector-stderr.mjs';
 
 const [rootArg, entry, eventLimitArg, byteLimitArg, ...arguments_] =
   process.argv.slice(2);
@@ -36,9 +37,6 @@ let stopped = false;
 let stopReason = '';
 let stderrBuffer = '';
 let applicationStderrTail = '';
-let inspectorUrl;
-let inspectorAttached = false;
-const inspectorHelpSeen = new Set();
 let inspected = false;
 let previousPause;
 let repeatedPause = 0;
@@ -987,52 +985,13 @@ function applicationStderr(text) {
   applicationStderrTail = (applicationStderrTail + text).slice(-4096);
   output(text, 'stderr');
 }
-function stderrLine(text) {
-  // Match whole, known Inspector notices, while preserving application text
-  // verbatim (including trailing spaces, carriage returns and final fragments).
-  const line = text.replace(/\r?\n$/, '');
-  const shutdownNotice = 'Waiting for the debugger to disconnect...';
-  if (inspectorUrl && line.endsWith(shutdownNotice)) {
-    // Node may append the notice to an unterminated application stderr write.
-    // The prefix belongs to the application and has no synthetic newline.
-    const prefix = line.slice(0, -shutdownNotice.length);
-    if (prefix) applicationStderr(prefix);
-    closeDebuggerWhenIdle();
-    return;
-  }
-  if (inspectorUrl && line.endsWith(`Debugger ending on ${inspectorUrl}`)) {
-    const prefix = line.slice(0, -`Debugger ending on ${inspectorUrl}`.length);
-    if (prefix) applicationStderr(prefix);
-    return;
-  }
-  const listening = line.match(/^Debugger listening on (ws:\/\/\S+)$/);
-  if (listening && !inspectorUrl) {
-    inspectorUrl = listening[1];
-    connect(inspectorUrl).catch((error) =>
-      stop('Inspector setup: ' + error.message),
-    );
-  } else if (
-    inspectorUrl &&
-    !inspectorAttached &&
-    line === 'Debugger attached.'
-  ) {
-    inspectorAttached = true;
-  } else if (
-    inspectorUrl &&
-    inspectorHelpSeen.size === 0 &&
-    (line === 'For help, see: https://nodejs.org/en/docs/inspector' ||
-      line ===
-        'For help, see: https://nodejs.org/learn/getting-started/debugging')
-  ) {
-    // Node emits one of the documented help variants during startup. Pipe
-    // delivery may be delayed until after Debugger attached or user stdout.
-    // Consume one exact Inspector help notice, then preserve app messages
-    // even when they contain the same URLs.
-    inspectorHelpSeen.add(line);
-  } else {
-    applicationStderr(text);
-  }
-}
+const stderrLine = createInspectorStderrHandler({
+  onListening: (url) => {
+    connect(url).catch((error) => stop('Inspector setup: ' + error.message));
+  },
+  onShutdown: closeDebuggerWhenIdle,
+  onOutput: applicationStderr,
+});
 
 child.stderr.on('data', (data) => {
   stderrBuffer += data;

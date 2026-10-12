@@ -26,6 +26,7 @@ try {
     'dist/index.js',
     'dist/recording/python-recorder.py',
     'dist/recording/node-recorder.mjs',
+    'dist/recording/inspector-stderr.mjs',
     'public/index.html',
     'public/player.js',
     'public/styles.css',

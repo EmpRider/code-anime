@@ -186,6 +186,19 @@ realistic paint/heap performance acceptance requirements.
    as application stderr. The recorder now consumes the first exact Inspector
    help notice even if pipe delivery occurs after debugger attachment, while
    preserving subsequent application messages that use those same URLs.
+   A later raw Inspector experiment reproduced a second help notice immediately
+   after `Debugger ending on <the recording URL>` in one of eight runs. This
+   explains the intermittent extra console text in a source-map test: filtering
+   only the startup notice left Node's shutdown help visible as application
+   output. The extracted stderr handler now consumes one exact help line
+   immediately following that known ending banner. Deterministic tests replay
+   the observed sequence and preserve application help text elsewhere, unknown
+   URLs, trailing whitespace, carriage returns, and unterminated prefixes.
+   The handler is included in the built recorder package. This evidence does
+   not explain the separate intermittent Inspector WebSocket connection failure.
+   After this correction, the full core check passed 132 tests with one optional
+   CodeGraph skip, plus typecheck, build, and formatting. Both recorded JavaScript
+   and verified TypeScript-source-map browser playback regressions passed.
    Exact source causality,
    pipe buffering delays, and cross-stream write ordering remain unresolved.
 4. **Preprocess before playback — implemented.**

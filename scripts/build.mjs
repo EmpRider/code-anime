@@ -15,3 +15,7 @@ copyFileSync(
   'src/recording/node-recorder.mjs',
   'dist/recording/node-recorder.mjs',
 );
+copyFileSync(
+  'src/recording/inspector-stderr.mjs',
+  'dist/recording/inspector-stderr.mjs',
+);
