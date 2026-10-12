@@ -74,6 +74,11 @@ const text = (tag, value, className) => {
   if (className) element.className = className;
   return element;
 };
+function setStatus(value) {
+  // Status is a live region. Writing the same text for every render can
+  // repeatedly announce it when a user steps or resizes the workspace.
+  if ($('status').textContent !== value) $('status').textContent = value;
+}
 const valueText = (value) =>
   value === undefined ? '∅' : JSON.stringify(value);
 const changed = (event) =>
@@ -713,7 +718,13 @@ function renderMethodDetails() {
           body.append(next);
           if (more) next.focus({ preventScroll: true });
         } else if (more) {
-          body.lastElementChild?.focus({ preventScroll: true });
+          // A final page may end with a nested <details> branch. The details
+          // element itself cannot receive keyboard focus; its summary can.
+          const last = body.lastElementChild;
+          const focusTarget = last?.matches('details')
+            ? last.querySelector(':scope > summary')
+            : last;
+          focusTarget?.focus({ preventScroll: true });
         }
       };
       const populate = () => {
@@ -1377,19 +1388,21 @@ function render() {
   $('bookmark').setAttribute('aria-pressed', bookmarks.has(cursor));
   $('bookmark').textContent = bookmarks.has(cursor) ? '★' : '☆';
   $('breakpoint').setAttribute('aria-pressed', breakpoints.has(cursor));
-  $('status').textContent = continuationStates.get(flow)?.error
-    ? 'Continuation unavailable · ' + continuationStates.get(flow).error
-    : cursor === flow.steps.length && cursor
-      ? flow.nextSessionId
-        ? 'More prepared steps available'
-        : flow.trace?.truncated
-          ? 'Trace incomplete · see coverage'
-          : 'Replay complete'
-      : recording
-        ? 'Recorded execution · local session'
-        : isMock
-          ? 'Mock execution · local session'
-          : 'Structural / unverified flow';
+  setStatus(
+    continuationStates.get(flow)?.error
+      ? 'Continuation unavailable · ' + continuationStates.get(flow).error
+      : cursor === flow.steps.length && cursor
+        ? flow.nextSessionId
+          ? 'More prepared steps available'
+          : flow.trace?.truncated
+            ? 'Trace incomplete · see coverage'
+            : 'Replay complete'
+        : recording
+          ? 'Recorded execution · local session'
+          : isMock
+            ? 'Mock execution · local session'
+            : 'Structural / unverified flow',
+  );
   $('coverage').textContent =
     recording?.coverage ??
     flow.trace?.simulation?.coverage ??
@@ -1596,6 +1609,24 @@ function render() {
       { duration: Number($('speed').value) * 0.65, easing: 'ease-in-out' },
     );
 }
+function announceSelectedStep() {
+  if (!cursor) {
+    $('navigation-announcement').textContent =
+      `Restarted. Step 0 of ${flow.steps.length}.`;
+    return;
+  }
+  const event = flow.trace?.events[cursor - 1];
+  const label = (
+    event?.label ??
+    flow.steps[cursor - 1]?.dtoName ??
+    'Execution event'
+  ).slice(0, 120);
+  const location = event?.source
+    ? ` ${event.source.file} line ${event.source.line}.`
+    : '';
+  $('navigation-announcement').textContent =
+    `Step ${cursor} of ${flow.steps.length}: ${label}.${location} ${event?.certainty ?? 'unverified'} evidence.`;
+}
 function seek(index) {
   if (!flow) return;
   pause();
@@ -1611,9 +1642,11 @@ function seek(index) {
     return;
   }
   const nextCursor = Math.max(0, Math.min(flow.steps.length, index));
+  const moved = nextCursor !== cursor;
   if (nextCursor !== cursor) consolePageBack = 0;
   cursor = nextCursor;
   render();
+  if (moved) announceSelectedStep();
 }
 function tick(version) {
   if (version !== navigationVersion) return;
@@ -1635,7 +1668,7 @@ function tick(version) {
   render();
   if (hasBreakpoint(cursor)) {
     pause();
-    $('status').textContent = 'Breakpoint · step ' + cursor;
+    setStatus('Breakpoint · step ' + cursor);
   } else if (cursor < flow.steps.length)
     timer = setTimeout(() => tick(version), Number($('speed').value));
   else if (flow.nextSessionId) {
@@ -2116,7 +2149,7 @@ async function load() {
     render();
   } catch (error) {
     $('title').textContent = 'Flow unavailable';
-    $('status').textContent = error.message;
+    setStatus(error.message);
     for (const control of document.querySelectorAll('button,input,select'))
       control.disabled = true;
   }

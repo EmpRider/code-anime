@@ -1076,6 +1076,16 @@ summary {
   color: #78c5ae;
   max-width: 210px;
 }
+.screen-reader-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .help-panel {
   display: flex;
   align-items: center;

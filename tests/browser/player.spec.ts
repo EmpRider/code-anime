@@ -750,6 +750,117 @@ test('method inspector paginates prepared steps without losing keyboard focus or
   expect(requests).toEqual([]);
 });
 
+test('nested-method pagination keeps keyboard focus when the final item is a branch', async ({
+  page,
+}) => {
+  const events: TraceEvent[] = [
+    {
+      id: 'event-1',
+      kind: 'enter',
+      callId: 'parent',
+      symbolId: 'parent',
+      label: 'enter parent',
+      source: { file: 'example.ts', line: 1, endLine: 1 },
+      stack: ['parent'],
+      values: {},
+      locals: {},
+      certainty: 'mock',
+    },
+    ...Array.from({ length: 58 }, (_, index): TraceEvent => ({
+      id: `event-${index + 2}`,
+      kind: 'enter',
+      callId: `child-${index}`,
+      parentCallId: 'parent',
+      symbolId: 'child',
+      label: `enter child ${index}`,
+      source: { file: 'example.ts', line: 2, endLine: 2 },
+      stack: ['parent', `child-${index}`],
+      values: {},
+      locals: {},
+      certainty: 'mock',
+    })),
+  ];
+  const session = await runtime.store.create(
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'browser-test',
+        projectRoot: 'fixture',
+        sourceHash: 'nested-pagination',
+        target: 'parent',
+        scenario: {},
+        events,
+        diagnostics: [],
+        truncated: false,
+        filesAnalyzed: 1,
+        cacheHits: 0,
+        sourceFiles: {
+          'example.ts': 'function parent() {}\nfunction child() {}',
+        },
+      },
+      'parent',
+    ),
+  );
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await page.locator('#view-mode').selectOption('map');
+  await page.locator('#timeline').fill('12');
+  await page.getByRole('button', { name: 'Inspect method parent' }).click();
+  const panel = page.locator('#method-details');
+  const more = panel.getByRole('button', { name: 'More prepared steps' });
+  await expect(more).toBeVisible();
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(more).toHaveCount(0);
+  const last = panel.locator('details[data-invocation="child-57"] > summary');
+  await expect(last).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(
+    panel.locator('details[data-invocation="child-57"]'),
+  ).toHaveAttribute('open', '');
+  await expect(page.locator('#progress')).toHaveText('12 / 59');
+  expect(requests).toEqual([]);
+});
+
+test('manual stepping announces source and evidence without repeating status on layout changes', async ({
+  page,
+}) => {
+  await page.goto(url);
+  await expect(page.locator('#progress')).toHaveText('0 / 100');
+  // Observe status content updates separately from the step announcement.
+  await page.evaluate(() => {
+    const status = document.getElementById('status')!;
+    (window as any).statusUpdates = 0;
+    new MutationObserver(() => (window as any).statusUpdates++).observe(
+      status,
+      {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      },
+    );
+  });
+  await page.locator('#next').click();
+  await expect(page.locator('#navigation-announcement')).toHaveText(
+    'Step 1 of 100: Line 1. example.ts line 1. mock evidence.',
+  );
+  await page.locator('#next').click();
+  await expect(page.locator('#navigation-announcement')).toHaveText(
+    'Step 2 of 100: Line 2. example.ts line 2. mock evidence.',
+  );
+  await page.locator('#toggle-inspector').click();
+  await page.locator('#previous').click();
+  await expect(page.locator('#navigation-announcement')).toHaveText(
+    'Step 1 of 100: Line 1. example.ts line 1. mock evidence.',
+  );
+  expect(await page.evaluate(() => (window as any).statusUpdates)).toBe(0);
+  await page.locator('#restart').click();
+  await expect(page.locator('#navigation-announcement')).toHaveText(
+    'Restarted. Step 0 of 100.',
+  );
+});
+
 test('diagram disclosure supports recursion deeper than 30 nested invocations', async ({
   page,
 }) => {

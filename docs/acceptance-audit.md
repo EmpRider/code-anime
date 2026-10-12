@@ -14,6 +14,59 @@ verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
 
+## Requirement status matrix
+
+This table summarizes the 37 original requirements. **Bounded** means the
+specified behavior is demonstrated by particular fixtures or tests, but the
+full acceptance scope is not yet proven. **Partial** means implementation or
+verification remains outstanding. Detailed evidence follows in the checklist.
+
+| #   | Requirement                               | Status      | Remaining acceptance work                                                                                  |
+| --- | ----------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------- |
+| 1   | No arbitrary 30-step limit                | Bounded     | Verify more real deep traces and resource limits.                                                          |
+| 2   | User-code focus                           | Bounded     | Exercise diverse framework callbacks and generated code.                                                   |
+| 3   | Entry-to-exit execution accuracy          | Partial     | Cover wider async, exceptions, runtime boundaries, and languages.                                          |
+| 4   | Preprocess before playback                | Bounded     | Verify all trace/scenario navigation paths.                                                                |
+| 5   | Shared execution event model              | Bounded     | Validate high-volume and cross-language semantics.                                                         |
+| 6   | High-level view by default                | Bounded     | Complete visual/interaction acceptance.                                                                    |
+| 7   | Expand method execution                   | Bounded     | Validate real deep, heavily branching traces.                                                              |
+| 8   | Independent nested disclosure             | Bounded     | Extend real branching and accessibility coverage.                                                          |
+| 9   | Synchronized overview and detail          | Bounded     | Validate complex interleaved tasks.                                                                        |
+| 10  | VisualJS reference behaviors              | Unverified  | Perform direct visual and interaction comparison.                                                          |
+| 11  | Live original-source editor               | Partial     | Verify full source-map and syntax-language coverage.                                                       |
+| 12  | Automatic source following                | Bounded     | Test deep cross-file jumps and return behavior.                                                            |
+| 13  | Real loop execution order                 | Bounded     | Verify wider runtime loop semantics.                                                                       |
+| 14  | Playback and debugger controls            | Bounded     | Exercise more cross-language and async step semantics.                                                     |
+| 15  | Reclaim viewport space                    | Partial     | Review rendered geometry and density.                                                                      |
+| 16  | Progressive disclosure                    | Partial     | Accept full visual hierarchy in rendered UI.                                                               |
+| 17  | Compact main workspace                    | Partial     | Refine toolbar and secondary controls.                                                                     |
+| 18  | Side-by-side desktop workspace            | Bounded     | Broader visual and viewport review.                                                                        |
+| 19  | Modern accessible visual style            | Partial     | Audit contrast, themes, and visual quality.                                                                |
+| 20  | Meaningful animation                      | Partial     | Inspect animation timing and transitions visually.                                                         |
+| 21  | No flicker or layout jumps                | Partial     | Profile browser paint and complex traces.                                                                  |
+| 22  | Instant prepared-data disclosure          | Bounded     | Verify real large branching trees.                                                                         |
+| 23  | Contextual variable inspection            | Bounded     | Deep-object screen-reader and rendering acceptance.                                                        |
+| 24  | User-controlled navigation                | Bounded     | Exercise broader synchronized keyboard paths.                                                              |
+| 25  | Keyboard and screen-reader access         | Partial     | Final nested-page focus and manual-step live updates now tested; full assistive-technology review remains. |
+| 26  | Responsive workspace                      | Partial     | Mobile nested disclosure and accessibility acceptance.                                                     |
+| 27  | Large trace performance                   | Partial     | Measure real paint, heap, and realistic large recordings.                                                  |
+| 28  | No repeated AI processing                 | Bounded     | Cover additional prepared continuation/scenario paths.                                                     |
+| 29  | Supported language compatibility          | Partial     | Verify full language inventory and observed-vs-static behavior.                                            |
+| 30  | Single replay state                       | Bounded     | Verify multi-task and cross-language history.                                                              |
+| 31  | Original source separate from annotations | Bounded     | Preserve separation during further source work.                                                            |
+| 32  | Inspect existing architecture first       | Verified    | Preserve existing implementation contracts.                                                                |
+| 33  | Implement in logical stages               | In progress | Complete remaining acceptance stages.                                                                      |
+| 34  | Preserve working functionality            | Bounded     | Recheck gates and regression scenarios on final build.                                                     |
+| 35  | Functional acceptance scenarios           | Partial     | Test representative languages and real large runs.                                                         |
+| 36  | UI/UX acceptance                          | Partial     | Complete rendered, contrast, and screen-reader review.                                                     |
+| 37  | Complete integrated delivery              | In progress | Close all gaps and verify final deliverables.                                                              |
+
+**Next implementation target:** inspect the rendered source/flow experience
+against the VisualJS interaction reference (items 10, 15–21, and 36), then
+exercise a real large branching trace with paint/heap measurements (item 27).
+The current keyboard work is bounded evidence for item 25 and does not establish
+screen-reader acceptance across browsers and assistive technologies.
+
 ## Requirement checklist
 
 1. **Remove the 30-step limit — implemented, bounded verification.**
@@ -302,6 +355,14 @@ about future changes.
     mobile evidence badge retains its full text in a tooltip. A browser
     regression verifies these semantics. Screen-reader behavior and all focus
     paths remain unverified.
+    The nested-method final-page regression reproduces focus loss when the
+    last prepared item is a `details` element; paging now focuses its actual
+    keyboard-accessible `summary`. Another browser regression checks that
+    manual step navigation announces the source location and evidence level in
+    a dedicated polite live region. Repeated layout/status renders leave that
+    announcement unchanged and avoid rewriting an identical status message;
+    autoplay does not narrate every frame. These are DOM/keyboard assertions,
+    not a complete assistive-technology acceptance test.
 26. **Responsive workspace — partial.**
     Browser tests cover 1440x900, 820x1180, and 390x844, panel switching, playback
     visibility, and page overflow. Desktop side-by-side flow and a dedicated
@@ -399,6 +460,18 @@ about future changes.
     supported language and primary interaction, including rendered visual review.
 
 ## Checkpoint verification
+
+- 2026-10-12 nested disclosure and screen-reader navigation refinement:
+  A 58-child, multi-page execution fixture reproduced and fixed lost keyboard
+  focus on a terminal nested branch. Another focused regression verifies
+  announced manual step/source/evidence transitions and unchanged live status
+  across layout-only rendering. Both regressions passed. Full `npm run check`
+  passed typecheck, 129 core tests (one optional live CodeGraph test skipped),
+  build, and Prettier. All **38 browser tests** passed. `npm run package:check`
+  passed the packaged npm CLI, MCP handshake, player assets, and Flow API.
+  `git diff --check` passed. Other screen-reader configurations, rendered
+  UI/VisualJS acceptance, language coverage, and paint/heap profiling remain
+  incomplete.
 
 - 2026-10-12 CommonJS parsing and callback identity refinement: the previously
   failing `with`-statement CommonJS fixture now retains breakpoint metadata
