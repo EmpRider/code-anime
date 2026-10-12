@@ -210,6 +210,57 @@ test('source announces the current line and accessible breakpoint state across s
   ).toHaveAttribute('data-line', '12');
 });
 
+test('replay retains stack controls and scrolls only the source editor when following', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(url);
+  await page.locator('#timeline').fill('12');
+  const stackLink = page.locator('#source-stack .stack-link').first();
+  await expect(stackLink).toHaveText('run');
+  await stackLink.focus();
+  await page.evaluate(() => {
+    document
+      .querySelector('#source-stack .stack-link')
+      ?.setAttribute('data-reused', 'true');
+    document
+      .querySelector('#frame-list .frame-item')
+      ?.setAttribute('data-reused', 'true');
+    document.getElementById('next')?.click();
+  });
+  await expect(page.locator('#progress')).toHaveText('13 / 100');
+  await expect(stackLink).toBeFocused();
+  await expect(stackLink).toHaveAttribute('data-reused', 'true');
+  await expect(page.locator('#frame-list .frame-item').first()).toHaveAttribute(
+    'data-reused',
+    'true',
+  );
+  const before = await page.evaluate(() => ({
+    page: window.scrollY,
+    source: document.getElementById('snippet')!.scrollTop,
+  }));
+  await page.locator('#timeline').fill('14');
+  const adjacent = await page.evaluate(() => ({
+    page: window.scrollY,
+    source: document.getElementById('snippet')!.scrollTop,
+  }));
+  expect(adjacent).toEqual(before);
+  await page.locator('#timeline').fill('70');
+  await expect(page.locator('.executing-line')).toHaveAttribute(
+    'data-line',
+    '70',
+  );
+  const after = await page.evaluate(() => ({
+    page: window.scrollY,
+    source: document.getElementById('snippet')!.scrollTop,
+  }));
+  expect(after.page).toBe(before.page);
+  expect(after.source).toBeGreaterThan(before.source);
+  await page.locator('#timeline').fill('0');
+  await expect(page.locator('#source-stack .stack-link')).toHaveCount(0);
+  await expect(page.locator('#frame-list .frame-item')).toHaveCount(0);
+});
+
 test('execution path stays synchronized across paging, seeking and view changes', async ({
   page,
 }) => {
@@ -376,6 +427,32 @@ test('execution path stays synchronized across paging, seeking and view changes'
     'data-event-index',
     '3',
   );
+  // Replacing one nested invocation with a sibling must invalidate the stack
+  // controls even when both stack snapshots have the same depth.
+  await page.locator('#timeline').fill('3');
+  await expect(page.locator('#source-stack .stack-link')).toHaveCount(2);
+  await expect(page.locator('#frame-list .frame-item')).toHaveCount(2);
+  await page.evaluate(() => {
+    document
+      .querySelector('#source-stack .stack-link:last-child')
+      ?.setAttribute('data-old-frame', 'b');
+    document
+      .querySelector('#frame-list .frame-item:last-child')
+      ?.setAttribute('data-old-frame', 'b');
+  });
+  await page.locator('#timeline').fill('8');
+  await expect(page.locator('#source')).toHaveText('B.ts');
+  await expect(page.locator('#source-stack .stack-link')).toHaveCount(2);
+  await expect(page.locator('#frame-list .frame-item')).toHaveCount(2);
+  await expect(
+    page.locator('#source-stack .stack-link:last-child'),
+  ).not.toHaveAttribute('data-old-frame', 'b');
+  await expect(
+    page.locator('#frame-list .frame-item:last-child'),
+  ).not.toHaveAttribute('data-old-frame', 'b');
+  await page.locator('#timeline').fill('5');
+  await expect(page.locator('#source-stack .stack-link')).toHaveCount(1);
+  await expect(page.locator('#frame-list .frame-item')).toHaveCount(1);
   expect(requests).toEqual([]);
 });
 

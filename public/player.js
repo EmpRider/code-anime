@@ -30,6 +30,8 @@ let shownSource = '';
 let shownFirstLine = 1;
 const sourceRows = new Map();
 let highlightedSourceRow;
+let sourceStackCalls;
+let inspectorStackCalls;
 let sourceBreakpointVersion = 0;
 let shownBreakpointVersion = -1;
 let pinnedCallId;
@@ -261,6 +263,8 @@ function buildNodes(preserveInspection = false) {
   sourceLines.clear();
   sourceCache.clear();
   sourceSyntaxCache.clear();
+  sourceStackCalls = undefined;
+  inspectorStackCalls = undefined;
   sourceBreakpointVersion++;
   consoleEvents.length = 0;
   const preparedOutput = preparePlainTerminalOutput(flow.trace?.events);
@@ -860,6 +864,7 @@ function renderSource(state, event) {
     shownFirstLine !== firstLine ||
     !$('snippet').hasChildNodes();
   if (needsBuild) {
+    if (sourceKey !== shownSource) $('snippet').scrollLeft = 0;
     shownSource = sourceKey;
     shownFirstLine = firstLine;
     sourceRows.clear();
@@ -929,38 +934,54 @@ function renderSource(state, event) {
       );
     }
   }
-  highlightedSourceRow?.classList.remove('executing-line');
-  highlightedSourceRow?.removeAttribute('aria-current');
-  highlightedSourceRow = undefined;
   const isExecuting =
     sourceEvent?.callId === event?.callId &&
     location?.file === event?.source?.file;
   const active =
     isExecuting && event?.source && sourceRows.get(event.source.line);
+  if (highlightedSourceRow !== active) {
+    highlightedSourceRow?.classList.remove('executing-line');
+    highlightedSourceRow?.removeAttribute('aria-current');
+    highlightedSourceRow = undefined;
+  }
   if (active) {
     active.classList.add('executing-line');
     active.setAttribute('aria-current', 'location');
     highlightedSourceRow = active;
-    if (
-      $('follow').checked &&
-      (active.offsetTop < $('snippet').scrollTop ||
-        active.offsetTop + active.offsetHeight >
-          $('snippet').scrollTop + $('snippet').clientHeight)
-    )
-      active.scrollIntoView?.({ block: 'nearest' });
+    if ($('follow').checked) {
+      const editor = $('snippet');
+      const rowBounds = active.getBoundingClientRect();
+      const editorBounds = editor.getBoundingClientRect();
+      // Keep source following inside the editor, without scrolling its panels
+      // or the page when advancing to an already visible source line.
+      if (rowBounds.top < editorBounds.top)
+        editor.scrollTop += rowBounds.top - editorBounds.top;
+      else if (rowBounds.bottom > editorBounds.bottom)
+        editor.scrollTop += rowBounds.bottom - editorBounds.bottom;
+    }
   }
-  $('source-stack').replaceChildren();
-  for (const callId of state.stack) {
-    const frame = invocations.get(callId);
-    const button = text('button', frame?.symbolId ?? callId, 'stack-link');
-    button.title = frame?.source?.file ?? callId;
+  if (
+    sourceStackCalls?.length !== state.stack.length ||
+    state.stack.some((callId, index) => sourceStackCalls[index] !== callId)
+  ) {
+    sourceStackCalls = [...state.stack];
+    const fragment = document.createDocumentFragment();
+    for (const callId of state.stack) {
+      const frame = invocations.get(callId);
+      const button = text('button', frame?.symbolId ?? callId, 'stack-link');
+      button.title = frame?.source?.file ?? callId;
+      button.onclick = () => inspectFrame(callId);
+      fragment.append(button);
+    }
+    $('source-stack').replaceChildren(fragment);
+  }
+  for (const [index, button] of [
+    ...$('source-stack').querySelectorAll('button'),
+  ].entries())
     button.classList.toggle(
       'selected',
-      (pinnedCallId ?? event?.callId) === callId,
+      (pinnedCallId ?? event?.callId) === sourceStackCalls[index],
     );
-    button.onclick = () => inspectFrame(callId);
-    $('source-stack').append(button);
-  }
 }
 function renderConsole() {
   let lo = 0,
@@ -1331,7 +1352,7 @@ function render() {
   );
   filterList();
   renderMethodDetails();
-  for (const id of ['fields', 'frame-list', 'local-tree', 'object-tree'])
+  for (const id of ['fields', 'local-tree', 'object-tree'])
     $(id).replaceChildren();
   for (const id of [
     'operation',
@@ -1355,6 +1376,9 @@ function render() {
     highlightedSourceRow = undefined;
     $('snippet').replaceChildren();
     $('source-stack').replaceChildren();
+    $('frame-list').replaceChildren();
+    sourceStackCalls = [];
+    inspectorStackCalls = [];
     $('source').textContent = 'Select a step to inspect its source';
     $('source-line').textContent = '—';
     $('source-empty').hidden = false;
@@ -1380,19 +1404,27 @@ function render() {
   $('stack').textContent = JSON.stringify(state.stack, null, 2);
   $('locals').textContent = JSON.stringify(state.locals, null, 2);
   $('objects').textContent = JSON.stringify(state.objects, null, 2);
-  state.stack.forEach((frame, i) => {
-    const row = text('li', '', 'frame-item');
-    row.append(
-      text('span', String(i + 1), 'frame-depth'),
-      text(
-        'button',
-        invocations.get(frame)?.symbolId ?? String(frame),
-        'stack-link',
-      ),
-    );
-    row.querySelector('button').onclick = () => inspectFrame(frame);
-    $('frame-list').append(row);
-  });
+  if (
+    inspectorStackCalls?.length !== state.stack.length ||
+    state.stack.some((callId, index) => inspectorStackCalls[index] !== callId)
+  ) {
+    inspectorStackCalls = [...state.stack];
+    const fragment = document.createDocumentFragment();
+    state.stack.forEach((frame, i) => {
+      const row = text('li', '', 'frame-item');
+      row.append(
+        text('span', String(i + 1), 'frame-depth'),
+        text(
+          'button',
+          invocations.get(frame)?.symbolId ?? String(frame),
+          'stack-link',
+        ),
+      );
+      row.querySelector('button').onclick = () => inspectFrame(frame);
+      fragment.append(row);
+    });
+    $('frame-list').replaceChildren(fragment);
+  }
   fieldRows(
     $('local-tree'),
     frameLocals(state, event),

@@ -197,8 +197,15 @@ about future changes.
 21. **No flicker/layout jumps — partial.**
     Source-window reuse, cached lexical state and cached timeline filtering
     reduce DOM work; source-window browser regressions protect source node
-    identity during adjacent steps. Inspector,
-    packet, and connection updates still need scrutiny for unnecessary rebuilds.
+    identity during adjacent steps. Source and inspector call-stack controls
+    now retain DOM identity and keyboard focus while invocation IDs remain
+    unchanged. Their caches invalidate on stack changes, trace-variant switches,
+    prepared-continuation rebuilds and cursor reset. A browser regression checks
+    adjacent-step reuse, same-depth sibling replacement, stack contraction,
+    and reset. Source following now scrolls only the editor when the active line
+    leaves its viewport; a browser regression checks that adjacent lines do not
+    scroll and page scroll remains stable. Inspector values, packet, and
+    connection updates still need scrutiny for unnecessary rebuilds.
 22. **Immediate disclosure — implemented, incomplete scale evidence.**
     Disclosure uses prepared data; tests verify no request and cursor retention.
     Deep simulated recursion (45 invocations) and keyboard pagination (100 events)
