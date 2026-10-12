@@ -49,7 +49,7 @@ verification remains outstanding. Detailed evidence follows in the checklist.
 | 24  | User-controlled navigation                | Bounded     | Exercise broader synchronized keyboard paths.                                                              |
 | 25  | Keyboard and screen-reader access         | Partial     | Final nested-page focus and manual-step live updates now tested; full assistive-technology review remains. |
 | 26  | Responsive workspace                      | Partial     | Mobile nested disclosure and accessibility acceptance.                                                     |
-| 27  | Large trace performance                   | Partial     | Measure real paint, heap, and realistic large recordings.                                                  |
+| 27  | Large trace performance                   | Partial     | Extend recorded paint/heap profiling to larger, deeper real applications.                                  |
 | 28  | No repeated AI processing                 | Bounded     | Cover additional prepared continuation/scenario paths.                                                     |
 | 29  | Supported language compatibility          | Partial     | Verify full language inventory and observed-vs-static behavior.                                            |
 | 30  | Single replay state                       | Bounded     | Verify multi-task and cross-language history.                                                              |
@@ -63,7 +63,8 @@ verification remains outstanding. Detailed evidence follows in the checklist.
 
 **Next implementation target:** inspect the rendered source/flow experience
 against the VisualJS interaction reference (items 10, 15–21, and 36), then
-exercise a real large branching trace with paint/heap measurements (item 27).
+extend the initial real recorded trace paint/heap measurements to deeper,
+larger applications (item 27).
 The current keyboard work is bounded evidence for item 25 and does not establish
 screen-reader acceptance across browsers and assistive technologies.
 
@@ -410,13 +411,22 @@ realistic paint/heap performance acceptance requirements.
     7,503 events, verifying final-method inspection, reverse seeks, console
     restoration, and exactly one retrieval per prepared session. These synthetic
     tests exclude browser paint, broad real-project behavior, and heap profiling.
-    Measure memory, many methods, larger trees, long stacks, large objects,
-    substantially larger real recorded output,
-    multiple files, and real stored continuation chains before accepting this.
+    An additional **actual recorded** Python program exercises two user source
+    files, loops, 482 observed method entries, console output, and 4,116 trace
+    events stored across multiple prepared sessions. A browser regression loads
+    all sessions and measures 24 seeks across two animation-frame boundaries, plus
+    Chromium DevTools heap and layout counters. The initial local sample
+    reported paint-inclusive p95 53.1 ms, JavaScript heap 7 to 6 MiB, and 79
+    additional layout operations. Historical replay remained correct, the DOM
+    stayed bounded, and seeking sent no new flow requests. This is one local
+    performance sample; the full 40-test browser suite passed after adding the
+    benchmark. It does not establish performance for arbitrary projects.
+    Continue measuring deeper trees, long stacks, large objects, substantially
+    larger recorded output, and diverse real applications before accepting this.
     Value-tree DOM creation is now bounded to visible pages and explicitly
     expanded branches; the large-value regression verifies lazy construction,
-    filtering, and replay state. Paint, heap, and real-project profiling are
-    still required.
+    filtering, and replay state. Broader paint, heap, and real-project profiling
+    is still required.
 28. **No repeated AI processing — implemented by architecture, broader controls tested.**
     Player HTTP requests retrieve stored flows. Backend analysis is separate.
     A desktop browser regression observes network requests while navigating,
