@@ -432,6 +432,23 @@ realistic paint/heap performance acceptance requirements.
     This follow-up passed all 41 browser tests, packed-package verification,
     formatting, and whitespace checks. The saved 390x844 Flow screenshot was
     visually reviewed; its legend and flow panel end above the playback dock.
+    Console preference continuity now has a separate regression: opening the
+    mobile Console view previously left the desktop console expanded after
+    resizing, even when the saved desktop preference was collapsed. Crossing
+    the mobile breakpoint now restores the desktop preference or reveals the
+    selected mobile Console view as appropriate. Only explicit desktop summary
+    clicks persist the preference, avoiding queued programmatic toggle events
+    overwriting it. Both collapsed and expanded desktop states, repeated
+    viewport transitions, unchanged playback, no additional requests, and
+    persistence of an explicit expansion across reload are tested.
+    The console-preference update passed all 42 browser tests. Core verification
+    was not consistently green: a concurrent run timed out in the CodeGraph
+    fixture job; a subsequent run passed that test but failed two Node recorder
+    tests (a debugger help notice leaked into mapped-program output, and a
+    Promise fixture failed its Inspector WebSocket connection). Focused source-map,
+    stderr-preservation, and Promise tests then passed (3/3). These intermittent
+    recorder failures remain unresolved; no recorder behavior was changed in
+    this UI update and focused passes do not establish a clean full core run.
 27. **Large-codebase performance — partial.**
     Cached source lines, event indices, bounded timeline rows, and continuation
     exist. Console output now renders at most 300 events per page, exposes

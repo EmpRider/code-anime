@@ -1445,6 +1445,34 @@ test('desktop layout resizes, focuses and remembers preferences without moving p
   await expect(divider).toHaveAttribute('aria-valuenow', String(width));
 });
 
+test('mobile console navigation preserves the desktop console preference across resizing', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(url);
+  await expect(page.locator('#progress')).toHaveText('0 / 100');
+  await page.locator('#timeline').fill('70');
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  const consolePanel = page.locator('#console-panel');
+  for (const expanded of [false, true]) {
+    if (expanded) await consolePanel.locator('summary').click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Console', exact: true }).click();
+    await expect(page.locator('#console-output')).toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(consolePanel).toHaveJSProperty('open', expanded);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('#console-output')).toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(consolePanel).toHaveJSProperty('open', expanded);
+    await expect(page.locator('#progress')).toHaveText('70 / 100');
+  }
+  expect(requests).toEqual([]);
+  await page.reload();
+  await expect(consolePanel).toHaveJSProperty('open', true);
+});
+
 test('steps panel can release desktop and tablet space without changing playback or mobile navigation', async ({
   page,
 }) => {

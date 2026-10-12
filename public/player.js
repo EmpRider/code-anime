@@ -1981,12 +1981,19 @@ consoleDetails.querySelector('summary').addEventListener('click', () => {
   layout.console = !consoleDetails.open;
   saveLayout();
 });
-consoleDetails.addEventListener('toggle', () => {
-  if (window.innerWidth <= 650) return;
-  layout.console = consoleDetails.open;
-  saveLayout();
+let consoleIsMobile = window.innerWidth <= 650;
+window.addEventListener('resize', () => {
+  applyLayout();
+  const mobile = window.innerWidth <= 650;
+  if (mobile === consoleIsMobile) return;
+  consoleIsMobile = mobile;
+  // Mobile console navigation is temporary; only summary clicks save a
+  // desktop preference. Queued native toggle events must not overwrite it.
+  consoleDetails.open = mobile
+    ? document.querySelector('main').dataset.mobileView === 'console' ||
+      layout.console
+    : layout.console;
 });
-window.addEventListener('resize', applyLayout);
 applyLayout();
 for (const button of document.querySelectorAll('.mobile-views button')) {
   button.onclick = () => {
