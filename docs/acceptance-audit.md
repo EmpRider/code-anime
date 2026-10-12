@@ -201,8 +201,11 @@ about future changes.
     evidence here establishing a second supported theme.
 20. **Meaningful animation — partial.**
     `render()` animates value packets and honors reduced motion. An identity
-    regression verifies unchanged packets on non-navigation updates. Connection
-    rebuilds and broader timing/visual quality remain unverified.
+    regression verifies unchanged packets on non-navigation updates. Flow
+    connections now preserve their SVG/path DOM for inspection updates and
+    consecutive steps with the same route; geometry updates in place on resize,
+    and route or view changes invalidate them. Real-browser regressions verify
+    these cases. Broader timing and visual quality remain unverified.
 21. **No flicker/layout jumps — partial.**
     Source-window reuse, cached lexical state and cached timeline filtering
     reduce DOM work; source-window browser regressions protect source node
@@ -219,7 +222,11 @@ about future changes.
     continuation, scenario changes and cursor movement invalidate those caches.
     A real-browser regression verifies retained expansion, 120 paged fields,
     focus and DOM identity, and necessary replacement on a new frame or step.
-    Flow packets and connections still need scrutiny for unnecessary rebuilds.
+    Flow connections now reuse their SVG/path elements across inspector-only
+    updates, resize and consecutive same-route events. They update geometry
+    when panel dimensions change and invalidate after route changes, path mode,
+    trace rebuilds, or cursor reset. Browser regressions verify DOM identity,
+    geometry update, and invalidation. Broader paint profiling remains open.
 22. **Immediate disclosure — implemented, incomplete scale evidence.**
     Disclosure uses prepared data; tests verify no request and cursor retention.
     Deep simulated recursion (45 invocations) and keyboard pagination (100 events)

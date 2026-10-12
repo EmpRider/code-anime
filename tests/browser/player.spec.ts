@@ -845,6 +845,111 @@ test('diagram disclosure supports recursion deeper than 30 nested invocations', 
   await expect(page.locator('#progress')).toHaveText(`1 / ${events.length}`);
 });
 
+test('flow connections retain their DOM across inspection and resize, then invalidate for new routes', async ({
+  page,
+}) => {
+  const events: TraceEvent[] = [
+    {
+      id: 'route-1',
+      kind: 'enter',
+      symbolId: 'A.m',
+      callId: 'a',
+      stack: ['a'],
+      values: { from: 'A.m', to: 'A.m' },
+      label: 'A.m',
+      certainty: 'mock',
+    },
+    {
+      id: 'route-2',
+      kind: 'enter',
+      symbolId: 'B.m',
+      callId: 'b',
+      parentCallId: 'a',
+      stack: ['a', 'b'],
+      values: { from: 'A.m', to: 'B.m' },
+      label: 'B.m',
+      certainty: 'mock',
+    },
+    {
+      id: 'route-3',
+      kind: 'return',
+      symbolId: 'B.m',
+      callId: 'b',
+      stack: ['a'],
+      values: { from: 'B.m', to: 'A.m' },
+      label: 'return to A.m',
+      certainty: 'mock',
+    },
+  ];
+  const session = await runtime.store.create(
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'browser-connection-test',
+        projectRoot: 'fixture',
+        sourceHash: 'route-fixture',
+        target: 'A.m',
+        scenario: {},
+        events,
+        diagnostics: [],
+        truncated: false,
+        filesAnalyzed: 1,
+        cacheHits: 0,
+        sourceFiles: {},
+      },
+      'A.m',
+    ),
+  );
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await page.locator('#view-mode').selectOption('map');
+  await page.locator('#next').click();
+  const firstConnection = await page.locator('.connections').elementHandle();
+  const firstPath = await page.locator('.connection-path').elementHandle();
+  const originalPath = await page.locator('.connection-path').getAttribute('d');
+  const initialWidth = await page
+    .locator('.connections')
+    .evaluate((node) => node.style.width);
+
+  await page.locator('#toggle-inspector').click();
+  await page.locator('#bookmark').click();
+  await page.locator('#follow').uncheck();
+  expect(await firstConnection!.evaluate((node) => node.isConnected)).toBe(
+    true,
+  );
+  expect(await firstPath!.evaluate((node) => node.isConnected)).toBe(true);
+  await expect(page.locator('.connection-path')).toHaveAttribute(
+    'd',
+    originalPath!,
+  );
+  await page.setViewportSize({ width: 1250, height: 900 });
+  expect(await firstConnection!.evaluate((node) => node.isConnected)).toBe(
+    true,
+  );
+  await expect(page.locator('.connections')).not.toHaveCSS(
+    'width',
+    initialWidth,
+  );
+  await page.locator('#view-mode').selectOption('focus');
+  expect(await firstConnection!.evaluate((node) => node.isConnected)).toBe(
+    true,
+  );
+
+  await page.locator('#next').click();
+  expect(await firstConnection!.evaluate((node) => node.isConnected)).toBe(
+    false,
+  );
+  await expect(page.locator('.connections')).toHaveCount(1);
+  const secondPath = await page.locator('.connection-path').getAttribute('d');
+  expect(secondPath).not.toBe(originalPath);
+  await page.locator('#view-mode').selectOption('path');
+  await expect(page.locator('.connections')).toHaveCount(0);
+  await page.locator('#view-mode').selectOption('map');
+  await expect(page.locator('.connections')).toHaveCount(1);
+  await page.locator('#restart').click();
+  await expect(page.locator('.connections')).toHaveCount(0);
+});
+
 test('inspection changes preserve the current packet without replaying its animation', async ({
   page,
 }) => {
@@ -853,6 +958,7 @@ test('inspection changes preserve the current packet without replaying its anima
   await page.locator('#view-mode').selectOption('focus');
   await page.locator('#next').click();
   const packet = await page.locator('.packet').elementHandle();
+  const connection = await page.locator('.connections').elementHandle();
   const animation = await packet!.evaluateHandle(
     (node) => node.getAnimations()[0],
   );
@@ -872,6 +978,9 @@ test('inspection changes preserve the current packet without replaying its anima
   await expect(page.locator('#progress')).toHaveText('1 / 100');
   await page.locator('#next').click();
   expect(await packet!.evaluate((node) => node.isConnected)).toBe(false);
+  // This fixture has the same route for consecutive steps; only the packet
+  // changes, so the connection itself should remain mounted.
+  expect(await connection!.evaluate((node) => node.isConnected)).toBe(true);
   await expect(page.locator('.packet')).toContainText('Line 2');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.locator('#next').click();

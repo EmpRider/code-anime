@@ -7,6 +7,7 @@ let flow, originalFlow, timer, animation;
 let cursor = 0;
 let renderedFlow;
 let renderedCursor = -1;
+let renderedConnection;
 let traceRevision = 0;
 let renderedInspectorRevision = -1;
 let inspectedFrame;
@@ -332,6 +333,7 @@ function buildNodes(preserveInspection = false) {
     const key = event.source.file + ':' + event.source.line;
     if (!sourceLines.has(key)) sourceLines.set(key, index + 1);
   });
+  clearConnection();
   $('canvas').replaceChildren();
   const proposed = new Set(
     flow.trace?.events
@@ -1128,25 +1130,49 @@ async function extendThrough(index) {
   }
   return true;
 }
+function clearConnection() {
+  renderedConnection?.svg.remove();
+  renderedConnection = undefined;
+}
 function drawConnection(from, to) {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.classList.add('connections');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.style.width =
-    Math.max($('canvas').clientWidth, $('canvas').scrollWidth) + 'px';
-  svg.style.height = $('canvas').clientHeight + 'px';
-  const path = document.createElementNS(svg.namespaceURI, 'path');
+  const canvas = $('canvas');
+  if (
+    !renderedConnection ||
+    renderedConnection.from !== from ||
+    renderedConnection.to !== to ||
+    !renderedConnection.svg.isConnected
+  ) {
+    clearConnection();
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.classList.add('connections');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS(svg.namespaceURI, 'path');
+    path.classList.add('connection-path');
+    svg.append(path);
+    canvas.append(svg);
+    renderedConnection = { from, to, svg, path, geometry: '' };
+  }
   const x1 = from.offsetLeft + from.offsetWidth / 2,
     x2 = to.offsetLeft + to.offsetWidth / 2;
   const y1 = from.offsetTop + from.offsetHeight,
     y2 = to.offsetTop + to.offsetHeight;
-  path.setAttribute(
+  // Include panel dimensions: resizing can change the overlay even when the
+  // two node positions remain fixed. Do not rebuild it on inspector updates.
+  const width = Math.max(
+    canvas.clientWidth,
+    from.offsetLeft + from.offsetWidth,
+    to.offsetLeft + to.offsetWidth,
+  );
+  const height = canvas.clientHeight;
+  const geometry = [x1, y1, x2, y2, width, height].join(':');
+  if (renderedConnection.geometry === geometry) return;
+  renderedConnection.geometry = geometry;
+  renderedConnection.svg.style.width = width + 'px';
+  renderedConnection.svg.style.height = height + 'px';
+  renderedConnection.path.setAttribute(
     'd',
     `M ${x1} ${y1} C ${x1 + (from === to ? 60 : 0)} ${y1 + 45}, ${x2 - (from === to ? 60 : 0)} ${y2 + 45}, ${x2} ${y2}`,
   );
-  path.classList.add('connection-path');
-  svg.append(path);
-  $('canvas').append(svg);
 }
 function activeOverviewPosition() {
   if (!cursor) return -1;
@@ -1334,10 +1360,9 @@ function render() {
     animation?.cancel();
     $('canvas').querySelector('.packet')?.remove();
   }
-  $('canvas')
-    .querySelectorAll('.connections,.canvas-empty')
-    .forEach((e) => e.remove());
+  $('canvas').querySelector('.canvas-empty')?.remove();
   const pathView = $('view-mode').value === 'path' && overviewItems.length;
+  if (!cursor || pathView) clearConnection();
   if (!pathView) $('canvas').querySelector('.flow-overview')?.remove();
   if (pathView) $('canvas').querySelector('.packet')?.remove();
   for (const node of nodes.values())
