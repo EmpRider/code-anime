@@ -71,6 +71,20 @@ about future changes.
    `await` resumes later on the same source line; same-line recognition
    requires column progress and the recorded async context. The existing
    nested concurrent-call regression also passes after that refinement.
+   A focused runtime regression exposed a false suspension: a synchronous
+   function returning the string `"await"` emitted an `await` event and lost
+   its observed return. The recorder now identifies syntactic `await`
+   expressions through Acorn instead of searching source text, and retains
+   `for await...of` loop headers. The regressions pass for string literals,
+   comments, property identifiers, template/regex literals, and a real async
+   generator consumed by `for await...of`. Actual loop values and V8's
+   fulfilled Promise return snapshot are checked without synthesizing a
+   scalar return.
+   The recorder also now prioritizes a V8-reported return over a syntactic
+   await candidate when a frame exits, preventing an observed return from
+   being replaced with an inferred suspension. The `return await` regression
+   passes. The exact suspension boundary remains heuristic when V8 does not
+   expose a return value.
    V8 pause locations and stack frames remain the sole evidence for
    an `observed` entry; a parsed function definition alone creates no trace
    event. Unsupported syntax may still prevent this breakpoint preparation.
@@ -366,6 +380,16 @@ about future changes.
     supported language and primary interaction, including rendered visual review.
 
 ## Checkpoint verification
+
+- 2026-10-12 JavaScript await-syntax refinement: the focused five-case suite
+  passed for misleading `await` text, real `for await...of` iterations,
+  `return await` completion, concurrent invocation identity, and repeated
+  awaited loops. Full `npm run check` passed: 125 core tests passed, one
+  optional live CodeGraph integration test skipped, and typecheck, build and
+  formatting passed. All 36 Playwright browser tests passed. Packed npm CLI,
+  MCP handshake, player assets and flow API verification passed. These checks
+  establish the listed tested cases, not general async completeness or full
+  37-item acceptance.
 
 - 2026-10-12 JavaScript async-entry verification: the previously failing
   concurrent process-output test now passes with real `first` and `second`

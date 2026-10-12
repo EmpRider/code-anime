@@ -144,12 +144,22 @@ function functionEntries(source) {
     });
   } catch {
     // The V8 debugger remains authoritative for syntax Acorn cannot parse.
-    return [];
+    return { entries: [], awaitLines: new Set() };
   }
   const pending = [ast];
   const entries = new Map();
+  const awaitLines = new Set();
   while (pending.length) {
     const node = pending.pop();
+    // A keyword-looking string, property name, or comment is not an async
+    // suspension point. Include both await expressions and for-await loops,
+    // which Acorn represents as ForOfStatements with await: true.
+    if (
+      node.loc &&
+      (node.type === 'AwaitExpression' ||
+        (node.type === 'ForOfStatement' && node.await === true))
+    )
+      awaitLines.add(node.loc.start.line);
     if (
       node.type === 'FunctionDeclaration' ||
       node.type === 'FunctionExpression' ||
@@ -180,7 +190,7 @@ function functionEntries(source) {
       }
     }
   }
-  return [...entries.values()];
+  return { entries: [...entries.values()], awaitLines };
 }
 
 function rememberEntryBreakpoint(scriptId, location, breakpointId) {
@@ -193,7 +203,9 @@ async function prepareFunctionEntries(scriptId, source) {
   // Async suspension can cause V8 to step past sibling user calls in the
   // synchronous caller. Preinstall debugger breakpoints at real function-body
   // statements, so later invocations are observed even after an await.
-  for (const location of functionEntries(source)) {
+  const { entries, awaitLines } = functionEntries(source);
+  scripts.get(scriptId).awaitLines = awaitLines;
+  for (const location of entries) {
     const key = `${scriptId}:${location.lineNumber}:${location.columnNumber}`;
     if (entryBreakpointLocations.has(key)) continue;
     entryBreakpointLocations.add(key);
@@ -564,9 +576,9 @@ async function invocationContext(frame, activeFrames) {
 }
 
 async function breakpointAfterAwait(frame) {
-  const lines = scripts.get(frame.raw.location.scriptId)?.sourceLines;
-  if (!lines || !/\bawait\b/.test(lines[frame.generatedLine - 1] || ''))
-    return false;
+  const script = scripts.get(frame.raw.location.scriptId);
+  const lines = script?.sourceLines;
+  if (!lines || !script.awaitLines?.has(frame.generatedLine)) return false;
   const next = lines.findIndex(
     (line, index) =>
       index >= frame.generatedLine &&
@@ -659,7 +671,11 @@ async function paused(params) {
   for (let index = stack.length - 1; index >= common; index--) {
     const old = stack[index];
     stack.pop();
-    if (old.awaiting) {
+    // A syntactic await on the last paused line is only a candidate for
+    // suspension. V8's debugger-reported return is stronger evidence that
+    // this invocation completed, including `return await ...` expressions.
+    const observedReturn = Object.hasOwn(old, 'observedReturn');
+    if (old.awaiting && !observedReturn) {
       suspendedCalls.set(old.callId, old);
       emit({
         kind: 'await',
@@ -675,7 +691,6 @@ async function paused(params) {
       });
       continue;
     }
-    const observedReturn = Object.hasOwn(old, 'observedReturn');
     emit({
       kind: observedReturn ? 'return' : 'unresolved',
       symbolId: old.symbolId,

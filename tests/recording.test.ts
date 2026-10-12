@@ -476,6 +476,189 @@ test('JavaScript process output is preserved without inventing its originating i
   }
 });
 
+test('JavaScript recorder does not suspend ordinary functions containing await text', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'function literal() {',
+      '  return "await";',
+      '}',
+      'function commented() {',
+      '  return 4; // await',
+      '}',
+      'function property() {',
+      '  const config = { await: 5 };',
+      '  return config.await;',
+      '}',
+      'function template() {',
+      '  return `await`;',
+      '}',
+      'function regexp() {',
+      '  return /await/.test("await");',
+      '}',
+      'console.log(literal(), commented(), property(), template(), regexp());',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    for (const [symbol, expected] of [
+      ['literal', 'await'],
+      ['commented', 4],
+      ['property', 5],
+      ['template', 'await'],
+      ['regexp', true],
+    ] as const) {
+      const matching = events.filter(
+        (event) => event.symbolId === `main.cjs:${symbol}`,
+      );
+      assert.equal(
+        matching.filter((event) => event.kind === 'enter').length,
+        1,
+        `Expected one entry for ${symbol}`,
+      );
+      assert.equal(
+        matching.filter((event) => event.kind === 'await').length,
+        0,
+        `Source text must not fabricate an await in ${symbol}: ${JSON.stringify(matching)}`,
+      );
+      assert.deepEqual(
+        matching
+          .filter((event) => event.kind === 'return')
+          .map((event) => event.result),
+        [expected],
+        `Expected observed return for ${symbol}`,
+      );
+    }
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'await 4 5 await true\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript for-await loops retain observed user statements and returns', async () => {
+  const f = await fixture({
+    'main.mjs': [
+      'async function* numbers() {',
+      '  yield 2;',
+      '  yield 3;',
+      '}',
+      'async function collect() {',
+      '  let sum = 0;',
+      '  for await (const value of numbers()) {',
+      '    sum += value;',
+      '  }',
+      '  return sum;',
+      '}',
+      'console.log(await collect());',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.mjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const entries = events.filter(
+      (event) =>
+        event.kind === 'enter' && event.symbolId === 'main.mjs:collect',
+    );
+    assert.equal(entries.length, 1, JSON.stringify(entries));
+    const callId = entries[0]!.callId;
+    const iterations = events.filter(
+      (event) =>
+        event.kind === 'statement' &&
+        event.callId === callId &&
+        event.source?.line === 8,
+    );
+    assert.deepEqual(
+      iterations.map((event) => localValue(event, callId, 'value')),
+      [2, 3],
+      JSON.stringify(iterations),
+    );
+    assert.deepEqual(
+      events
+        .filter((event) => event.kind === 'return' && event.callId === callId)
+        .map((event) => event.result),
+      [{ $type: 'Promise', $state: 'fulfilled', $result: 5 }],
+      'V8 reports the async method Promise, not a fabricated scalar return',
+    );
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      '5\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript return-await completion preserves V8-reported returns', async () => {
+  const f = await fixture({
+    'main.mjs': [
+      'async function worker() {',
+      '  return await Promise.resolve(7);',
+      '}',
+      'console.log(await worker());',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.mjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const worker = events.filter(
+      (event) => event.symbolId === 'main.mjs:worker',
+    );
+    const entry = worker.find((event) => event.kind === 'enter');
+    assert.ok(entry, JSON.stringify(worker));
+    const completed = worker.filter(
+      (event) => event.kind === 'return' && event.callId === entry.callId,
+    );
+    assert.equal(completed.length, 1, JSON.stringify(worker));
+    assert.ok(
+      worker.every(
+        (event) =>
+          event.kind !== 'await' ||
+          events.indexOf(event) < events.indexOf(completed[0]!),
+      ),
+      'The debugger-observed return must end the invocation',
+    );
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      '7\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
 test('JavaScript async sibling functions and class methods preserve observed entry across awaits', async () => {
   const f = await fixture({
     'main.cjs': [
