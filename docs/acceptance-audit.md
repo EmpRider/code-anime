@@ -251,7 +251,11 @@ about future changes.
     focus preservation, pagination focus, mobile controls, and keyboard resizing.
     A focused browser regression checks source-line `aria-current` and
     stateful breakpoint names/pressed state after keyboard activation and seeks.
-    Screen-reader behavior and all focus paths remain unverified.
+    Keyboard-shortcut help now exposes `aria-controls` and tracks its expanded
+    state; Escape and its close control restore focus to the opener. The compact
+    mobile evidence badge retains its full text in a tooltip. A browser
+    regression verifies these semantics. Screen-reader behavior and all focus
+    paths remain unverified.
 26. **Responsive workspace — partial.**
     Browser tests cover 1440x900, 820x1180, and 390x844, panel switching, playback
     visibility, and page overflow. Desktop side-by-side flow and a dedicated
@@ -283,9 +287,14 @@ about future changes.
     expanded branches; the large-value regression verifies lazy construction,
     filtering, and replay state. Paint, heap, and real-project profiling are
     still required.
-28. **No repeated AI processing — implemented by architecture.**
+28. **No repeated AI processing — implemented by architecture, broader controls tested.**
     Player HTTP requests retrieve stored flows. Backend analysis is separate.
-    Extend request assertions to all ordinary controls for behavioral acceptance.
+    A desktop browser regression observes network requests while navigating,
+    stepping, playing, changing speed, filtering, inspecting variables,
+    expanding panels, toggling bookmarks/breakpoints, switching visualizations,
+    and using shortcuts. All operate on the prepared fixture without another
+    request. Further coverage is required for continuation retrieval and
+    alternative saved scenarios; those are permitted prepared-data requests.
 29. **Existing language compatibility — partial.**
     Shared frontend and CodeGraph-backed simulation remain language-independent.
     Observed recording is implemented for Python and experimentally for

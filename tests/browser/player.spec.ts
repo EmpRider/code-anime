@@ -1751,6 +1751,61 @@ test('keyboard disclosure preserves playback and uses only prepared data', async
   expect(requests).toEqual([]);
 });
 
+test('normal playback, inspection, and layout controls reuse the prepared trace', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(url);
+  await expect(page.locator('#progress')).toHaveText('0 / 100');
+  const requests: string[] = [];
+  const errors: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  page.on('pageerror', (error) => errors.push(error.message));
+
+  await page.locator('#timeline').fill('50');
+  await page.locator('#previous').click();
+  await page.locator('#next').click();
+  await page.locator('#step-over').click();
+  await page.locator('#step-out').click();
+  await page.locator('#speed').selectOption('450');
+  await page.locator('#toggle-inspector').click();
+  await page.locator('#tab-state').click();
+  await page.locator('#tab-values').click();
+  await page.locator('#changes-only').check();
+  await page.locator('#bookmark').click();
+  await page.locator('#breakpoint').click();
+  await page.locator('#bookmarks-only').click();
+  await page.locator('#bookmarks-only').click();
+  await page.locator('#kind-filter').selectOption('changes');
+  await page.locator('#kind-filter').selectOption('all');
+  await page.locator('#search').fill('Line 50');
+  await page.locator('#search').fill('');
+  await page.locator('#view-mode').selectOption('focus');
+  await page.locator('#view-mode').selectOption('map');
+  await page.locator('#center-view').click();
+  await page.locator('#view-mode').selectOption('path');
+  await page.locator('#follow').uncheck();
+  await page.locator('#follow').check();
+  await page.locator('#toggle-flow').click();
+  await page.locator('#toggle-flow').click();
+  await page.locator('#maximize-source').click();
+  await page.locator('#maximize-source').click();
+  await page.locator('#maximize-flow').click();
+  await page.locator('#maximize-flow').click();
+  await page.locator('#console-panel summary').click();
+  await page.locator('#help').click();
+  await page.keyboard.press('Escape');
+  await page.locator('#timeline').fill('30');
+  await page.locator('#play').click();
+  await expect(page.locator('#play')).toHaveAttribute('data-playing', 'true');
+  await page.locator('#play').click();
+  await expect(page.locator('#play')).toHaveAttribute('data-playing', 'false');
+  await page.locator('#restart').click();
+  await expect(page.locator('#progress')).toHaveText('0 / 100');
+  expect(errors).toEqual([]);
+  expect(requests).toEqual([]);
+});
+
 for (const viewport of [
   { width: 1440, height: 900 },
   { width: 820, height: 1180 },
@@ -1825,8 +1880,19 @@ test('mobile state, search, console and keyboard shortcuts preserve the selected
   await expect(page.locator('#search')).toBeFocused();
   await page.locator('#help').click();
   await expect(page.locator('#help-panel')).toBeVisible();
+  await expect(page.locator('#help')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#help')).toHaveAttribute(
+    'aria-controls',
+    'help-panel',
+  );
+  await expect(page.locator('#evidence-mode')).toHaveAttribute(
+    'title',
+    'Simulated values',
+  );
   await page.keyboard.press('Escape');
   await expect(page.locator('#help-panel')).toBeHidden();
+  await expect(page.locator('#help')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#help')).toBeFocused();
   await expect(page.locator('#progress')).toHaveText('70 / 100');
 });
 

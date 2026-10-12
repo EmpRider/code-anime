@@ -1310,11 +1310,13 @@ function render() {
   renderedCursor = cursor;
   const recording = flow.trace?.recording;
   const isMock = flowHasMock;
-  $('evidence-mode').textContent = recording
+  const evidenceLabel = recording
     ? 'Recorded execution'
     : isMock
       ? 'Simulated values'
       : 'Static / unverified evidence';
+  $('evidence-mode').textContent = evidenceLabel;
+  $('evidence-mode').title = evidenceLabel;
   $('trace-order').textContent = recording
     ? 'Recorded runtime order'
     : isMock
@@ -1928,11 +1930,15 @@ $('changes-only').onchange = () => {
   $('fields').classList.toggle('changes-only', $('changes-only').checked);
   renderInspectedFields();
 };
+function setHelpVisible(visible) {
+  $('help-panel').hidden = !visible;
+  $('help').setAttribute('aria-expanded', String(visible));
+}
 $('help').onclick = () => {
-  $('help-panel').hidden = !$('help-panel').hidden;
+  setHelpVisible($('help-panel').hidden);
 };
 $('close-help').onclick = () => {
-  $('help-panel').hidden = true;
+  setHelpVisible(false);
   $('help').focus();
 };
 const tabs = [...document.querySelectorAll('[data-tab]')];
