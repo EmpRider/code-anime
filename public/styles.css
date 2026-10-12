@@ -2040,6 +2040,12 @@ main {
 #method-details[hidden] {
   display: none;
 }
+@media (max-width: 650px) {
+  /* Keep the flow diagram usable beside an independently scrollable inspector. */
+  main[data-mobile-view='flow'] #method-details {
+    flex: 0 1 clamp(112px, 35%, 220px);
+  }
+}
 .method-details-heading {
   display: flex;
   align-items: center;

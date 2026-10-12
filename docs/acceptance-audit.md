@@ -411,8 +411,17 @@ realistic paint/heap performance acceptance requirements.
     visibility, and page overflow. Desktop side-by-side flow and a dedicated
     mobile Flow view pass geometry and replay checks. Mobile console-history
     paging and scrollable output now pass browser checks with 655 events.
-    Mobile diagram method
-    disclosure and broader visual accessibility still need verification.
+    The recorded Python nested-call regression now also covers 320x568,
+    390x667, and 390x844: the inspector retains at least 110px and the canvas
+    at least 100px, nested disclosure responds to Enter, playback stays at the
+    selected event, the dock fits within the viewport, and no additional
+    requests or horizontal page overflow occur. The 320x568 canvas previously
+    measured only 92px because the inspector consumed 45% of the flow panel.
+    A mobile-only bounded inspector allocation now leaves more canvas space.
+    All 41 browser tests passed, along with 129 core tests (one optional
+    CodeGraph skip), typecheck, build, and formatting. These checks do not
+    establish full visual accessibility or rule out dock overlap with content;
+    broader compact-layout and assistive-technology review remains open.
 27. **Large-codebase performance — partial.**
     Cached source lines, event indices, bounded timeline rows, and continuation
     exist. Console output now renders at most 300 events per page, exposes

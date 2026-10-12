@@ -667,6 +667,33 @@ test('recorded nested calls retain independent disclosure during playback and re
       'data-event-index',
       String(detailIndex + 1),
     );
+    for (const viewport of [
+      { width: 320, height: 568 },
+      { width: 390, height: 667 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.locator('button[data-mobile-view="flow"]').click();
+      await expect(detailsPanel).toBeVisible();
+      await expect(childDetails).toBeVisible();
+      const compactDetails = (await detailsPanel.boundingBox())!;
+      expect(compactDetails.height).toBeGreaterThanOrEqual(110);
+      const compactCanvas = (await page.locator('#canvas').boundingBox())!;
+      expect(compactCanvas.height).toBeGreaterThanOrEqual(100);
+      await middleDetails.locator(':scope > summary').focus();
+      await page.keyboard.press('Enter');
+      await expect(childDetails).toBeHidden();
+      await page.keyboard.press('Enter');
+      await expect(childDetails).toBeVisible();
+      await expect(page.locator('#progress')).toHaveText(
+        `${detailIndex + 1} / ${events.length}`,
+      );
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(viewport.width);
+      const dock = (await page.locator('.playback-dock').boundingBox())!;
+      expect(dock.y + dock.height).toBeLessThanOrEqual(viewport.height);
+    }
     expect(requests).toEqual([]);
   } finally {
     await recorder.close();
