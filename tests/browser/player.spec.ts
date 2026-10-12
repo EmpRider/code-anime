@@ -1343,8 +1343,8 @@ test('actual Python recording replays across chunks with exact output and revers
 
 test('observed JavaScript recording replays actual source lines, locals and output', async ({
   page,
-}) => 
-  test.setTimeout(60_000);{
+}) => {
+  test.setTimeout(60_000);
   const recorder = new RecordingService(
     runtime.store,
     runtime.baseUrl,
@@ -1433,8 +1433,8 @@ test('observed JavaScript recording replays actual source lines, locals and outp
 
 test('verified TypeScript source map follows the original lines in real browser playback', async ({
   page,
-}) => 
-  test.setTimeout(60_000);{
+}) => {
+  test.setTimeout(60_000);
   const root = await mkdtemp(join(tmpdir(), 'code-anime-source-map-'));
   const recorder = new RecordingService(
     runtime.store,
