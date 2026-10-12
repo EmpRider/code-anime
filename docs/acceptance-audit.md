@@ -25,7 +25,9 @@ about future changes.
 2. **Focus on user code — implemented for tested Python and JavaScript scope.**
    Recorded fixtures cross user files; the JavaScript V8 Inspector adapter
    excludes Node runtime and dependency frames. `tests/recording.test.ts`
-   verifies user-file entries. Broad framework callback coverage, generated
+   verifies user-file entries, including user callbacks called twice through
+   Node's native EventEmitter without exposing Node internals. Broad framework
+   callback coverage, generated
    infrastructure filtering, and worker-thread coverage remain unverified.
 3. **Understand entry through completion — partial.**
    Python recording tests exercise calls, locals, returns, loops, branches,
@@ -91,6 +93,16 @@ about future changes.
    are now associated with their nearest lexical function and checked against
    the paused generated location. The focused same-line throwing regression
    passes alongside related await and async-entry tests.
+   Another runtime regression exposed two distinct calls to a user callback
+   on the same source line appearing as one invocation after an `await` in
+   CommonJS. The parser now retries script grammar when strict module grammar
+   rejects valid CommonJS code, retaining function-entry breakpoints. When V8
+   reports a callback return and then hits the function-entry breakpoint,
+   recording closes the earlier invocation and starts a new one. A fixture
+   verifies three calls, including repeated identical arguments, distinct
+   call IDs, observed returns, and complete process output. A separate fixture
+   confirms repeated native EventEmitter calls. Other frame transitions where
+   V8 reports neither return nor reliable entry evidence remain unresolved.
    V8 pause locations and stack frames remain the sole evidence for
    an `observed` entry; a parsed function definition alone creates no trace
    event. Unsupported syntax may still prevent this breakpoint preparation.
@@ -333,7 +345,8 @@ about future changes.
     Shared frontend and CodeGraph-backed simulation remain language-independent.
     Observed recording is implemented for Python and experimentally for
     Node.js JavaScript through V8 Inspector. JavaScript coverage includes
-    verified recursive calls, ES modules, timer callbacks, caught/uncaught throws,
+    verified recursive calls, ES modules, CommonJS script-only syntax, timer callbacks,
+    caught/uncaught throws,
     catch-handler entry, output, budgets, and debugger-observed return values
     for tested synchronous calls. Unobserved exits remain unresolved, while
     Promise snapshots expose V8-observed state/results and explicitly preserve
@@ -386,6 +399,19 @@ about future changes.
     supported language and primary interaction, including rendered visual review.
 
 ## Checkpoint verification
+
+- 2026-10-12 CommonJS parsing and callback identity refinement: the previously
+  failing `with`-statement CommonJS fixture now retains breakpoint metadata
+  and records three independently observed callbacks following an `await`,
+  including two with identical arguments. Node EventEmitter callback coverage
+  and unreachable same-line `await` were also added. The focused seven-case
+  selection passed alongside loop and throwing-`finally` regressions. Full
+  After formatting, full `npm run check` passed: typecheck, 129 core tests
+  (one optional live CodeGraph test skipped), build, and Prettier. All 36
+  Playwright browser tests and
+  the packaged npm CLI/MCP/player/flow API verification passed. This is
+  evidence for the named JavaScript cases; broader callback and language
+  coverage and the remaining acceptance requirements are still unverified.
 
 - 2026-10-12 same-line await scope refinement: a new real JavaScript
   recording fixture reproduced a false `await` on a throwing synchronous

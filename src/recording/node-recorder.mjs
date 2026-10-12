@@ -134,15 +134,26 @@ function projectPath(filename) {
 
 function functionEntries(source) {
   let ast;
-  try {
-    ast = parse(source, {
-      ecmaVersion: 'latest',
-      sourceType: 'module',
-      locations: true,
-      allowHashBang: true,
-      allowReturnOutsideFunction: true,
-    });
-  } catch {
+  // V8 can execute CommonJS scripts containing constructs (for example,
+  // `with`) that Acorn rejects in strict ES modules. Preserve the module
+  // parse for ESM and retry script grammar for executable CommonJS syntax.
+  // These ASTs only select debugger breakpoints; V8 remains authoritative
+  // about what executed and which values were observed.
+  for (const sourceType of ['module', 'script']) {
+    try {
+      ast = parse(source, {
+        ecmaVersion: 'latest',
+        sourceType,
+        locations: true,
+        allowHashBang: true,
+        allowReturnOutsideFunction: true,
+      });
+      break;
+    } catch {
+      // Try the other JavaScript grammar before giving up on breakpoint hints.
+    }
+  }
+  if (!ast) {
     // The V8 debugger remains authoritative for syntax Acorn cannot parse.
     return { entries: [], awaitSites: new Map(), functionRanges: [] };
   }
@@ -685,8 +696,13 @@ async function paused(params) {
     common < frames.length &&
     common < stack.length &&
     stack[common].signature === frames[common].signature &&
+    // V8 can step straight from one synchronous callback's observed return
+    // into its next invocation without exposing an intervening caller frame.
+    // A new hit on its function-entry breakpoint establishes a new invocation;
+    // simply revisiting a loop line (without a return) does not.
     !(
-      stack[common].awaiting &&
+      (stack[common].awaiting ||
+        Object.hasOwn(stack[common], 'observedReturn')) &&
       frames[common].generatedLine === stack[common].entryLine &&
       [
         ...(entryBreakpoints.get(

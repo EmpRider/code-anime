@@ -587,6 +587,146 @@ test('JavaScript await in a sibling function on the same line does not suspend a
   }
 });
 
+test('JavaScript unreachable await later on the same line cannot suspend a thrown function', async () => {
+  const f = await fixture({
+    'main.mjs': [
+      'async function failure() { throw new Error("boom"); await Promise.resolve(1); }',
+      'try { await failure(); } catch (error) { console.log(error.message); }',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.mjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const failure = events.filter(
+      (event) => event.symbolId === 'main.mjs:failure',
+    );
+    assert.equal(failure.filter((event) => event.kind === 'enter').length, 1);
+    assert.equal(failure.filter((event) => event.kind === 'throw').length, 1);
+    assert.equal(
+      failure.filter((event) => event.kind === 'await').length,
+      0,
+      `An unreachable await cannot suspend a thrown function: ${JSON.stringify(failure)}`,
+    );
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'boom\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript recording follows user callbacks invoked through native event infrastructure', async () => {
+  const f = await fixture({
+    'main.mjs': [
+      "import { EventEmitter } from 'node:events';",
+      'const emitter = new EventEmitter();',
+      'function onData(value) {',
+      '  const enriched = value + 1;',
+      '  console.log(enriched);',
+      '  return enriched;',
+      '}',
+      "emitter.on('data', onData);",
+      "emitter.emit('data', 9);",
+      "emitter.emit('data', 19);",
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.mjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const callback = events.filter(
+      (event) => event.symbolId === 'main.mjs:onData',
+    );
+    const entries = callback.filter((event) => event.kind === 'enter');
+    assert.equal(entries.length, 2, JSON.stringify(events));
+    assert.notEqual(entries[0]!.callId, entries[1]!.callId);
+    assert.deepEqual(
+      callback
+        .filter((event) => event.kind === 'return')
+        .map((event) => event.result),
+      [10, 20],
+    );
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      '10\n20\n',
+    );
+    assert.ok(
+      events.every(
+        (event) => !event.source || event.source.file === 'main.mjs',
+      ),
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript CommonJS script syntax retains user callbacks following awaits', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'const scope = { marker: 3 };',
+      'with (scope) { console.log(marker); }',
+      'async function run() {',
+      '  await Promise.resolve();',
+      '  [4, 5, 5].forEach(function callback(value) { console.log(value); });',
+      '}',
+      'run();',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const callbacks = events.filter(
+      (event) =>
+        event.kind === 'enter' && event.symbolId === 'main.cjs:callback',
+    );
+    assert.equal(callbacks.length, 3, JSON.stringify(events));
+    assert.equal(new Set(callbacks.map((event) => event.callId)).size, 3);
+    assert.equal(
+      events.filter(
+        (event) =>
+          event.kind === 'return' && event.symbolId === 'main.cjs:callback',
+      ).length,
+      3,
+    );
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      '3\n4\n5\n5\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
 test('JavaScript for-await loops retain observed user statements and returns', async () => {
   const f = await fixture({
     'main.mjs': [
