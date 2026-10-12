@@ -1175,6 +1175,44 @@ test('tablet layout keeps timeline resizable and source focus available', async 
   expect(width).toBeLessThanOrEqual(690);
 });
 
+test('compact header and tablet timeline leave room for execution and playback', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 820, height: 1180 });
+  await page.goto(url);
+  const header = (await page.locator('.app-header').boundingBox())!;
+  const session = (await page.locator('.session-header').boundingBox())!;
+  const source = (await page.locator('.source-panel').boundingBox())!;
+  const flow = (await page.locator('#flow-panel').boundingBox())!;
+  const trace = (await page.locator('.trace-panel').boundingBox())!;
+  const center = (await page.locator('.center-column').boundingBox())!;
+  const dock = (await page.locator('.playback-dock').boundingBox())!;
+
+  expect(session.y).toBeGreaterThanOrEqual(header.y);
+  expect(session.y + session.height).toBeLessThanOrEqual(
+    header.y + header.height,
+  );
+  expect(Math.abs(trace.height - center.height)).toBeLessThan(2);
+  expect(trace.y + trace.height).toBeLessThanOrEqual(dock.y + 1);
+  expect(source.height).toBeGreaterThan(350);
+  expect(flow.height).toBeGreaterThan(350);
+  expect(
+    await page
+      .locator('#event-list')
+      .evaluate((element) => element.scrollHeight > element.clientHeight),
+  ).toBe(true);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('#evidence-mode')).toBeVisible();
+  const mobileHeader = (await page.locator('.app-header').boundingBox())!;
+  const mobileSession = (await page.locator('.session-header').boundingBox())!;
+  const actions = (await page.locator('.header-actions').boundingBox())!;
+  expect(mobileSession.x + mobileSession.width).toBeLessThanOrEqual(actions.x);
+  expect(mobileSession.y + mobileSession.height).toBeLessThanOrEqual(
+    mobileHeader.y + mobileHeader.height,
+  );
+});
+
 test('desktop source and flow share the workspace and retain split preferences', async ({
   page,
 }) => {

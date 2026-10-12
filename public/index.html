@@ -10,9 +10,19 @@
   <body>
     <header class="app-header">
       <a class="brand" href="/" aria-label="Code Anime home"
-        ><span class="brand-icon">▸</span>code<span>anime</span
-        ><span class="studio-label">EXECUTION STUDIO</span></a
+        ><span class="brand-icon">▸</span>code<span>anime</span></a
       >
+      <section class="session-header" aria-label="Current execution session">
+        <div class="session-heading">
+          <h1 id="title">Loading your flow…</h1>
+          <span id="evidence-mode" class="mock-badge">Trace evidence</span>
+        </div>
+        <div class="session-stats" aria-label="Trace summary">
+          <div><strong id="stat-events">—</strong><span>steps</span></div>
+          <div><strong id="stat-symbols">—</strong><span>symbols</span></div>
+          <div><strong id="stat-changes">—</strong><span>changes</span></div>
+        </div>
+      </section>
       <div class="header-actions">
         <button
           id="toggle-inspector"
@@ -33,9 +43,11 @@
         ><button
           id="export"
           class="quiet-button"
+          aria-label="Export trace as JSON"
           title="Download the current trace as JSON"
         >
-          ↓ Export trace
+          <span aria-hidden="true">↓</span>
+          <span class="export-label">Export trace</span>
         </button>
       </div>
     </header>
@@ -47,23 +59,6 @@
         <button data-mobile-view="state" aria-pressed="false">State</button>
         <button data-mobile-view="console" aria-pressed="false">Console</button>
       </nav>
-      <section class="session-header">
-        <div class="session-heading">
-          <p class="eyebrow">WORKSPACE / FLOW EXPLORER</p>
-          <h1 id="title">Loading your flow…</h1>
-          <p class="subtitle">
-            Follow the logic. Watch the values change.
-            <span id="evidence-mode" class="mock-badge">Trace evidence</span>
-          </p>
-        </div>
-        <div class="session-stats">
-          <div><strong id="stat-events">—</strong><span>STEPS</span></div>
-          <div><strong id="stat-symbols">—</strong><span>SYMBOLS</span></div>
-          <div>
-            <strong id="stat-changes">—</strong><span>STATE CHANGES</span>
-          </div>
-        </div>
-      </section>
       <section
         id="help-panel"
         hidden

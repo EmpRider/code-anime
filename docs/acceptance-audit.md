@@ -175,7 +175,13 @@ about future changes.
     The overview now uses more of the available height on tall desktop screens,
     paging up to 24 prepared transitions; smaller windows retain six rows.
     A browser regression is added for viewport-dependent density and paging.
-    Rendered visual acceptance and performance verification are still open.
+    The session title, evidence badge, and trace counts now share the application
+    header, eliminating the separate session information row. A browser geometry
+    regression checks that the header contains the session label, tablet timeline
+    scrolls internally without extending below playback, and source and flow each
+    receive usable height at 820x1180. Mobile retains a visible evidence label.
+    Rendered visual acceptance, performance verification, and broader viewport
+    allocation review remain open.
 16. **Content-first progressive disclosure — partial.**
     Inspector, console, and method details are disclosed on demand. The desktop
     source/flow arrangement is implemented. Default overview clarity and visual
@@ -443,6 +449,20 @@ about future changes.
   broader rendered accessibility and memory profiling remain open.
 
 ## Next implementation order
+
+### Compact header and tablet viewport follow-up
+
+The session heading and evidence label were consolidated into the existing top
+bar, removing a secondary information row and restoring vertical workspace
+space. The separate decorative studio title and descriptive text were removed;
+existing event counts and export access remain available. On tablets, source
+and flow split available height more evenly. The execution timeline now has a
+bounded height and an independently scrolling event list, so long traces do not
+extend the page below the playback dock. Mobile retains its evidence badge in
+the compact header. Browser coverage measures panel geometry, scrolling, and
+header containment at 820x1180 and 390x844; the existing layout, focus, and
+navigation regressions cover the other supported viewports. A broader visual
+and accessibility review is still required.
 
 ### Desktop layout follow-up
 
