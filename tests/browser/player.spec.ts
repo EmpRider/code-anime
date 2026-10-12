@@ -693,6 +693,8 @@ test('recorded nested calls retain independent disclosure during playback and re
       ).toBeLessThanOrEqual(viewport.width);
       const dock = (await page.locator('.playback-dock').boundingBox())!;
       expect(dock.y + dock.height).toBeLessThanOrEqual(viewport.height);
+      const flowPanel = (await page.locator('#flow-panel').boundingBox())!;
+      expect(flowPanel.y + flowPanel.height).toBeLessThanOrEqual(dock.y);
     }
     expect(requests).toEqual([]);
   } finally {

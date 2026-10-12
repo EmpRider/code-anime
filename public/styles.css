@@ -1837,11 +1837,17 @@ main {
   }
 }
 @media (max-width: 650px) {
+  body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    height: 100dvh;
+  }
   main {
     display: flex;
     flex-direction: column;
-    height: calc(100dvh - 150px);
-    min-height: 280px;
+    height: auto;
+    min-height: 0;
     padding: 8px;
   }
   .mobile-views {

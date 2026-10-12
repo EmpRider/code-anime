@@ -420,8 +420,18 @@ realistic paint/heap performance acceptance requirements.
     A mobile-only bounded inspector allocation now leaves more canvas space.
     All 41 browser tests passed, along with 129 core tests (one optional
     CodeGraph skip), typecheck, build, and formatting. These checks do not
-    establish full visual accessibility or rule out dock overlap with content;
-    broader compact-layout and assistive-technology review remains open.
+    establish full visual accessibility; broader compact-layout and
+    assistive-technology review remains open.
+    A subsequent non-overlap assertion reproduced 20px of flow content behind
+    the dock at 320x568. The mobile page now allocates separate grid rows to
+    the header, remaining workspace, and actual dock height, replacing the
+    fixed viewport subtraction. Its single column can shrink below intrinsic
+    content width. The recorded regression checks the entire flow panel ends
+    above the dock at all three phone sizes while retaining the existing
+    canvas/inspector height, keyboard, cursor, and request assertions.
+    This follow-up passed all 41 browser tests, packed-package verification,
+    formatting, and whitespace checks. The saved 390x844 Flow screenshot was
+    visually reviewed; its legend and flow panel end above the playback dock.
 27. **Large-codebase performance — partial.**
     Cached source lines, event indices, bounded timeline rows, and continuation
     exist. Console output now renders at most 300 events per page, exposes
