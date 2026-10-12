@@ -8,6 +8,7 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { SourceMap } from 'node:module';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse } from 'acorn';
 
 const [rootArg, entry, eventLimitArg, byteLimitArg, ...arguments_] =
   process.argv.slice(2);
@@ -21,6 +22,7 @@ const stack = [];
 const suspendedCalls = new Map();
 const resumeBreakpoints = new Set();
 const entryBreakpoints = new Map();
+const entryBreakpointLocations = new Set();
 const invocationContextKey = `code-anime-invocations-${process.pid}`;
 const requests = new Map();
 let socket;
@@ -130,6 +132,95 @@ function projectPath(filename) {
   return path.split(sep).join('/');
 }
 
+function functionEntries(source) {
+  let ast;
+  try {
+    ast = parse(source, {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      locations: true,
+      allowHashBang: true,
+      allowReturnOutsideFunction: true,
+    });
+  } catch {
+    // The V8 debugger remains authoritative for syntax Acorn cannot parse.
+    return [];
+  }
+  const pending = [ast];
+  const entries = new Map();
+  while (pending.length) {
+    const node = pending.pop();
+    if (
+      node.type === 'FunctionDeclaration' ||
+      node.type === 'FunctionExpression' ||
+      node.type === 'ArrowFunctionExpression'
+    ) {
+      const body = node.body;
+      const first =
+        body.type === 'BlockStatement'
+          ? body.body.find((statement) => statement.type !== 'EmptyStatement')
+          : body;
+      if (first?.loc) {
+        const { line, column } = first.loc.start;
+        entries.set(`${line}:${column}`, {
+          lineNumber: line - 1,
+          columnNumber: column,
+        });
+      }
+    }
+    for (const value of Object.values(node)) {
+      const candidates = Array.isArray(value) ? value : [value];
+      for (const child of candidates) {
+        if (
+          child &&
+          typeof child === 'object' &&
+          typeof child.type === 'string'
+        )
+          pending.push(child);
+      }
+    }
+  }
+  return [...entries.values()];
+}
+
+function rememberEntryBreakpoint(scriptId, location, breakpointId) {
+  const key = `${scriptId}:${location.lineNumber}`;
+  if (!entryBreakpoints.has(key)) entryBreakpoints.set(key, new Set());
+  entryBreakpoints.get(key).add(breakpointId);
+}
+
+async function prepareFunctionEntries(scriptId, source) {
+  // Async suspension can cause V8 to step past sibling user calls in the
+  // synchronous caller. Preinstall debugger breakpoints at real function-body
+  // statements, so later invocations are observed even after an await.
+  for (const location of functionEntries(source)) {
+    const key = `${scriptId}:${location.lineNumber}:${location.columnNumber}`;
+    if (entryBreakpointLocations.has(key)) continue;
+    entryBreakpointLocations.add(key);
+    try {
+      const { breakpointId, actualLocation } = await request(
+        'Debugger.setBreakpoint',
+        { location: { scriptId, ...location } },
+      );
+      if (breakpointId)
+        rememberEntryBreakpoint(
+          scriptId,
+          actualLocation || location,
+          breakpointId,
+        );
+    } catch (error) {
+      // V8 can resolve multiple functions to the same breakpoint position.
+      // The existing breakpoint still observes those pauses.
+      if (
+        !String(error.message).includes(
+          'Breakpoint at specified location already exists.',
+        )
+      )
+        throw error;
+    }
+  }
+}
+
 async function snapshotSource(file, content) {
   if (sources.has(file)) return;
   sourceBytes += Buffer.byteLength(content);
@@ -222,6 +313,8 @@ async function projectSource(scriptId, location) {
     script.file = file;
     script.source = scriptSource;
     script.sourceLines = scriptSource.split(/\r?\n/);
+    if (!file.split('/').includes('dist'))
+      await prepareFunctionEntries(scriptId, scriptSource);
     script.sourceMap = await verifiedSourceMap(filename, scriptSource);
   }
   if (!script.file) return undefined;
@@ -494,13 +587,29 @@ async function breakpointAfterAwait(frame) {
 async function breakpointAtEntry(frame) {
   const key = `${frame.raw.location.scriptId}:${frame.generatedLine - 1}`;
   if (entryBreakpoints.has(key)) return;
-  const { breakpointId } = await request('Debugger.setBreakpoint', {
-    location: {
-      scriptId: frame.raw.location.scriptId,
-      lineNumber: frame.generatedLine - 1,
-    },
-  });
-  entryBreakpoints.set(key, breakpointId);
+  try {
+    const { breakpointId, actualLocation } = await request(
+      'Debugger.setBreakpoint',
+      {
+        location: {
+          scriptId: frame.raw.location.scriptId,
+          lineNumber: frame.generatedLine - 1,
+        },
+      },
+    );
+    rememberEntryBreakpoint(
+      frame.raw.location.scriptId,
+      actualLocation || { lineNumber: frame.generatedLine - 1 },
+      breakpointId,
+    );
+  } catch (error) {
+    if (
+      !String(error.message).includes(
+        'Breakpoint at specified location already exists.',
+      )
+    )
+      throw error;
+  }
 }
 
 async function paused(params) {
@@ -513,6 +622,7 @@ async function paused(params) {
       raw: frame,
       ...source,
       generatedLine: frame.location.lineNumber + 1,
+      generatedColumn: frame.location.columnNumber,
       symbol,
       signature: `${frame.location.scriptId}:${frame.functionLocation?.lineNumber ?? 0}:${symbol}`,
       symbolId: `${source.file}:${symbol}`,
@@ -529,11 +639,11 @@ async function paused(params) {
     !(
       stack[common].awaiting &&
       frames[common].generatedLine === stack[common].entryLine &&
-      params.hitBreakpoints?.includes(
-        entryBreakpoints.get(
+      [
+        ...(entryBreakpoints.get(
           `${frames[common].raw.location.scriptId}:${frames[common].generatedLine - 1}`,
-        ),
-      )
+        ) || []),
+      ].some((breakpointId) => params.hitBreakpoints?.includes(breakpointId))
     ) &&
     !(
       common === frames.length - 1 &&
@@ -597,7 +707,12 @@ async function paused(params) {
       const resuming =
         index === frames.length - 1 &&
         suspension?.signature === current.signature &&
-        current.generatedLine > suspension.generatedLine;
+        // An await can continue later on its original line. Only recognize
+        // this as progress when V8 moves beyond the suspended source column;
+        // re-pausing at the await itself does not establish a resumption.
+        (current.generatedLine > suspension.generatedLine ||
+          (current.generatedLine === suspension.generatedLine &&
+            current.generatedColumn > suspension.generatedColumn));
       current.resuming = resuming;
       current.callId = resuming ? suspension.callId : `call-${++nextCall}`;
       current.entryLine = resuming
@@ -625,6 +740,7 @@ async function paused(params) {
       current.callId = stack[index].callId;
       stack[index].line = current.line;
       stack[index].generatedLine = current.generatedLine;
+      stack[index].generatedColumn = current.generatedColumn;
       stack[index].generated = current.generated;
       stack[index].file = current.file;
       stack[index].symbolId = current.symbolId;
@@ -835,15 +951,15 @@ function stderrLine(text) {
     inspectorAttached = true;
   } else if (
     inspectorUrl &&
-    !inspected &&
-    !inspectorAttached &&
-    !inspectorHelpSeen.has(line) &&
+    inspectorHelpSeen.size === 0 &&
     (line === 'For help, see: https://nodejs.org/en/docs/inspector' ||
       line ===
         'For help, see: https://nodejs.org/learn/getting-started/debugging')
   ) {
-    // Both documented Inspector help variants may appear during startup.
-    // Retain subsequent identical lines written by the application.
+    // Node emits one of the documented help variants during startup. Pipe
+    // delivery may be delayed until after Debugger attached or user stdout.
+    // Consume one exact Inspector help notice, then preserve app messages
+    // even when they contain the same URLs.
     inspectorHelpSeen.add(line);
   } else {
     applicationStderr(text);

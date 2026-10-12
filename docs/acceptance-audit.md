@@ -1,6 +1,6 @@
 # Execution visualizer acceptance audit
 
-Checkpoint: 2026-10-10, branch `codex/execution-visualizer-improvements`.
+Checkpoint: 2026-10-12, branch `codex/execution-visualizer-improvements`.
 Multilingual source highlighting, a persisted branching-tree performance
 fixture, recorded Python execution, and experimental Node.js JavaScript
 recording are covered by tests.
@@ -62,6 +62,22 @@ about future changes.
    tests cover split controls (including OSC ESC-backslash), interleaved
    streams, raw-output preservation, a 300-event history boundary, and a
    stored-session split. Cross-stream causality remains unresolved.
+   The JavaScript recorder now preinstalls Inspector breakpoints from parsed
+   local JavaScript function bodies. Concurrent `Promise.all` siblings that V8
+   previously stepped past after an `await` are observed as method entries.
+   Tests cover function declarations, function expressions, async arrows,
+   object methods, and async class methods. An additional one-line sibling
+   regression verifies that distinct invocations are not duplicated when
+   `await` resumes later on the same source line; same-line recognition
+   requires column progress and the recorded async context. The existing
+   nested concurrent-call regression also passes after that refinement.
+   V8 pause locations and stack frames remain the sole evidence for
+   an `observed` entry; a parsed function definition alone creates no trace
+   event. Unsupported syntax may still prevent this breakpoint preparation.
+   A separate startup race could misclassify the Inspector's delayed help URL
+   as application stderr. The recorder now consumes the first exact Inspector
+   help notice even if pipe delivery occurs after debugger attachment, while
+   preserving subsequent application messages that use those same URLs.
    Exact source causality,
    pipe buffering delays, and cross-stream write ordering remain unresolved.
 4. **Preprocess before playback — implemented.**
@@ -310,19 +326,19 @@ about future changes.
 
 ## Checkpoint verification
 
-- 2026-10-10 terminal-output verification: all 30 Playwright browser tests,
-  focused player/continuation/terminal/overview tests, TypeScript checking,
-  build, package verification, formatting, and whitespace checks pass.
-  The complete `npm run check` gate remains **red**: the recorder test
-  `JavaScript process output is preserved without inventing its originating
-  invocation` misses the debugger `enter` event for `main.cjs:second`, even
-  when run alone. Its stdout/stderr preservation assertions pass, but missing
-  that entry prevents declaring full acceptance. A speculative debugger
-  stepping change was reverted after it did not resolve the failure. The
-  previously recorded checkpoint results below predate this verification.
+- 2026-10-12 JavaScript async-entry verification: the previously failing
+  concurrent process-output test now passes with real `first` and `second`
+  method-entry events. New fixtures also cover async function-expression,
+  arrow, object, and class-method entries, including multiple sibling
+  functions on one line. The full `npm run check` gate passes: 122 core
+  tests passed, one optional live CodeGraph integration test was skipped,
+  and typecheck, build, and formatting passed. All 30 browser tests and
+  packed CLI/package verification also passed. These results verify the
+  tested behaviors, not the complete 37-requirement acceptance scope.
 
-- `npm run check`: typecheck, 115 core tests (114 passed, one optional live
-  CodeGraph integration test skipped), build, and Prettier passed.
+- Earlier checkpoint: `npm run check` typecheck, 115 core tests (114 passed,
+  one optional live CodeGraph integration test skipped), build, and Prettier
+  passed. Current results are above.
 - `npm run test:browser`: 30 passed, including bounded console-history paging,
   preserved mobile output scrolling, paired-call, recorded
   execution-path, separate console writes, overview rewind, and persisted
@@ -361,8 +377,8 @@ about future changes.
   event-budget and cancellation regressions passed after adding the Windows
   `taskkill` nonzero-exit fallback.
   An additional stderr regression writes both documented Node.js Inspector
-  help URLs from application code. The recorder filters each URL at most once
-  during Inspector startup, retaining later application-written lines. This
+  help URLs from application code. The recorder filters one exact Inspector
+  startup help notice, retaining later application-written lines. This
   addresses a Node.js v26.8.1 failure that appended an Inspector notice to
   recorded output. Rare startup notice ordering remains under investigation.
   A concurrent stdout/stderr regression now checks per-stream text preservation

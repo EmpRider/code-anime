@@ -464,6 +464,175 @@ test('JavaScript process output is preserved without inventing its originating i
         (event) =>
           event.kind === 'enter' && event.symbolId === 'main.cjs:second',
       ),
+      `Observed events: ${events
+        .map(
+          (event) =>
+            `${event.kind}:${event.symbolId}@${event.source?.line ?? '?'}`,
+        )
+        .join(', ')}`,
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript async sibling functions and class methods preserve observed entry across awaits', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'const first = async function first() {',
+      '  await new Promise((resolve) => setTimeout(resolve, 15));',
+      '  return 1;',
+      '};',
+      'const second = async function second() {',
+      '  await Promise.resolve();',
+      '  return 2;',
+      '};',
+      'class Third {',
+      '  async work() {',
+      '    await Promise.resolve();',
+      '    return 3;',
+      '  }',
+      '}',
+      'async function run() {',
+      '  await Promise.all([first(), second(), new Third().work()]);',
+      "  process.stdout.write('DONE');",
+      '}',
+      'run();',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    for (const symbol of ['first', 'second', 'work']) {
+      assert.ok(
+        events.some(
+          (event) =>
+            event.kind === 'enter' && event.symbolId === `main.cjs:${symbol}`,
+        ),
+        `Missing observed entry for ${symbol}`,
+      );
+    }
+    assert.equal(
+      events
+        .filter(
+          (event) =>
+            event.kind === 'console' && event.values.stream === 'stdout',
+        )
+        .map((event) => event.output)
+        .join(''),
+      'DONE',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript async expression arrows and object methods record observed sibling entries', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'const first = async (value) => value + 1;',
+      'const second = async (value) => { await Promise.resolve(); return value + 2; };',
+      'const object = { async work(value) { await Promise.resolve(); return value + 3; } };',
+      'async function run() {',
+      '  const results = await Promise.all([first(1), second(2), object.work(3)]);',
+      "  process.stdout.write(results.join(','));",
+      '}',
+      'run();',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    for (const symbol of ['first', 'second', 'work']) {
+      assert.ok(
+        events.some(
+          (event) =>
+            event.kind === 'enter' && event.symbolId === `main.cjs:${symbol}`,
+        ),
+        `Missing debugger-observed entry for ${symbol}`,
+      );
+    }
+    assert.equal(
+      events
+        .filter(
+          (event) =>
+            event.kind === 'console' && event.values.stream === 'stdout',
+        )
+        .map((event) => event.output)
+        .join(''),
+      '2,4,6',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('JavaScript sibling function entries on one source line keep distinct invocation IDs', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'const first = async () => { await Promise.resolve(); return 1; }; const second = async () => { await Promise.resolve(); return 2; };',
+      'async function run() {',
+      '  const values = await Promise.all([first(), second()]);',
+      "  process.stdout.write(values.join(','));",
+      '}',
+      'run();',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const entryFor = (name: string) =>
+      events.filter(
+        (event) =>
+          event.kind === 'enter' && event.symbolId === `main.cjs:${name}`,
+      );
+    const diagnostics = events
+      .filter((event) =>
+        ['enter', 'await', 'resume', 'return', 'unresolved'].includes(
+          event.kind,
+        ),
+      )
+      .map(
+        (event) =>
+          `${event.kind}:${event.symbolId}:${event.callId}:${event.source?.line}`,
+      )
+      .join(', ');
+    assert.equal(entryFor('first').length, 1, diagnostics);
+    assert.equal(entryFor('second').length, 1, diagnostics);
+    assert.notEqual(
+      entryFor('first')[0]!.callId,
+      entryFor('second')[0]!.callId,
+    );
+    assert.equal(
+      events
+        .filter(
+          (event) =>
+            event.kind === 'console' && event.values.stream === 'stdout',
+        )
+        .map((event) => event.output)
+        .join(''),
+      '1,2',
     );
   } finally {
     await f.close();
