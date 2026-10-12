@@ -1857,10 +1857,18 @@ divider.onkeydown = (event) => {
   saveLayout();
   render();
 };
-$('console-panel').open = layout.console;
-$('console-panel').addEventListener('toggle', () => {
+const consoleDetails = $('console-panel');
+consoleDetails.open = layout.console;
+// A native details toggle is queued asynchronously. Save a user click before
+// navigation can interrupt that event, including keyboard-activated clicks.
+consoleDetails.querySelector('summary').addEventListener('click', () => {
   if (window.innerWidth <= 650) return;
-  layout.console = $('console-panel').open;
+  layout.console = !consoleDetails.open;
+  saveLayout();
+});
+consoleDetails.addEventListener('toggle', () => {
+  if (window.innerWidth <= 650) return;
+  layout.console = consoleDetails.open;
   saveLayout();
 });
 window.addEventListener('resize', applyLayout);
