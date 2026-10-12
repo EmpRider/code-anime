@@ -548,6 +548,45 @@ test('JavaScript recorder does not suspend ordinary functions containing await t
   }
 });
 
+test('JavaScript await in a sibling function on the same line does not suspend a throwing call', async () => {
+  const f = await fixture({
+    'main.mjs': [
+      'async function delayed() { await Promise.resolve(1); return 1; } function failure() { throw new Error("boom"); }',
+      'try { failure(); } catch (error) { console.log(error.message); }',
+      'console.log(await delayed());',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.mjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const failure = events.filter(
+      (event) => event.symbolId === 'main.mjs:failure',
+    );
+    assert.equal(failure.filter((event) => event.kind === 'enter').length, 1);
+    assert.equal(
+      failure.filter((event) => event.kind === 'await').length,
+      0,
+      `An await in a different function cannot suspend failure: ${JSON.stringify(failure)}`,
+    );
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'boom\n1\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
 test('JavaScript for-await loops retain observed user statements and returns', async () => {
   const f = await fixture({
     'main.mjs': [

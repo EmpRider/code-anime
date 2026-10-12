@@ -85,6 +85,12 @@ about future changes.
    being replaced with an inferred suspension. The `return await` regression
    passes. The exact suspension boundary remains heuristic when V8 does not
    expose a return value.
+   A second reproduced defect involved two functions defined on one physical
+   line: throwing in the synchronous function incorrectly emitted `await`
+   because its async sibling contained a real `await` expression. Await sites
+   are now associated with their nearest lexical function and checked against
+   the paused generated location. The focused same-line throwing regression
+   passes alongside related await and async-entry tests.
    V8 pause locations and stack frames remain the sole evidence for
    an `observed` entry; a parsed function definition alone creates no trace
    event. Unsupported syntax may still prevent this breakpoint preparation.
@@ -380,6 +386,18 @@ about future changes.
     supported language and primary interaction, including rendered visual review.
 
 ## Checkpoint verification
+
+- 2026-10-12 same-line await scope refinement: a new real JavaScript
+  recording fixture reproduced a false `await` on a throwing synchronous
+  method sharing one source line with an async method. Matching await sites
+  to the nearest Acorn function range removed the false event. The focused
+  seven-case await/async regression selection passes, including real
+  `for await...of`, `return await`, and concurrent invocation identity. After
+  formatting, full `npm run check` passed: 126 core tests passed, one optional
+  live CodeGraph integration skipped, and typecheck, build and formatting
+  passed. All 36 Playwright browser tests and packed CLI/MCP/player/flow API
+  verification passed. Unverified async cases and the other acceptance gaps
+  remain open.
 
 - 2026-10-12 JavaScript await-syntax refinement: the focused five-case suite
   passed for misleading `await` text, real `for await...of` iterations,

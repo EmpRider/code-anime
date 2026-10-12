@@ -144,13 +144,29 @@ function functionEntries(source) {
     });
   } catch {
     // The V8 debugger remains authoritative for syntax Acorn cannot parse.
-    return { entries: [], awaitLines: new Set() };
+    return { entries: [], awaitSites: new Map(), functionRanges: [] };
   }
-  const pending = [ast];
+  const pending = [{ node: ast, scope: null }];
   const entries = new Map();
-  const awaitLines = new Set();
+  const awaitSites = new Map();
+  const functionRanges = [];
   while (pending.length) {
-    const node = pending.pop();
+    const { node, scope: parentScope } = pending.pop();
+    const isFunction =
+      node.type === 'FunctionDeclaration' ||
+      node.type === 'FunctionExpression' ||
+      node.type === 'ArrowFunctionExpression';
+    // Two different functions can share a line. Associate each await with its
+    // nearest lexical function, so a sibling throw cannot look like a suspend.
+    const scope = isFunction ? `${node.start}:${node.end}` : parentScope;
+    if (isFunction) {
+      functionRanges.push({
+        scope,
+        start: node.loc.start,
+        end: node.loc.end,
+        size: node.end - node.start,
+      });
+    }
     // A keyword-looking string, property name, or comment is not an async
     // suspension point. Include both await expressions and for-await loops,
     // which Acorn represents as ForOfStatements with await: true.
@@ -158,13 +174,12 @@ function functionEntries(source) {
       node.loc &&
       (node.type === 'AwaitExpression' ||
         (node.type === 'ForOfStatement' && node.await === true))
-    )
-      awaitLines.add(node.loc.start.line);
-    if (
-      node.type === 'FunctionDeclaration' ||
-      node.type === 'FunctionExpression' ||
-      node.type === 'ArrowFunctionExpression'
     ) {
+      const line = node.loc.start.line;
+      if (!awaitSites.has(line)) awaitSites.set(line, new Set());
+      awaitSites.get(line).add(scope);
+    }
+    if (isFunction) {
       const body = node.body;
       const first =
         body.type === 'BlockStatement'
@@ -186,11 +201,11 @@ function functionEntries(source) {
           typeof child === 'object' &&
           typeof child.type === 'string'
         )
-          pending.push(child);
+          pending.push({ node: child, scope });
       }
     }
   }
-  return { entries: [...entries.values()], awaitLines };
+  return { entries: [...entries.values()], awaitSites, functionRanges };
 }
 
 function rememberEntryBreakpoint(scriptId, location, breakpointId) {
@@ -203,8 +218,9 @@ async function prepareFunctionEntries(scriptId, source) {
   // Async suspension can cause V8 to step past sibling user calls in the
   // synchronous caller. Preinstall debugger breakpoints at real function-body
   // statements, so later invocations are observed even after an await.
-  const { entries, awaitLines } = functionEntries(source);
-  scripts.get(scriptId).awaitLines = awaitLines;
+  const { entries, awaitSites, functionRanges } = functionEntries(source);
+  scripts.get(scriptId).awaitSites = awaitSites;
+  scripts.get(scriptId).functionRanges = functionRanges;
   for (const location of entries) {
     const key = `${scriptId}:${location.lineNumber}:${location.columnNumber}`;
     if (entryBreakpointLocations.has(key)) continue;
@@ -578,7 +594,28 @@ async function invocationContext(frame, activeFrames) {
 async function breakpointAfterAwait(frame) {
   const script = scripts.get(frame.raw.location.scriptId);
   const lines = script?.sourceLines;
-  if (!lines || !script.awaitLines?.has(frame.generatedLine)) return false;
+  const candidates = script?.awaitSites?.get(frame.generatedLine);
+  if (!lines || !candidates) return false;
+  const { lineNumber, columnNumber } = frame.raw.location;
+  const positionInRange = ({ line, column }, start, end) =>
+    (line > start.line || (line === start.line && column >= start.column)) &&
+    (line < end.line || (line === end.line && column < end.column));
+  let currentScope = null;
+  let narrowest = Infinity;
+  for (const { scope, start, end, size } of script.functionRanges) {
+    if (
+      size < narrowest &&
+      positionInRange(
+        { line: lineNumber + 1, column: columnNumber },
+        start,
+        end,
+      )
+    ) {
+      narrowest = size;
+      currentScope = scope;
+    }
+  }
+  if (!candidates.has(currentScope)) return false;
   const next = lines.findIndex(
     (line, index) =>
       index >= frame.generatedLine &&
