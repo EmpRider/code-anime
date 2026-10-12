@@ -1166,7 +1166,9 @@ function renderFlowOverview() {
   if (!overviewItems.length) return false;
   const pageSize = overviewPageSize();
   if (pageSize !== overviewRenderedPageSize) {
-    overviewPage = Math.floor((overviewPage * overviewRenderedPageSize) / pageSize);
+    overviewPage = Math.floor(
+      (overviewPage * overviewRenderedPageSize) / pageSize,
+    );
     overviewRenderedPageSize = pageSize;
     overviewRenderedPage = -1;
   }
@@ -1252,7 +1254,9 @@ function renderFlowOverview() {
       const movePage = (delta) => {
         overviewPage += delta;
         renderFlowOverview();
-        const buttons = [...$('canvas').querySelectorAll('.overview-pages button')];
+        const buttons = [
+          ...$('canvas').querySelectorAll('.overview-pages button'),
+        ];
         const preferred = delta < 0 ? buttons[0] : buttons.at(-1);
         const focusTarget = preferred?.disabled
           ? buttons.find((button) => !button.disabled)
