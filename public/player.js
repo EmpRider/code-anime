@@ -1806,6 +1806,7 @@ const workspace = document.querySelector('.workspace');
 const divider = $('workspace-divider');
 let layout = {
   inspector: false,
+  timeline: true,
   traceWidth: 220,
   console: false,
   diagram: true,
@@ -1814,6 +1815,7 @@ let layout = {
 try {
   const saved = JSON.parse(localStorage.getItem('code-anime-layout') ?? '{}');
   if (typeof saved.inspector === 'boolean') layout.inspector = saved.inspector;
+  if (typeof saved.timeline === 'boolean') layout.timeline = saved.timeline;
   if (typeof saved.console === 'boolean') layout.console = saved.console;
   if (typeof saved.diagram === 'boolean') layout.diagram = saved.diagram;
   if (Number.isFinite(saved.sourceShare))
@@ -1842,6 +1844,11 @@ function resizeTimeline(width) {
 }
 function applyLayout() {
   workspace.classList.toggle('inspector-collapsed', !layout.inspector);
+  workspace.classList.toggle('timeline-collapsed', !layout.timeline);
+  $('toggle-timeline').setAttribute('aria-expanded', String(layout.timeline));
+  $('toggle-timeline').textContent = layout.timeline
+    ? 'Hide steps'
+    : 'Show steps';
   $('toggle-inspector').setAttribute('aria-expanded', String(layout.inspector));
   resizeTimeline(layout.traceWidth);
   const center = document.querySelector('.center-column');
@@ -1868,6 +1875,12 @@ function focusPanel(panel) {
   }
   render();
 }
+$('toggle-timeline').onclick = () => {
+  layout.timeline = !layout.timeline;
+  applyLayout();
+  saveLayout();
+  render();
+};
 $('toggle-inspector').onclick = () => {
   layout.inspector = !layout.inspector;
   if (layout.inspector) {

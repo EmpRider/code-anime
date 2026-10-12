@@ -68,6 +68,14 @@ larger applications (item 27).
 The current keyboard work is bounded evidence for item 25 and does not establish
 screen-reader acceptance across browsers and assistive technologies.
 
+The October 12 Steps-panel update passed 129 core tests with one optional
+CodeGraph integration skip, 41 Playwright browser tests, the production build,
+TypeScript typecheck, formatting, and packed-package verification. The new
+browser regression covers persisted desktop/tablet timeline disclosure,
+inspector coexistence, playback continuity, and mobile Steps navigation.
+This confirms the tested UI improvement without closing the remaining
+visual, accessibility, language, or real-project performance requirements.
+
 ### Verification of the legacy first-load overview correction
 
 After the structural-overview change, the full verification on 2026-10-12
@@ -294,6 +302,11 @@ realistic paint/heap performance acceptance requirements.
     regression checks that the header contains the session label, tablet timeline
     scrolls internally without extending below playback, and source and flow each
     receive usable height at 820x1180. Mobile retains a visible evidence label.
+    Desktop and tablet users can now collapse the step timeline from the compact
+    header, recover its width for source and flow, and restore it without changing
+    the selected event. The choice persists across reloads and leaves the mobile
+    Steps tab accessible; a browser regression checks the panel geometry,
+    inspector coexistence, replay continuity, and no additional flow retrieval.
     Rendered visual acceptance, performance verification, and broader viewport
     allocation review remain open.
 16. **Content-first progressive disclosure — partial.**
@@ -303,8 +316,9 @@ realistic paint/heap performance acceptance requirements.
 17. **Compact application structure — partial.**
     Resizable timeline, source, inspector, and console exist. Playback is in a
     bottom dock, with separate header regions. Resizable source/flow panes are
-    implemented; toolbar density and secondary-control organization still need
-    review.
+    implemented. The compact header now offers an accessible, persistent Steps
+    toggle for desktop and tablet; toolbar density and secondary-control
+    organization still need review.
 18. **Default side-by-side layout — implemented for tested desktops.**
     Source and diagram display side by side by default at desktop widths.
     Pointer/keyboard resizing, per-pane focus, persisted preferences, and mobile

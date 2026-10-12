@@ -1416,6 +1416,56 @@ test('desktop layout resizes, focuses and remembers preferences without moving p
   await expect(divider).toHaveAttribute('aria-valuenow', String(width));
 });
 
+test('steps panel can release desktop and tablet space without changing playback or mobile navigation', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  let flowRequests = 0;
+  page.on('request', (request) => {
+    if (request.url().includes('/api/flow/')) flowRequests++;
+  });
+  await page.goto(url);
+  await page.locator('#timeline').fill('70');
+  const toggle = page.locator('#toggle-timeline');
+  const trace = page.locator('#timeline-panel');
+  const source = page.locator('.source-panel');
+  const center = page.locator('.center-column');
+  const requestsAfterLoad = flowRequests;
+  await page.locator('#toggle-inspector').click();
+  const initialWidth = (await center.boundingBox())!.width;
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toHaveText('Show steps');
+  await expect(trace).toBeHidden();
+  await expect(page.locator('#workspace-divider')).toBeHidden();
+  await expect(page.locator('.inspector')).toBeVisible();
+  expect((await center.boundingBox())!.width).toBeGreaterThan(
+    initialWidth + 130,
+  );
+  await page.locator('#next').click();
+  await expect(page.locator('#progress')).toHaveText('71 / 100');
+  await expect(source).toBeVisible();
+  expect(flowRequests).toBe(requestsAfterLoad);
+  await page.reload();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(trace).toBeHidden();
+  await expect(page.locator('.inspector')).toBeVisible();
+  await page.setViewportSize({ width: 820, height: 1180 });
+  await expect(trace).toBeHidden();
+  await expect(center).toBeVisible();
+  expect((await center.boundingBox())!.width).toBeGreaterThan(700);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(toggle).toBeHidden();
+  await page.locator('button[data-mobile-view="trace"]').click();
+  await expect(trace).toBeVisible();
+  await expect(page.locator('.event-row').first()).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(trace).toBeVisible();
+  await expect(page.locator('#workspace-divider')).toBeVisible();
+});
+
 test('tablet layout keeps timeline resizable and source focus available', async ({
   page,
 }) => {

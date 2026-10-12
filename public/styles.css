@@ -1773,6 +1773,13 @@ main {
     grid-template-columns: var(--trace-width, 220px) 8px minmax(0, 1fr);
     gap: 6px;
   }
+  .workspace.timeline-collapsed:not(.source-focused):not(.flow-focused) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace.timeline-collapsed > .trace-panel,
+  .workspace.timeline-collapsed > #workspace-divider {
+    display: none;
+  }
   #workspace-divider {
     display: block;
     cursor: col-resize;
@@ -1813,11 +1820,17 @@ main {
   .workspace.inspector-collapsed {
     grid-template-columns: var(--trace-width, 220px) 8px minmax(0, 1fr);
   }
+  .workspace.timeline-collapsed:not(.inspector-collapsed):not(
+      .source-focused
+    ):not(.flow-focused) {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 265px);
+  }
   .workspace.source-focused {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 650px) {
+  #toggle-timeline,
   #toggle-inspector,
   #maximize-source {
     display: none;
