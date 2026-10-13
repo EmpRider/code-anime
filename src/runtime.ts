@@ -44,10 +44,18 @@ export async function startRuntime(config: Config = readConfig()) {
   let shutdown: Promise<void> | undefined;
   const close = () =>
     (shutdown ??= (async () => {
-      await new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
-      );
-      await store.close();
+      try {
+        const serverClosed = new Promise<void>((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve())),
+        );
+        // Shutdown cannot rely on browsers or other clients completing
+        // in-flight requests. Close connections after stopping acceptance to
+        // avoid a race with new connections during shutdown.
+        server.closeAllConnections();
+        await serverClosed;
+      } finally {
+        await store.close();
+      }
     })());
   return { store, baseUrl, close };
 }

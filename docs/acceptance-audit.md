@@ -14,6 +14,30 @@ verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
 
+## Runtime shutdown during pending browser requests (October 13)
+
+The older Chromium push run `38354004675` timed out after 120 seconds in the
+five-continuation browser test, despite logging successful assertions after
+approximately 1.5 seconds. This made HTTP runtime cleanup a plausible failure
+site, but that CI log does not identify the exact open connection. Both later
+runs at `3b323dc` (`38355619772` and `38355624676`) passed all five jobs.
+
+A new integration regression reproduced a related shutdown defect locally:
+an in-flight `/api/flow/:id` response prevented `runtime.close()` from
+settling. The test failed before the fix (`pending` after 400 ms) and passed
+after the fix (approximately 10 ms in the full core suite). Runtime shutdown
+now stops accepting connections, closes remaining HTTP clients, waits for the
+server close callback, and releases the session store even if HTTP shutdown
+rejects. This change affects server shutdown only, not trace generation or
+ordinary player requests.
+
+Local verification after the fix: 134 core tests passed, one optional live
+CodeGraph test skipped, 42 Chromium/Edge Playwright tests passed (including
+the five-continuation scenario), TypeScript typecheck, production build,
+Prettier, packed CLI/MCP/player/flow verification, and `git diff --check`
+passed. CI on this new change and the original CI timeout's exact root cause
+remain to be verified. Requirements 27 and 35 remain partial.
+
 ## Source/flow keyboard continuity (October 13)
 
 GitHub Actions run `38354009065` for PR #3 at `70b684f` finished successfully

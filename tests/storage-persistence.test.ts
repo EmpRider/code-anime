@@ -144,6 +144,42 @@ test('saved HTTP flow and independently continued comparison reopen across runti
   });
 });
 
+test('runtime shutdown completes while an HTTP response is in flight', async () => {
+  const runtime = await startRuntime({ ...readConfig({}), port: 0 });
+  let releaseResponse!: () => void;
+  const responseHeld = new Promise<void>(
+    (resolve) => (releaseResponse = resolve),
+  );
+  let notifyStarted!: () => void;
+  const started = new Promise<void>((resolve) => (notifyStarted = resolve));
+  const get = runtime.store.get.bind(runtime.store);
+  runtime.store.get = async (id) => {
+    notifyStarted();
+    await responseHeld;
+    return get(id);
+  };
+  let request: Promise<unknown> | undefined;
+  try {
+    // Simulate a browser request whose response has not finished when the
+    // server shuts down. No user client should be able to stall shutdown.
+    request = fetch(runtime.baseUrl + '/api/flow/' + randomUUID()).catch(
+      () => {},
+    );
+    await started;
+    const result = await Promise.race([
+      runtime.close().then(() => 'closed'),
+      new Promise<string>((resolve) =>
+        setTimeout(() => resolve('pending'), 400),
+      ),
+    ]);
+    assert.equal(result, 'closed');
+  } finally {
+    releaseResponse();
+    await request;
+    await runtime.close();
+  }
+});
+
 test('recovery quarantines corrupt and oversized sessions but keeps valid sessions', async () => {
   await withDirectory(async (directory) => {
     const config = { ...options, persistentDirectory: directory };
