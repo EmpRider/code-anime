@@ -1356,8 +1356,28 @@ test('JavaScript recording follows more than 30 nested user calls through an ES 
       timeoutMs: 20000,
     });
     const result = await wait(f.service, job.jobId);
-    assert.equal(result.complete, true, JSON.stringify(result));
     const { events } = await allEvents(f.store, result.sessionId!);
+    const summaries = events.map((event) => ({
+      kind: event.kind,
+      symbolId: event.symbolId,
+      callId: event.callId,
+      source: event.source,
+      stackDepth: event.stack?.length,
+      result: event.kind === 'return' ? event.result : undefined,
+    }));
+    if (process.env.CODE_ANIME_RECORDING_TRACE_DEBUG === '1')
+      console.log(
+        'Deep recorder event 194 and ending:',
+        JSON.stringify({
+          event194: summaries.slice(188, 199),
+          ending: summaries.slice(-8),
+        }),
+      );
+    assert.equal(
+      result.complete,
+      true,
+      JSON.stringify({ ...result, lastEvents: summaries.slice(-8) }),
+    );
     const descents = events.filter(
       (event) =>
         event.kind === 'enter' && event.symbolId === 'helper.mjs:descend',

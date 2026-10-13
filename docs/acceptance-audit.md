@@ -14,6 +14,57 @@ verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
 
+## Node Inspector shutdown investigation (October 13)
+
+GitHub Actions run `38343526305` at commit `54ae7ba` passed browser and both
+Windows Node 22/24 jobs. Ubuntu Node 22 timed out in 16 recording tests; Ubuntu
+Node 24 timed out in the deep ES module recursion test. Both Ubuntu versions
+stopped that recursion recording after 194 events, with explicit incomplete
+recording diagnostics. This suggests a shared recorder stall, but the CI logs do
+not identify the blocked Inspector request or prove the root cause.
+
+Commit `4a0d6c4` permits a pending final Inspector step request to finish its
+wait when Node signals debugger shutdown, while preserving errors during active
+execution. It retains the existing process execution budget and incomplete-trace
+semantics. The patch passed 43 focused recording tests, the full local check
+(133 passed, one optional CodeGraph skip), 42 Chromium browser tests, npm package
+verification and whitespace validation. These were Windows local results; the
+next Ubuntu run was needed to evaluate the shutdown hypothesis.
+
+GitHub Actions run `38344686096` for `4a0d6c4` again passed the browser and
+Windows Node 22/24 jobs, but **failed both Ubuntu jobs**. The Ubuntu Node 24
+deep-recursion trace again stopped at 194 events, and Ubuntu Node 22 still timed
+out in 16 recorder tests. The shutdown-notice race alone does not fix the stall.
+Local reproduction of the same 194-event boundary shows that it is the observed
+final return from `main.mjs:<module>`, following all recursive returns and output.
+The next candidate resets the stale active-user-frame marker upon entering a
+blackboxed runtime frame and resumes to installed user-code entry breakpoints,
+avoiding step-into requests through Node's idle/shutdown machinery. Callback,
+async, cancellation and recursion tests remain green locally; Ubuntu behavior
+is not yet established for this second candidate.
+
+The second candidate passed the complete Windows local `npm run check` gate on
+October 13 (133 passed, one optional CodeGraph integration skip, typecheck,
+production build and Prettier). `npm run test:browser` passed all 42 Chromium
+tests, including 45-level mobile disclosure and the 4,308-event recorded
+performance fixture. `npm run package:check` verified the packed CLI, MCP
+handshake, player assets and flow API. These results do not validate Ubuntu
+Inspector shutdown behavior; GitHub Actions on Ubuntu Node 22/24 is the next
+required evidence before accepting the recorder fix.
+
+The 45-level prepared-recursion browser regression now also exercises a 390 px
+mobile Flow workspace: it preserves the deepest visible invocation, collapses
+and reopens an ancestor with the Enter key, retains keyboard focus and playback
+position, and checks that the document has no horizontal overflow. The focused
+browser test passed locally. This adds bounded mobile disclosure evidence for
+requirements 8, 25 and 26; device and screen-reader acceptance is still open.
+
+Running the opt-in real-CodeGraph test with the installed Windows `codegraph.cmd`
+and default discovery enabled passed all 8 tests, including a newly indexed
+temporary Kotlin fixture, expected refusal without an index, provider-only
+replay, and refinement. This is bounded evidence for requirement 29 and does not
+establish cross-language runtime recording or every supported language.
+
 ## CI and recorded deep-disclosure follow-up (October 13)
 
 GitHub Actions run `38340435972` for `d480f2d` passed Windows Node 22 and

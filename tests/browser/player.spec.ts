@@ -1031,6 +1031,34 @@ test('diagram disclosure supports recursion deeper than 30 nested invocations', 
     panel.locator(`details[data-invocation="${ids[depth - 1]}"]`),
   ).toBeVisible();
   await expect(page.locator('#progress')).toHaveText(`1 / ${events.length}`);
+
+  // Deep disclosure must remain operable from the narrow, single-panel Flow
+  // workspace. Keyboard toggles should preserve both focus and replay position.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Flow', exact: true }).click();
+  await expect(panel).toBeVisible();
+  const deepCall = panel.locator(
+    `details[data-invocation="${ids[depth - 1]}"]`,
+  );
+  await expect(deepCall).toBeVisible();
+  const summary = panel.locator(
+    `details[data-invocation="${ids[20]}"] > summary`,
+  );
+  await summary.focus();
+  await page.keyboard.press('Enter');
+  await expect(deepCall).toBeHidden();
+  await expect(summary).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(deepCall).toBeVisible();
+  await expect(summary).toBeFocused();
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    ),
+  ).toBeLessThanOrEqual(1);
+  await expect(page.locator('#progress')).toHaveText(`1 / ${events.length}`);
 });
 
 test('flow connections retain their DOM across inspection and resize, then invalidate for new routes', async ({

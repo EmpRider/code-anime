@@ -912,6 +912,11 @@ async function paused(params) {
   }
   const active = frames.at(-1);
   if (!active) {
+    // The debugger is now inside a blackboxed runtime frame. Reset the last
+    // user frame so the next command resumes to a real project breakpoint,
+    // instead of repeatedly stepping through Node's idle/shutdown machinery.
+    // Preinstalled function-entry breakpoints still observe later callbacks.
+    lastFrame = undefined;
     previousPause = undefined;
     repeatedPause = 0;
     return;
@@ -1151,7 +1156,7 @@ async function connect(url) {
           await paused(packet.params);
           if (!stopped && !closeRequested) {
             const step = request(
-              lastFrame?.awaiting
+              !lastFrame || lastFrame.awaiting
                 ? 'Debugger.resume'
                 : repeatedPause > 0
                   ? 'Debugger.stepOver'
