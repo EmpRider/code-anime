@@ -270,6 +270,10 @@ function functionEntries(source) {
         start: node.loc.start,
         end: node.loc.end,
         size: node.end - node.start,
+        // Only async and generator invocations can suspend and later resume
+        // with the same invocation identity. Synchronous callers are included
+        // in the ancestry when a descendant that can suspend is entered.
+        canSuspend: node.async === true || node.generator === true,
       });
     }
     // A keyword-looking string, property name, or comment is not an async
@@ -773,6 +777,30 @@ async function invocationContext(frame, activeFrames) {
   return reply.result?.value;
 }
 
+function needsInvocationContext(frame) {
+  const ranges = scripts.get(frame.raw.location.scriptId)?.functionRanges;
+  if (!ranges?.length) return true;
+  const position = frame.raw.location;
+  let innermost;
+  for (const range of ranges) {
+    const start = range.start;
+    const end = range.end;
+    const afterStart =
+      position.lineNumber + 1 > start.line ||
+      (position.lineNumber + 1 === start.line &&
+        position.columnNumber >= start.column);
+    const beforeEnd =
+      position.lineNumber + 1 < end.line ||
+      (position.lineNumber + 1 === end.line &&
+        position.columnNumber < end.column);
+    if (afterStart && beforeEnd && (!innermost || range.size < innermost.size))
+      innermost = range;
+  }
+  // Unknown syntax or a module-level frame may include top-level await.
+  // In either case retain the debugger observation rather than guessing.
+  return !innermost || innermost.canSuspend;
+}
+
 async function breakpointAfterAwait(frame) {
   const script = scripts.get(frame.raw.location.scriptId);
   const lines = script?.sourceLines;
@@ -883,13 +911,18 @@ async function paused(params) {
       symbolId: `${source.file}:${symbol}`,
     });
   }
-  // Scope snapshots and async-context inspection both observe this same V8
-  // pause. Start independent Inspector requests together to reduce serial
-  // round trips without changing async invocation tracking.
+  // Local snapshots observe every V8 pause. The async store is needed when a
+  // paused invocation can resume, but fetching it for purely synchronous
+  // execution adds an Inspector round trip to every loop iteration. A frame
+  // about to leave an await must still be inspected even before it has been
+  // added to suspendedCalls (that happens later in this pause).
   const frameSnapshots = frames.map((frame) => locals(frame.raw));
-  const resumedContext = frames.at(-1)
-    ? await invocationContext(frames.at(-1).raw)
-    : undefined;
+  const inspectResumeContext =
+    suspendedCalls.size > 0 || stack.some((frame) => frame.awaiting);
+  const resumedContext =
+    inspectResumeContext && frames.at(-1)
+      ? await invocationContext(frames.at(-1).raw)
+      : undefined;
   let common = 0;
   while (
     common < frames.length &&
@@ -999,7 +1032,8 @@ async function paused(params) {
           note: 'Resumed in the async context bound to the original invocation',
         });
       } else {
-        await invocationContext(current.raw, stack);
+        if (needsInvocationContext(current))
+          await invocationContext(current.raw, stack);
         await breakpointAtEntry(current);
       }
     } else {

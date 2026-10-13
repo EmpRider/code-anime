@@ -1644,6 +1644,71 @@ test('concurrent JavaScript invocations retain identity across repeated awaits',
   }
 });
 
+test('JavaScript synchronous wrappers preserve concurrent async invocation identity', async () => {
+  const f = await fixture({
+    'main.mjs': [
+      'function outer(label) { return middle(label); }',
+      'function middle(label) { return worker(label); }',
+      'async function worker(label) {',
+      '  let value = label;',
+      '  await Promise.resolve();',
+      '  value += "1";',
+      '  await Promise.resolve();',
+      '  value += "2";',
+      '  console.log(value);',
+      '}',
+      'await Promise.all([outer("A"), outer("B")]);',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.mjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const workers = events.filter(
+      (event) => event.kind === 'enter' && event.symbolId === 'main.mjs:worker',
+    );
+    assert.deepEqual(
+      workers.map((event) => event.inputs?.label),
+      ['A', 'B'],
+    );
+    assert.equal(new Set(workers.map((event) => event.callId)).size, 2);
+    for (const worker of workers) {
+      const statements = events.filter(
+        (event) => event.kind === 'statement' && event.callId === worker.callId,
+      );
+      assert.ok(statements.some((event) => event.source?.line === 8));
+      assert.ok(statements.some((event) => event.source?.line === 9));
+      assert.ok(
+        statements.every(
+          (event) =>
+            localValue(event, worker.callId, 'label') === worker.inputs?.label,
+        ),
+      );
+      assert.equal(
+        events.filter(
+          (event) => event.kind === 'resume' && event.callId === worker.callId,
+        ).length,
+        2,
+      );
+    }
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'A12\nB12\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
 test('JavaScript awaits inside loops preserve each invocation and iteration', async () => {
   const f = await fixture({
     'main.mjs': [
