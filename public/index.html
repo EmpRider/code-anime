@@ -238,6 +238,31 @@
               aria-label="Active call stack"
             ></nav>
             <pre id="snippet" class="source-code"></pre>
+            <nav
+              id="source-pages"
+              class="source-pages"
+              aria-label="Source pages"
+              hidden
+            >
+              <button
+                id="source-earlier"
+                class="quiet-button"
+                aria-label="Earlier source lines"
+              >
+                ←
+              </button>
+              <span id="source-range" aria-live="polite"></span>
+              <button
+                id="source-later"
+                class="quiet-button"
+                aria-label="Later source lines"
+              >
+                →
+              </button>
+              <button id="source-resume" class="quiet-button">
+                Follow execution
+              </button>
+            </nav>
             <p id="source-empty" class="empty-message">
               Source is unavailable for this step. Inspect its evidence excerpt.
             </p>

@@ -33,6 +33,7 @@ let renderedMethod;
 const expandedCalls = new Set();
 let shownSource = '';
 let shownFirstLine = 1;
+let manualSourceWindow;
 const sourceRows = new Map();
 let highlightedSourceRow;
 let sourceStackCalls;
@@ -292,6 +293,7 @@ function buildNodes(preserveInspection = false) {
     pinnedCallId = undefined;
     inspectedSourceEvent = undefined;
     shownSource = '';
+    manualSourceWindow = undefined;
     lastConsoleText = '';
     consolePageBack = 0;
   }
@@ -961,6 +963,12 @@ function renderSource(state, event, initial = false) {
     sourceCode === undefined
       ? 'excerpt:' + (location?.file ?? '') + ':' + (sourceEvent?.snippet ?? '')
       : 'file:' + location.file;
+  if (
+    $('follow').checked ||
+    revealInspectedSource ||
+    manualSourceWindow?.key !== sourceKey
+  )
+    manualSourceWindow = undefined;
   if (sourceCode !== undefined && !sourceCache.has(location.file))
     sourceCache.set(location.file, sourceCode.split(/\r?\n/));
   const lines = sourceCode === undefined ? [] : sourceCache.get(location.file);
@@ -984,8 +992,35 @@ function renderSource(state, event, initial = false) {
       ? shownFirstLine
       : Math.min(Math.max(1, line - 150), Math.max(1, lines.length - 300));
   }
+  if (manualSourceWindow) firstLine = manualSourceWindow.first;
   const endLine =
     lines.length > 600 ? Math.min(lines.length, firstLine + 300) : lines.length;
+  $('source-pages').hidden = lines.length <= 600;
+  $('source-range').textContent = `${firstLine}–${endLine} of ${lines.length}`;
+  $('source-earlier').disabled = firstLine === 1;
+  $('source-later').disabled = endLine === lines.length;
+  const browseSource = (direction) => {
+    $('follow').checked = false;
+    pinnedCallId = sourceEvent?.callId;
+    manualSourceWindow = {
+      key: sourceKey,
+      first: Math.max(
+        1,
+        Math.min(lines.length - 300, firstLine + direction * 301),
+      ),
+    };
+    render();
+    const control = $(direction < 0 ? 'source-earlier' : 'source-later');
+    (control.disabled ? $('source-resume') : control).focus({
+      preventScroll: true,
+    });
+  };
+  $('source-earlier').onclick = () => browseSource(-1);
+  $('source-later').onclick = () => browseSource(1);
+  $('source-resume').onclick = () => {
+    $('follow').checked = true;
+    $('follow').dispatchEvent(new Event('change'));
+  };
   const needsBuild =
     sourceKey !== shownSource ||
     shownFirstLine !== firstLine ||
@@ -1703,6 +1738,7 @@ function render() {
       $('snippet').replaceChildren();
       $('source').textContent = 'Select a step to inspect its source';
       $('source-line').textContent = '—';
+      $('source-pages').hidden = true;
       $('source-empty').hidden = false;
     }
     $('packet-title').textContent = 'Ready to explore';

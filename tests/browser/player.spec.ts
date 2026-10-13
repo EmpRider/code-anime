@@ -637,6 +637,45 @@ test('manual inspection resets the viewport when changing virtual windows in one
     });
   expect(selectedLineVisible).toBe(true);
   await expect(page.locator('#progress')).toHaveText('2 / 2');
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  await page.getByRole('button', { name: 'Earlier source lines' }).click();
+  await expect(page.locator('#source-range')).toHaveText('349–649 of 950');
+  await expect(page.locator('#snippet')).toContainText('shared.ts line 400');
+  await expect(page.locator('.executing-line')).toHaveCount(0);
+  await expect(page.locator('#progress')).toHaveText('2 / 2');
+  // Inspection remains stable through unrelated rendering and reverse seeking.
+  await page.locator('#toggle-inspector').click();
+  await page.locator('#timeline').fill('1');
+  await expect(page.locator('#source-range')).toHaveText('349–649 of 950');
+  await page.getByRole('button', { name: 'Earlier source lines' }).click();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#source-range')).toHaveText('1–301 of 950');
+  await expect(page.locator('#source-resume')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#follow')).toBeChecked();
+  await expect(page.locator('.executing-line')).toHaveAttribute(
+    'data-line',
+    '12',
+  );
+  await page.locator('#timeline').fill('2');
+  await expect(page.locator('.executing-line')).toHaveAttribute(
+    'data-line',
+    '800',
+  );
+  await expect(page.locator('#snippet .code-row')).toHaveCount(301);
+  await expect(page.locator('#source-later')).toBeDisabled();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('#source-pages')).toBeVisible();
+  await page.getByRole('button', { name: 'Earlier source lines' }).click();
+  await expect(page.locator('#source-range')).toHaveText('349–649 of 950');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    390,
+  );
+  await page.screenshot({
+    path: test.info().outputPath('source-paging-mobile.png'),
+  });
+  expect(requests).toEqual([]);
 });
 
 test('replay retains stack controls and scrolls only the source editor when following', async ({

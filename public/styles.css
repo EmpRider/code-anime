@@ -1502,6 +1502,21 @@ main {
 .source-stack:empty {
   display: none;
 }
+.source-pages {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  font-size: 11px;
+}
+.source-pages[hidden] {
+  display: none;
+}
+#source-resume {
+  margin-left: auto;
+}
 .stack-link {
   border: 1px solid transparent;
   padding: 3px 7px;

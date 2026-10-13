@@ -14,6 +14,32 @@ verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
 
+## Browse complete original source during inspection (October 13)
+
+Long files previously exposed only the source window surrounding an execution
+event. Source paging now makes every captured line accessible without changing
+the replay cursor or loading new analysis. Paging disables automatic following,
+retains the inspected window across reverse seeking and layout changes, and
+offers a direct Follow execution control. Explicit stack navigation still reveals
+the selected frame. New scenarios clear manual source navigation state.
+
+The browser regression covers previously inaccessible lines, a 301-row DOM bound,
+keyboard focus at the first page, reverse seeking, returning to the actual current
+execution line, and zero additional requests. The 390x844 mobile render was
+inspected: source and paging fit without horizontal page overflow, and playback
+controls remain visible. This improves requirements 11, 24–27, and 36; broader
+language, accessibility, and visual acceptance remains outstanding.
+
+PR #6 at `100eea6` has successful push and PR CI runs `38430699497` and
+`38430709000`, including Ubuntu/Windows Node 22/24 and browser tests. These runs
+precede the source-paging change.
+
+Local source-paging validation: 148 core tests passed with one optional CodeGraph
+skip; all 50 browser tests passed. Typecheck and packed-package verification
+passed. Browser checks include recorded traces as well as the simulated paging
+fixture; these results do not establish all-language or assistive-technology
+acceptance.
+
 ## Large-source replay cache and current CI (October 13)
 
 GitHub Actions push run `38425933251` and PR #6 rerun `38425943614`,
