@@ -14,6 +14,35 @@ verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
 
+## Large-source replay cache and current CI (October 13)
+
+GitHub Actions push run `38425933251` and PR #6 rerun `38425943614`,
+both at `a688a8c`, completed successfully. The rerun passed Chromium and
+Ubuntu/Windows Node 22/24. The earlier Ubuntu Node 24 failure was resolved by
+the rerun; no distinct reproducible root cause was established from that
+initial failure. These runs predate the cache changes described below.
+
+`renderSource` previously constructed a display identity by concatenating the
+entire captured file content (up to 2 MiB) on every render. It now uses the
+captured file path, which is stable within a trace. Continuation imports
+already reject changed source content, so prepared source lines and syntax
+state can also survive the import. Switching independently prepared scenario
+variants still invalidates the source caches and displays each variant's
+original code even when its file path is the same.
+
+A new real Python large-source browser measurement navigated 4,967 recorded
+events across more than 2.2 MiB of exact original source. After preparing all
+continuations, 24 repeated cross-file seeks measured a 92.3 ms two-frame p95
+and bounded editor DOM (at most 301 source rows) on local Chromium. The test
+also checks that seeks make no additional flow requests. A separate regression
+validates source invalidation when scenario variants share a path. The focused
+browser tests passed; the full local Chromium suite passed all 50 tests with
+127.8 ms two-frame p95 in the same recorded scenario. The local core suite
+passed 148 tests with one optional live CodeGraph skip; typecheck, build,
+Prettier, and the packed CLI/MCP/player/flow verification also passed.
+These measurements extend bounded evidence for items 11, 21, 27, 28, and 35;
+they do not establish broad real-world paint/heap or screen-reader acceptance.
+
 ## Manual cross-file source inspection viewport (October 13)
 
 The first fix also exposed a related large-file case: moving manually between

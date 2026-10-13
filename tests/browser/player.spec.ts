@@ -485,6 +485,69 @@ test('manually inspecting another source file starts with its own viewport', asy
   await expect(page.locator('#progress')).toHaveText('2 / 2');
 });
 
+test('switching prepared scenarios refreshes original source at the same file path', async ({
+  page,
+}) => {
+  const makeTrace = (value: string, id: string) =>
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'browser-test',
+        projectRoot: 'fixture',
+        sourceHash: id,
+        target: 'run',
+        scenario: {},
+        events: [
+          {
+            id: `event-${id}`,
+            kind: 'statement',
+            callId: 'run',
+            symbolId: 'run',
+            label: `console.log(${value})`,
+            source: { file: 'shared.ts', line: 2, endLine: 2 },
+            values: {},
+            stack: ['run'],
+            certainty: 'mock',
+          },
+        ],
+        diagnostics: ['Prepared comparison fixture'],
+        truncated: false,
+        filesAnalyzed: 1,
+        cacheHits: 0,
+        sourceFiles: {
+          'shared.ts': `function run() {\n  console.log(${value});\n}`,
+        },
+      },
+      'run',
+    );
+  const modified = makeTrace('42', 'modified');
+  const baseline = makeTrace('10', 'baseline');
+  const session = await runtime.store.create({
+    ...modified,
+    baselineTrace: baseline.trace,
+  });
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await page.locator('#toggle-inspector').click();
+  await page.locator('#tab-context').click();
+  const editor = page.locator('#snippet');
+  await expect(page.locator('#variant')).toBeVisible();
+  await expect(editor).toContainText('console.log(42)');
+  await page.locator('#timeline').fill('1');
+  await expect(editor.locator('.executing-line')).toContainText(
+    'console.log(42)',
+  );
+  await page.locator('#variant').selectOption('baseline');
+  await expect(editor.locator('.executing-line')).toHaveCount(0);
+  await expect(editor).toContainText('console.log(10)');
+  await page.locator('#timeline').fill('1');
+  await expect(editor.locator('.executing-line')).toContainText(
+    'console.log(10)',
+  );
+  await page.locator('#variant').selectOption('proposed');
+  await expect(editor).toContainText('console.log(42)');
+  await expect(editor).not.toContainText('console.log(10)');
+});
+
 test('manual inspection resets the viewport when changing virtual windows in one file', async ({
   page,
 }) => {

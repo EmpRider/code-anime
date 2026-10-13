@@ -150,6 +150,45 @@ test('recorded large Python modules navigate exact source with bounded editor ro
       ).toBeLessThanOrEqual(301);
       await expect(page.locator('#source-empty')).toBeHidden();
     }
+    // Measure browser paint and heap while switching between actual captured
+    // multi-megabyte source files. All continuations are already prepared.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Performance.enable');
+    const heap = async () => {
+      const { metrics } = await cdp.send('Performance.getMetrics');
+      return metrics.find((metric) => metric.name === 'JSHeapUsedSize')?.value;
+    };
+    const heapBefore = await heap();
+    const seekTimes = await page.evaluate(
+      async (positions) => {
+        const timeline = document.querySelector<HTMLInputElement>('#timeline')!;
+        const samples: number[] = [];
+        for (const position of positions) {
+          const start = performance.now();
+          timeline.value = String(position);
+          timeline.dispatchEvent(new Event('input', { bubbles: true }));
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          );
+          samples.push(performance.now() - start);
+        }
+        return samples.sort((a, b) => a - b);
+      },
+      Array.from({ length: 24 }, (_, i) => [first, second, main][i % 3]! + 1),
+    );
+    const p95 = seekTimes[Math.floor(seekTimes.length * 0.95)]!;
+    const heapAfter = await heap();
+    console.log(
+      `recorded large-source seek: ${events.length} events, ` +
+        `2-frame p95=${p95.toFixed(1)}ms, ` +
+        `JS heap ${Math.round((heapBefore ?? 0) / 1024 / 1024)}→` +
+        `${Math.round((heapAfter ?? 0) / 1024 / 1024)} MiB`,
+    );
+    expect(p95).toBeLessThan(1_000);
+    expect(heapAfter).toBeGreaterThan(0);
+    expect(
+      await page.locator('#snippet .code-row').count(),
+    ).toBeLessThanOrEqual(301);
     let expected = 0;
     for (let i = 0; i < 550; i++) expected = ((expected + 1) * 2) % 1000;
     await page.locator('#timeline').fill(String(events.length));

@@ -296,8 +296,13 @@ function buildNodes(preserveInspection = false) {
     consolePageBack = 0;
   }
   sourceLines.clear();
-  sourceCache.clear();
-  sourceSyntaxCache.clear();
+  // Continuations are checked for source-content equality before they are
+  // appended. Keep prepared lines and lexical context for those files;
+  // replaying a new chunk must not re-tokenize multi-megabyte sources.
+  if (!preserveInspection) {
+    sourceCache.clear();
+    sourceSyntaxCache.clear();
+  }
   sourceStackCalls = undefined;
   inspectorStackCalls = undefined;
   sourceBreakpointVersion++;
@@ -948,10 +953,14 @@ function renderSource(state, event, initial = false) {
     : '';
   $('source-line').textContent =
     location && !initial ? 'L' + location.line : '—';
+  // A captured file is immutable within a trace (including continuations).
+  // Use its path as the display key instead of copying up to 2 MiB of source
+  // into a new string every time playback or inspection calls renderSource.
+  // Excerpt-only events still depend on their snippet text.
   const sourceKey =
     sourceCode === undefined
       ? 'excerpt:' + (location?.file ?? '') + ':' + (sourceEvent?.snippet ?? '')
-      : location.file + '\0' + sourceCode;
+      : 'file:' + location.file;
   if (sourceCode !== undefined && !sourceCache.has(location.file))
     sourceCache.set(location.file, sourceCode.split(/\r?\n/));
   const lines = sourceCode === undefined ? [] : sourceCache.get(location.file);
