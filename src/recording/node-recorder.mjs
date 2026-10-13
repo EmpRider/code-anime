@@ -984,6 +984,9 @@ async function paused(params) {
   };
   active.awaiting = await breakpointAfterAwait(active);
   stack.at(-1).awaiting = active.awaiting;
+  // The stepping command reads the copied lastFrame. Keep its suspension
+  // flag current so an observed await resumes to installed user breakpoints.
+  lastFrame.awaiting = active.awaiting;
   const activeScope = stack.at(-1);
   // Multiple lexical catch scopes may be active simultaneously. A boolean
   // misses the inner handler when execution enters it from an outer handler.
