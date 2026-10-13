@@ -709,7 +709,7 @@ async function remoteValue(object, depth = 0, seen = new Set()) {
   return result;
 }
 
-async function locals(frame) {
+async function locals(frame, scopeReads) {
   const values = {};
   let seen = 0;
   // All property reads observe the same debugger pause. Fetch the independent
@@ -718,12 +718,19 @@ async function locals(frame) {
     ['local', 'block', 'catch', 'script', 'module'].includes(scope.type),
   );
   const scopeProperties = await Promise.all(
-    scopes.map((scope) =>
-      request('Runtime.getProperties', {
-        objectId: scope.object.objectId,
-        ownProperties: true,
-      }),
-    ),
+    scopes.map((scope) => {
+      const objectId = scope.object.objectId;
+      // Multiple frames can expose the same lexical scope at one debugger
+      // pause. Share the one observation instead of asking V8 for identical
+      // properties several times. The cache never crosses a pause: a child
+      // call may mutate values visible from the caller on the next step.
+      if (!scopeReads.has(objectId))
+        scopeReads.set(
+          objectId,
+          request('Runtime.getProperties', { objectId, ownProperties: true }),
+        );
+      return scopeReads.get(objectId);
+    }),
   );
   const selected = [];
   const names = new Set();
@@ -916,7 +923,8 @@ async function paused(params) {
   // execution adds an Inspector round trip to every loop iteration. A frame
   // about to leave an await must still be inspected even before it has been
   // added to suspendedCalls (that happens later in this pause).
-  const frameSnapshots = frames.map((frame) => locals(frame.raw));
+  const scopeReads = new Map();
+  const frameSnapshots = frames.map((frame) => locals(frame.raw, scopeReads));
   const inspectResumeContext =
     suspendedCalls.size > 0 || stack.some((frame) => frame.awaiting);
   const resumedContext =

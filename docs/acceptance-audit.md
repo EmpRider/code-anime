@@ -14,6 +14,34 @@ verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
 
+## Ubuntu Inspector throughput regression (October 13)
+
+GitHub Actions run `38408303893`, commit `8383fcb`, passed the Chromium browser
+job and both Windows Node 22/24 jobs but failed Ubuntu Node 22/24. The same two
+real JavaScript recorder tests exceeded their unchanged 60-second execution
+budgets: the cross-module 2.2 MiB original-source recording and the failed
+continuation-save rollback scenario. The resulting traces correctly retained
+observed events and declared incomplete coverage; the rollback scenario never
+reached its intended storage-failure path.
+
+Opt-in Linux recorder timings show approximately 120–122 pauses per 10 seconds.
+`Runtime.getProperties` accounts for roughly 5–7 seconds of summed request
+latency per 10-second interval, with individual requests reaching 41–42 ms.
+The prior optimization to omit unneeded async-context lookups did not resolve
+this slowdown. It is incorrect to infer Linux performance from Windows passes
+or from the browser playback suite.
+
+The current follow-up reuses a lexical-scope property request when two or more
+stack frames expose the same Inspector object ID during **one** debugger pause.
+Each subsequent pause re-reads the scopes, preserving child mutations and
+runtime-observed values. A new observed-recording regression checks caller
+state after three separate child mutations. Local verification passed 148 core
+tests with one optional live CodeGraph skip, 44 Chromium browser tests,
+typecheck, build, and formatting. This optimization is not yet demonstrated to
+resolve the single-frame Linux loop throughput limit; cross-platform CI is
+required before claiming a performance improvement. Requirements 27 and 35
+remain incomplete.
+
 ## Source display before playback (October 13)
 
 The player now shows a captured original source file at cursor zero, preferring

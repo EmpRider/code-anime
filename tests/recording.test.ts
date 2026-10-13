@@ -1346,6 +1346,57 @@ test('JavaScript call sites with identical visible state still trace each user i
   }
 });
 
+test('JavaScript caller snapshots observe child mutations on every subsequent pause', async () => {
+  const f = await fixture({
+    'main.cjs': [
+      'function change(state) {',
+      '  state.count++;',
+      '  return state.count;',
+      '}',
+      'const state = { count: 0 };',
+      'for (let i = 0; i < 3; i++) {',
+      '  change(state);',
+      '  console.log(state.count);',
+      '}',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.cjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const moduleCall = events.find(
+      (event) =>
+        event.kind === 'enter' && event.symbolId === 'main.cjs:<module>',
+    );
+    assert.ok(moduleCall, 'Observed module invocation');
+    const snapshots = events
+      .filter((event) => event.kind === 'statement' && event.source?.line === 8)
+      .map((event) => localValue(event, moduleCall.callId, 'state'))
+      .filter(
+        (value): value is { count: number } =>
+          typeof value === 'object' && value !== null && 'count' in value,
+      )
+      .map((state) => state.count);
+    for (const count of [1, 2, 3])
+      assert.ok(snapshots.includes(count), JSON.stringify(snapshots));
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      '1\n2\n3\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
 test('JavaScript recording follows more than 30 nested user calls through an ES module', async () => {
   const f = await fixture({
     'main.mjs': [
