@@ -44,13 +44,18 @@ per 10 seconds and timed out in the same two tests. Windows 22/24 and Chromium
 passed. The scope cache remains useful for shared stack scopes but cannot solve
 single-frame Inspector latency.
 
-A subsequent Linux-only experiment sends bounded, read-only
-`Runtime.getIsolateId` requests while debugger commands or recent source
-steps await a response, attempting to avoid TCP delayed ACK stalls without
-evaluating application code. Unlike an earlier unsupported WebSocket ping,
-this command is accepted by the local Node Inspector. Linux CI must establish
-whether it improves throughput and retains the complete observed trace; there
-is no verified fix yet. Requirements 27 and 35 remain incomplete.
+A Linux-only ACK workaround introduced in `c616008` sends bounded, read-only
+`Runtime.getIsolateId` requests while debugger commands or recent source steps
+await a response. Unlike an earlier unsupported WebSocket ping, this method
+works with Node Inspector and requires no application evaluation. GitHub Actions
+runs `38413220790` and `38413228793` passed all five jobs (Ubuntu and Windows
+Node 22/24 plus Chromium). The formerly failing Linux large-source JavaScript
+test completed in approximately 53 seconds on both Ubuntu versions, while the
+continuation rollback test completed in approximately 44 seconds. Both retained
+their original 60-second execution budgets and full assertions. A shorter
+2 ms pulse interval is being evaluated separately to improve the time margin;
+its effect is unverified. Broader source, runtime and UI scalability remain
+unverified, so requirements 27 and 35 remain incomplete.
 
 ## Source display before playback (October 13)
 

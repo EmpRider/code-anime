@@ -1418,7 +1418,7 @@ async function connect(url) {
           supported = false;
         },
       );
-    }, 5);
+    }, 2);
     ackPulse.unref();
     connectedSocket.addEventListener('close', () => clearInterval(ackPulse), {
       once: true,
