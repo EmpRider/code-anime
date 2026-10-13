@@ -485,6 +485,97 @@ test('manually inspecting another source file starts with its own viewport', asy
   await expect(page.locator('#progress')).toHaveText('2 / 2');
 });
 
+test('manual inspection resets the viewport when changing virtual windows in one file', async ({
+  page,
+}) => {
+  const session = await runtime.store.create(
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'browser-test',
+        projectRoot: 'fixture',
+        sourceHash: 'manual-virtual-window',
+        target: 'A.m',
+        scenario: {},
+        events: [
+          {
+            id: 'outer',
+            kind: 'enter',
+            callId: 'outer',
+            symbolId: 'A.m',
+            label: 'A.m',
+            source: { file: 'shared.ts', line: 12, endLine: 12 },
+            values: {},
+            stack: ['outer'],
+            certainty: 'mock',
+          },
+          {
+            id: 'inner',
+            kind: 'enter',
+            callId: 'inner',
+            parentCallId: 'outer',
+            symbolId: 'B.m',
+            label: 'B.m',
+            source: { file: 'shared.ts', line: 800, endLine: 800 },
+            values: {},
+            stack: ['outer', 'inner'],
+            certainty: 'mock',
+          },
+        ],
+        diagnostics: ['Simulated virtual source inspection fixture'],
+        truncated: false,
+        filesAnalyzed: 1,
+        cacheHits: 0,
+        sourceFiles: {
+          'shared.ts': Array.from(
+            { length: 950 },
+            (_, i) => `// shared.ts line ${i + 1}`,
+          ).join('\n'),
+        },
+      },
+      'A.m',
+    ),
+  );
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await page.locator('#timeline').fill('2');
+  await expect(page.locator('#source')).toHaveText('shared.ts');
+  await expect(page.locator('#snippet .code-row').first()).toHaveAttribute(
+    'data-line',
+    '650',
+  );
+  await page.locator('#snippet').evaluate((editor) => {
+    editor.scrollTop = 1700;
+  });
+  await page.locator('#follow').uncheck();
+  await page.locator('#source-stack .stack-link').first().click();
+  await expect(page.locator('#snippet .code-row').first()).toHaveAttribute(
+    'data-line',
+    '1',
+  );
+  expect(
+    await page.locator('#snippet').evaluate((editor) => editor.scrollTop),
+  ).toBe(0);
+  await page.locator('#source-stack .stack-link').last().click();
+  await expect(page.locator('#snippet .code-row').first()).toHaveAttribute(
+    'data-line',
+    '650',
+  );
+  const selectedLineVisible = await page
+    .locator('#snippet')
+    .evaluate((editor) => {
+      const selected = editor.querySelector('[data-line="800"]');
+      if (!selected) return false;
+      const lineBounds = selected.getBoundingClientRect();
+      const editorBounds = editor.getBoundingClientRect();
+      return (
+        lineBounds.top >= editorBounds.top &&
+        lineBounds.bottom <= editorBounds.bottom
+      );
+    });
+  expect(selectedLineVisible).toBe(true);
+  await expect(page.locator('#progress')).toHaveText('2 / 2');
+});
+
 test('replay retains stack controls and scrolls only the source editor when following', async ({
   page,
 }) => {

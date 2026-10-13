@@ -41,6 +41,7 @@ let sourceBreakpointVersion = 0;
 let shownBreakpointVersion = -1;
 let pinnedCallId;
 let inspectedSourceEvent;
+let revealInspectedSource = false;
 let lastConsoleText = '';
 let consolePageBack = 0;
 const CONSOLE_PAGE_SIZE = 300;
@@ -851,6 +852,7 @@ function renderMethodDetails() {
 function inspectFrame(callId) {
   pinnedCallId = callId;
   $('follow').checked = false;
+  revealInspectedSource = true;
   render();
 }
 function activeFrame(state, event) {
@@ -987,12 +989,15 @@ function renderSource(state, event, initial = false) {
         line: Number(focused.parentElement.dataset.line),
         sameSource: sourceKey === shownSource,
       };
-    if (sourceKey !== shownSource) {
-      $('snippet').scrollLeft = 0;
-      // A manual cross-file inspection must not inherit another file's
-      // vertical position. Automatic following handles its own active line.
-      if (!$('follow').checked) $('snippet').scrollTop = 0;
-    }
+    if (sourceKey !== shownSource) $('snippet').scrollLeft = 0;
+    // A manual inspection must not inherit an unrelated viewport when the
+    // source file or a large file's virtualized source window changes.
+    // Automatic following handles its own active line.
+    if (
+      !$('follow').checked &&
+      (sourceKey !== shownSource || shownFirstLine !== firstLine)
+    )
+      $('snippet').scrollTop = 0;
     shownSource = sourceKey;
     shownFirstLine = firstLine;
     sourceRows.clear();
@@ -1088,17 +1093,23 @@ function renderSource(state, event, initial = false) {
     active.classList.add('executing-line');
     active.setAttribute('aria-current', 'location');
     highlightedSourceRow = active;
-    if ($('follow').checked) {
-      const editor = $('snippet');
-      const rowBounds = active.getBoundingClientRect();
-      const editorBounds = editor.getBoundingClientRect();
-      // Keep source following inside the editor, without scrolling its panels
-      // or the page when advancing to an already visible source line.
-      if (rowBounds.top < editorBounds.top)
-        editor.scrollTop += rowBounds.top - editorBounds.top;
-      else if (rowBounds.bottom > editorBounds.bottom)
-        editor.scrollTop += rowBounds.bottom - editorBounds.bottom;
-    }
+  }
+  // Explicit stack navigation reveals the selected method's source even when
+  // automatic following is off. Subsequent playback leaves that viewport alone.
+  const revealRow = revealInspectedSource
+    ? sourceRows.get(location?.line)
+    : undefined;
+  revealInspectedSource = false;
+  const scrollRow = $('follow').checked ? active : revealRow;
+  if (scrollRow) {
+    const editor = $('snippet');
+    const rowBounds = scrollRow.getBoundingClientRect();
+    const editorBounds = editor.getBoundingClientRect();
+    // Scroll only when the target line is outside the visible editor area.
+    if (rowBounds.top < editorBounds.top)
+      editor.scrollTop += rowBounds.top - editorBounds.top;
+    else if (rowBounds.bottom > editorBounds.bottom)
+      editor.scrollTop += rowBounds.bottom - editorBounds.bottom;
   }
   if (focusedSourceGutter) {
     const originalGutter = focusedSourceGutter.sameSource

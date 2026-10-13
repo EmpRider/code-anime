@@ -16,6 +16,23 @@ about future changes.
 
 ## Manual cross-file source inspection viewport (October 13)
 
+The first fix also exposed a related large-file case: moving manually between
+distant methods in the **same** 950-line source can shift the 301-row virtual
+window while carrying over the former window's 1,700px scroll offset. A new
+Chromium regression reproduced this failure and passed when manual source-window
+changes reset the viewport. Same-window inspection retains its current scroll,
+and normal automatic execution-line following remains responsible for its own
+scroll. An additional assertion reproduced how returning to a distant method
+still left its selected source line offscreen. Explicit stack inspection now
+reveals that line without enabling continuous source following or changing the
+replay cursor. This is additional bounded evidence for source navigation and large
+source handling under requirements 11, 12, 21, 24, 27 and 35.
+Following the source-window and explicit-inspection corrections, all 49
+Chromium browser tests passed, as did 148 core tests (one optional live
+CodeGraph test skipped), TypeScript typecheck, build, formatting, and packed
+CLI/MCP/player/flow verification. Cross-platform CI on this follow-up remains
+a separate gate.
+
 With automatic source following disabled, inspecting a different invocation
 could replace the source file without changing the editor's vertical scroll
 position. After scrolling far down in a callee's source, choosing an ancestor
