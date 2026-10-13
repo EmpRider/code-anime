@@ -50,12 +50,38 @@ let closeRequested = false;
 // project-relative source locations. Never emit inspected values or source text.
 const debugRecorder = process.env.CODE_ANIME_DEBUG_RECORDER === '1';
 const diagnosticStart = Date.now();
+// Timing totals are aggregated by Inspector method; no application data or
+// source text is retained in diagnostics. Counters reset every 10 seconds.
+let diagnosticTimings = new Map();
+let diagnosticPauseWork = { calls: 0, totalMs: 0, maxMs: 0 };
+function collectTiming(target, elapsedMs) {
+  target.calls++;
+  target.totalMs += elapsedMs;
+  target.maxMs = Math.max(target.maxMs, elapsedMs);
+}
 let diagnosticPauses = 0;
 let diagnosticPhase = 'startup';
 let diagnosticStep = 'none';
 let diagnosticLastPause = 0;
 if (debugRecorder)
   setInterval(() => {
+    const timings = Object.fromEntries(
+      [...diagnosticTimings].map(([method, stats]) => [
+        method,
+        {
+          calls: stats.calls,
+          totalMs: Math.round(stats.totalMs),
+          maxMs: Math.round(stats.maxMs),
+        },
+      ]),
+    );
+    const pauseWork = {
+      calls: diagnosticPauseWork.calls,
+      totalMs: Math.round(diagnosticPauseWork.totalMs),
+      maxMs: Math.round(diagnosticPauseWork.maxMs),
+    };
+    diagnosticTimings = new Map();
+    diagnosticPauseWork = { calls: 0, totalMs: 0, maxMs: 0 };
     const pending = [...requests.values()].reduce((counts, request) => {
       counts[request.method] = (counts[request.method] || 0) + 1;
       return counts;
@@ -81,6 +107,8 @@ if (debugRecorder)
               }
             : null,
           pending,
+          timings,
+          pauseWork,
         }) +
         '\n',
     );
@@ -150,7 +178,12 @@ function request(method, params = {}) {
     return Promise.reject(new Error('Debugger disconnected'));
   const id = ++nextId;
   return new Promise((resolve, reject) => {
-    requests.set(id, { resolve, reject, method });
+    requests.set(id, {
+      resolve,
+      reject,
+      method,
+      ...(debugRecorder ? { startedAt: performance.now() } : {}),
+    });
     socket.send(JSON.stringify({ id, method, params }));
   });
 }
@@ -849,6 +882,10 @@ async function paused(params) {
       symbolId: `${source.file}:${symbol}`,
     });
   }
+  // Scope snapshots and async-context inspection both observe this same V8
+  // pause. Start independent Inspector requests together to reduce serial
+  // round trips without changing async invocation tracking.
+  const frameSnapshots = frames.map((frame) => locals(frame.raw));
   const resumedContext = frames.at(-1)
     ? await invocationContext(frames.at(-1).raw)
     : undefined;
@@ -923,7 +960,6 @@ async function paused(params) {
   const snapshots = {};
   // Every debugger frame is frozen at this pause. Start independent local
   // inspections together; retain the original outer-to-inner event order.
-  const frameSnapshots = frames.map((frame) => locals(frame.raw));
   await Promise.all(frameSnapshots);
   for (let index = 0; index < frames.length; index++) {
     const current = frames[index];
@@ -1234,6 +1270,14 @@ async function connect(url) {
     if (packet.id && requests.has(packet.id)) {
       const pending = requests.get(packet.id);
       requests.delete(packet.id);
+      if (debugRecorder) {
+        let stats = diagnosticTimings.get(pending.method);
+        if (!stats) {
+          stats = { calls: 0, totalMs: 0, maxMs: 0 };
+          diagnosticTimings.set(pending.method, stats);
+        }
+        collectTiming(stats, performance.now() - pending.startedAt);
+      }
       if (packet.error) pending.reject(new Error(packet.error.message));
       else pending.resolve(packet.result || {});
     } else if (packet.method === 'Debugger.scriptParsed') {
@@ -1244,8 +1288,11 @@ async function connect(url) {
       diagnosticPhase = 'inspecting pause';
       pausedInFlight++;
       void (async () => {
+        const startedAt = debugRecorder ? performance.now() : 0;
         try {
           await paused(packet.params);
+          if (debugRecorder)
+            collectTiming(diagnosticPauseWork, performance.now() - startedAt);
           diagnosticPhase = 'stepping';
           if (!stopped && !closeRequested) {
             diagnosticStep =
