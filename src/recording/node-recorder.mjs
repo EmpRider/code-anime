@@ -494,27 +494,39 @@ async function remoteValue(object, depth = 0, seen = new Set()) {
       entries.every((item) => isElement(item.name));
     if (dense) {
       const result = Array(length);
-      for (const item of entries)
-        result[Number(item.name)] = item.value
-          ? await remoteValue(item.value, depth + 1, visited)
-          : { $unavailable: 'Accessor not evaluated' };
+      const values = await Promise.all(
+        entries.map((item) =>
+          item.value
+            ? remoteValue(item.value, depth + 1, visited)
+            : { $unavailable: 'Accessor not evaluated' },
+        ),
+      );
+      for (let index = 0; index < entries.length; index++)
+        result[Number(entries[index].name)] = values[index];
       return result;
     }
     // JSON turns array holes into null and drops trailing holes. Preserve the
     // observed length and exact own keys instead of manufacturing values.
     const elements = {};
     const namedProperties = {};
-    for (const item of limited)
+    const values = await Promise.all(
+      limited.map((item) =>
+        item.value
+          ? remoteValue(item.value, depth + 1, visited)
+          : { $unavailable: 'Accessor not evaluated' },
+      ),
+    );
+    for (let index = 0; index < limited.length; index++) {
+      const item = limited[index];
       Object.defineProperty(
         isElement(item.name) ? elements : namedProperties,
         item.name,
         {
-          value: item.value
-            ? await remoteValue(item.value, depth + 1, visited)
-            : { $unavailable: 'Accessor not evaluated' },
+          value: values[index],
           enumerable: true,
         },
       );
+    }
     return {
       $type: 'Array',
       length: Number.isSafeInteger(length)
@@ -532,11 +544,17 @@ async function remoteValue(object, depth = 0, seen = new Set()) {
     };
   }
   const result = {};
-  for (const item of limited) {
-    Object.defineProperty(result, item.name, {
-      value: item.value
-        ? await remoteValue(item.value, depth + 1, visited)
+  const values = await Promise.all(
+    limited.map((item) =>
+      item.value
+        ? remoteValue(item.value, depth + 1, visited)
         : { $unavailable: 'Accessor not evaluated' },
+    ),
+  );
+  for (let index = 0; index < limited.length; index++) {
+    const item = limited[index];
+    Object.defineProperty(result, item.name, {
+      value: values[index],
       enumerable: true,
       configurable: true,
     });
@@ -568,13 +586,22 @@ async function remoteValue(object, depth = 0, seen = new Set()) {
 async function locals(frame) {
   const values = {};
   let seen = 0;
-  for (const scope of frame.scopeChain) {
-    if (!['local', 'block', 'catch', 'script', 'module'].includes(scope.type))
-      continue;
-    const properties = await request('Runtime.getProperties', {
-      objectId: scope.object.objectId,
-      ownProperties: true,
-    });
+  // All property reads observe the same debugger pause. Fetch the independent
+  // scopes together, then apply lexical shadowing in their original order.
+  const scopes = frame.scopeChain.filter((scope) =>
+    ['local', 'block', 'catch', 'script', 'module'].includes(scope.type),
+  );
+  const scopeProperties = await Promise.all(
+    scopes.map((scope) =>
+      request('Runtime.getProperties', {
+        objectId: scope.object.objectId,
+        ownProperties: true,
+      }),
+    ),
+  );
+  const selected = [];
+  const names = new Set();
+  for (const properties of scopeProperties) {
     for (const property of properties.result) {
       if (
         !property.enumerable ||
@@ -584,18 +611,27 @@ async function locals(frame) {
         continue;
       if (seen++ >= 40) {
         values.$unavailable = 'Locals exceed 40 entries';
-        return values;
+        break;
       }
-      if (Object.hasOwn(values, property.name)) continue;
-      Object.defineProperty(values, property.name, {
-        value: property.value
-          ? await remoteValue(property.value)
-          : { $unavailable: 'Accessor not evaluated' },
-        enumerable: true,
-        configurable: true,
-      });
+      if (names.has(property.name)) continue;
+      names.add(property.name);
+      selected.push(property);
     }
+    if (seen > 40) break;
   }
+  const snapshots = await Promise.all(
+    selected.map((property) =>
+      property.value
+        ? remoteValue(property.value)
+        : { $unavailable: 'Accessor not evaluated' },
+    ),
+  );
+  for (let index = 0; index < selected.length; index++)
+    Object.defineProperty(values, selected[index].name, {
+      value: snapshots[index],
+      enumerable: true,
+      configurable: true,
+    });
   return values;
 }
 
@@ -793,6 +829,10 @@ async function paused(params) {
     });
   }
   const snapshots = {};
+  // Every debugger frame is frozen at this pause. Start independent local
+  // inspections together; retain the original outer-to-inner event order.
+  const frameSnapshots = frames.map((frame) => locals(frame.raw));
+  await Promise.all(frameSnapshots);
   for (let index = 0; index < frames.length; index++) {
     const current = frames[index];
     if (index >= common) {
@@ -842,7 +882,7 @@ async function paused(params) {
       stack[index].file = current.file;
       stack[index].symbolId = current.symbolId;
     }
-    snapshots[current.callId] = await locals(current.raw);
+    snapshots[current.callId] = await frameSnapshots[index];
     // V8 exposes `returnValue` only at a debugger-observed return position.
     // Do not evaluate the source expression or derive a return from locals.
     if (Object.hasOwn(current.raw, 'returnValue')) {
