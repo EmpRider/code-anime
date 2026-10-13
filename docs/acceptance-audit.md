@@ -65,6 +65,16 @@ CLI/MCP/player checks, and `git diff --check` passed. These are local Windows
 results. Native screen-reader review, wider keyboard/device coverage, and the
 remaining 37-requirement acceptance work are still open.
 
+The stacked PR #3 integration at `520d51e` passed GitHub Actions run
+`38353153801`: Chromium and Windows/Ubuntu Node 22/24 jobs all succeeded.
+The later execution-list keyboard regression exposed focus loss when paginated
+event rows or paging controls were replaced. Event list replacement now keeps
+focus on the same visible event or page action, moves it to a nearby visible
+event after a seek, and falls back to an enabled page action at boundaries.
+A 20,000-event Playwright fixture confirms page navigation, a seek across
+several pages, and the last-page fallback. This is bounded keyboard evidence;
+manual screen-reader and additional device validation remain outstanding.
+
 ## Node Inspector shutdown investigation (October 13)
 
 GitHub Actions run `38343526305` at commit `54ae7ba` passed browser and both

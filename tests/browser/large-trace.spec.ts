@@ -96,6 +96,30 @@ test('20,000 prepared events support responsive seeking, filtering, and nested d
     await disclosure.click();
     await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('.event-row')).toHaveCount(150);
+    // Paging and seek-driven page replacement must retain usable keyboard
+    // focus rather than leaving it on a detached button.
+    const nextEvents = page.getByRole('button', { name: 'Next events' });
+    await nextEvents.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.event-pages')).toContainText('2 / 134');
+    await expect(nextEvents).toBeFocused();
+    await page.locator('.event-row[data-index="151"]').focus();
+    await page.evaluate(() => {
+      const timeline = document.querySelector<HTMLInputElement>('#timeline')!;
+      timeline.value = '451';
+      timeline.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(page.locator('#progress')).toHaveText('451 / 20000');
+    await expect(page.locator('.event-row[data-index="451"]')).toBeFocused();
+    await nextEvents.focus();
+    await page.evaluate(() => {
+      const timeline = document.querySelector<HTMLInputElement>('#timeline')!;
+      timeline.value = '20000';
+      timeline.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(
+      page.getByRole('button', { name: 'Previous events' }),
+    ).toBeFocused();
     await page.locator('#search').fill('Iteration 19000');
     await expect(page.locator('.event-row')).toHaveCount(1);
     await page.locator('.event-row').click();

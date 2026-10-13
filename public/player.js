@@ -504,6 +504,57 @@ function createEventRow(index) {
   container.append(button);
   return container;
 }
+function replaceEventListControls(container, fragment) {
+  const focused = document.activeElement;
+  const ownsFocus = focused && container.contains(focused);
+  const focusedIndex = focused?.classList?.contains('event-row')
+    ? Number(focused.dataset.index)
+    : undefined;
+  const focusedCall = focused?.classList?.contains('call-disclosure')
+    ? focused.dataset.callId
+    : undefined;
+  const focusedPageAction = focused?.closest?.('.event-pages')
+    ? focused.textContent
+    : undefined;
+  container.replaceChildren(fragment);
+  if (!ownsFocus) return;
+
+  const buttons = [...container.querySelectorAll('button')];
+  let target = buttons.find(
+    (button) =>
+      (focusedIndex &&
+        button.classList.contains('event-row') &&
+        Number(button.dataset.index) === focusedIndex) ||
+      (focusedCall &&
+        button.classList.contains('call-disclosure') &&
+        button.dataset.callId === focusedCall) ||
+      (focusedPageAction &&
+        button.closest('.event-pages') &&
+        button.textContent === focusedPageAction &&
+        !button.disabled),
+  );
+  if (!target && focusedPageAction)
+    target = buttons.find(
+      (button) => button.closest('.event-pages') && !button.disabled,
+    );
+  if (!target) {
+    const visibleRows = buttons.filter((button) =>
+      button.classList.contains('event-row'),
+    );
+    target = focusedIndex
+      ? visibleRows.reduce(
+          (nearest, row) =>
+            !nearest ||
+            Math.abs(Number(row.dataset.index) - focusedIndex) <
+              Math.abs(Number(nearest.dataset.index) - focusedIndex)
+              ? row
+              : nearest,
+          undefined,
+        )
+      : visibleRows[0];
+  }
+  (target ?? $('search')).focus({ preventScroll: true });
+}
 function buildList() {
   rows.length = 0;
   listSignature = '';
@@ -618,7 +669,7 @@ function filterList() {
       fragment.append(navigation);
     }
     for (const index of page) fragment.append(createEventRow(index));
-    $('event-list').replaceChildren(fragment);
+    replaceEventListControls($('event-list'), fragment);
     listSignature = signature;
   }
   for (const button of $('event-list').querySelectorAll('.event-row')) {
