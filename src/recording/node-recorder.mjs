@@ -1337,6 +1337,7 @@ async function connect(url) {
     requests.clear();
   });
   if (process.platform === 'linux') {
+    const activeSocket = socket;
     // Node's Inspector server can split small WebSocket replies across TCP
     // writes. A delayed ACK from the client then leaves the second write
     // waiting for the Linux ~40 ms timer even though the client's socket has
@@ -1344,14 +1345,17 @@ async function connect(url) {
     // supplies client traffic (and an immediate TCP ACK) without executing
     // JavaScript or changing any debugger-observed state.
     const ackPulse = setInterval(() => {
-      if (socket !== candidate || candidate.readyState !== WebSocket.OPEN) {
+      if (
+        socket !== activeSocket ||
+        activeSocket.readyState !== WebSocket.OPEN
+      ) {
         clearInterval(ackPulse);
         return;
       }
-      if (requests.size > 0) candidate.ping();
+      if (requests.size > 0) activeSocket.ping();
     }, 5);
     ackPulse.unref();
-    candidate.addEventListener('close', () => clearInterval(ackPulse), {
+    activeSocket.addEventListener('close', () => clearInterval(ackPulse), {
       once: true,
     });
   }
