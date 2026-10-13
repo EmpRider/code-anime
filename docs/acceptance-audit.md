@@ -37,10 +37,20 @@ Each subsequent pause re-reads the scopes, preserving child mutations and
 runtime-observed values. A new observed-recording regression checks caller
 state after three separate child mutations. Local verification passed 148 core
 tests with one optional live CodeGraph skip, 44 Chromium browser tests,
-typecheck, build, and formatting. This optimization is not yet demonstrated to
-resolve the single-frame Linux loop throughput limit; cross-platform CI is
-required before claiming a performance improvement. Requirements 27 and 35
-remain incomplete.
+typecheck, build, and formatting. The change was committed as `012f3e4` and
+GitHub Actions run `38412016937` confirmed it did not fix the Linux loop
+throughput regression: both Ubuntu jobs still recorded about 120–122 pauses
+per 10 seconds and timed out in the same two tests. Windows 22/24 and Chromium
+passed. The scope cache remains useful for shared stack scopes but cannot solve
+single-frame Inspector latency.
+
+A subsequent Linux-only experiment sends bounded, read-only
+`Runtime.getIsolateId` requests while debugger commands or recent source
+steps await a response, attempting to avoid TCP delayed ACK stalls without
+evaluating application code. Unlike an earlier unsupported WebSocket ping,
+this command is accepted by the local Node Inspector. Linux CI must establish
+whether it improves throughput and retains the complete observed trace; there
+is no verified fix yet. Requirements 27 and 35 remain incomplete.
 
 ## Source display before playback (October 13)
 

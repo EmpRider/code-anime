@@ -64,6 +64,7 @@ let diagnosticPauses = 0;
 let diagnosticPhase = 'startup';
 let diagnosticStep = 'none';
 let diagnosticLastPause = 0;
+let lastStepSentAt = 0;
 if (debugRecorder)
   setInterval(() => {
     const timings = Object.fromEntries(
@@ -1347,6 +1348,7 @@ async function connect(url) {
                 : repeatedPause > 0
                   ? 'Debugger.stepOver'
                   : 'Debugger.stepInto';
+            lastStepSentAt = performance.now();
             const step = request(diagnosticStep);
             // A finished Node process may keep its Inspector connection open
             // until we disconnect while never replying to the final step.
@@ -1378,6 +1380,50 @@ async function connect(url) {
       pending.reject(new Error('Debugger disconnected'));
     requests.clear();
   });
+  if (process.platform === 'linux') {
+    // Linux Inspector WebSocket replies can arrive in separate TCP writes.
+    // The second write may wait for the peer's delayed ACK (~40 ms). Node's
+    // Inspector does not accept WebSocket ping frames, so send a read-only CDP
+    // command to supply an outgoing ACK while inspection or stepping is waiting.
+    // Limit pulses after a step so long-running user computations stay idle.
+    const connectedSocket = socket;
+    let outstanding = false;
+    let supported = true;
+    const ackPulse = setInterval(() => {
+      if (
+        stopped ||
+        closeRequested ||
+        socket !== connectedSocket ||
+        connectedSocket.readyState !== WebSocket.OPEN
+      ) {
+        clearInterval(ackPulse);
+        return;
+      }
+      if (!inspected || outstanding || !supported) return;
+      const pendingWork = [...requests.values()].some(
+        (pending) => pending.method !== 'Runtime.getIsolateId',
+      );
+      const recentStep =
+        diagnosticPhase === 'awaiting next pause' &&
+        performance.now() - lastStepSentAt < 100;
+      if (!pendingWork && !recentStep) return;
+      outstanding = true;
+      void request('Runtime.getIsolateId').then(
+        () => {
+          outstanding = false;
+        },
+        () => {
+          outstanding = false;
+          // Older Inspector versions may lack this optional method.
+          supported = false;
+        },
+      );
+    }, 5);
+    ackPulse.unref();
+    connectedSocket.addEventListener('close', () => clearInterval(ackPulse), {
+      once: true,
+    });
+  }
   await request('Runtime.enable');
   await request('Debugger.enable');
   const initialized = await request('Runtime.evaluate', {
