@@ -304,6 +304,78 @@ test('source announces the current line and accessible breakpoint state across s
   ).toHaveAttribute('data-line', '12');
 });
 
+test('source gutter clears an existing step breakpoint on the same source line', async ({
+  page,
+}) => {
+  await page.goto(url);
+  await page.locator('#toggle-inspector').click();
+  await page.locator('#timeline').fill('12');
+  const gutter = page.locator('.code-row[data-line="12"] .code-gutter');
+  await page.locator('#breakpoint').click();
+  await expect(gutter).toHaveAttribute('aria-pressed', 'true');
+  await expect(gutter).toHaveAccessibleName('Remove breakpoint at line 12');
+
+  await gutter.click();
+  await expect(gutter).toHaveAttribute('aria-pressed', 'false');
+  await expect(gutter).toHaveAccessibleName('Set breakpoint at line 12');
+  await expect(page.locator('#breakpoint')).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
+});
+
+test('source gutter clears individual breakpoints from repeated loop iterations', async ({
+  page,
+}) => {
+  const events: TraceEvent[] = Array.from({ length: 4 }, (_, i) => ({
+    id: `event-${i + 1}`,
+    kind: i === 0 ? 'enter' : 'statement',
+    callId: 'loop-call',
+    symbolId: 'loop',
+    label: `Iteration ${i + 1}`,
+    source: { file: 'loop.ts', line: 2, endLine: 2 },
+    values: {},
+    stack: ['loop-call'],
+    certainty: 'mock',
+  }));
+  const session = await runtime.store.create(
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'browser-test',
+        projectRoot: 'fixture',
+        sourceHash: 'loop-breakpoints',
+        target: 'loop',
+        scenario: {},
+        events,
+        diagnostics: ['Simulated repeated execution fixture'],
+        truncated: false,
+        filesAnalyzed: 1,
+        cacheHits: 0,
+        sourceFiles: { 'loop.ts': 'function loop() {\n  return 1;\n}' },
+      },
+      'loop',
+    ),
+  );
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await page.locator('#toggle-inspector').click();
+  for (const step of [2, 4]) {
+    await page.locator('#timeline').fill(String(step));
+    await page.locator('#breakpoint').click();
+  }
+  const gutter = page.locator('.code-row[data-line="2"] .code-gutter');
+  await expect(gutter).toHaveAttribute('aria-pressed', 'true');
+  await gutter.click();
+  await expect(gutter).toHaveAttribute('aria-pressed', 'false');
+  for (const step of [2, 4]) {
+    await page.locator('#timeline').fill(String(step));
+    await expect(page.locator('#breakpoint')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  }
+});
+
 test('replay retains stack controls and scrolls only the source editor when following', async ({
   page,
 }) => {

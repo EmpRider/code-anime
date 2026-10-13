@@ -14,6 +14,23 @@ verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
 
+## Source gutter breakpoint consistency (October 13)
+
+An event-specific breakpoint could make its source-line gutter appear pressed
+and label it "Remove breakpoint", but activating that gutter added a separate
+line breakpoint instead of clearing the existing event breakpoint. The control
+therefore remained pressed. A focused browser regression reproduced this
+failure before the correction. Source gutter controls now represent all event
+breakpoints sharing the original file and line, including repeated loop
+iterations. Activating a marked gutter clears those event breakpoints and any
+line breakpoint at the location; activating an unmarked gutter sets a line
+breakpoint. Both browser regressions and TypeScript typecheck passed locally.
+
+This is bounded evidence for debugger controls and source accessibility in
+requirements 11, 14, 24 and 25. Runtime breakpoint behavior, wider browser
+and assistive-technology acceptance, and the remaining acceptance gaps remain
+open.
+
 ## Ubuntu Inspector throughput regression (October 13)
 
 GitHub Actions run `38408303893`, commit `8383fcb`, passed the Chromium browser

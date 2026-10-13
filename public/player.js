@@ -1022,10 +1022,20 @@ function renderSource(state, event, initial = false) {
   );
   if (needsBuild || shownBreakpointVersion !== sourceBreakpointVersion) {
     shownBreakpointVersion = sourceBreakpointVersion;
+    // A line may run several times (for example, inside a loop). The gutter
+    // represents every event breakpoint on that source line, not just the
+    // first event stored in sourceLines.
+    const eventBreakpointSources = new Set(
+      [...breakpoints].map((step) =>
+        sourceLocationKey(flow?.trace?.events[step - 1]?.source),
+      ),
+    );
     for (const [line, row] of sourceRows) {
       const key = location.file + ':' + line;
       const index = sourceLines.get(key);
       const gutter = row.querySelector('.code-gutter');
+      const marked =
+        sourceBreakpoints.has(key) || eventBreakpointSources.has(key);
       gutter.disabled = !index;
       gutter.title = index
         ? 'Toggle breakpoint at line ' + line
@@ -1034,27 +1044,28 @@ function renderSource(state, event, initial = false) {
         'aria-label',
         !index
           ? `Line ${line}: no recorded execution`
-          : sourceBreakpoints.has(key) || breakpoints.has(index)
+          : marked
             ? `Remove breakpoint at line ${line}`
             : `Set breakpoint at line ${line}`,
       );
       gutter.onclick = index
         ? () => {
-            sourceBreakpoints.has(key)
-              ? sourceBreakpoints.delete(key)
-              : sourceBreakpoints.add(key);
+            if (marked) {
+              sourceBreakpoints.delete(key);
+              for (const step of breakpoints) {
+                if (
+                  sourceLocationKey(flow?.trace?.events[step - 1]?.source) ===
+                  key
+                )
+                  breakpoints.delete(step);
+              }
+            } else sourceBreakpoints.add(key);
             sourceBreakpointVersion++;
             render();
           }
         : null;
-      row.classList.toggle(
-        'has-breakpoint',
-        sourceBreakpoints.has(key) || breakpoints.has(index),
-      );
-      gutter.setAttribute(
-        'aria-pressed',
-        String(sourceBreakpoints.has(key) || breakpoints.has(index)),
-      );
+      row.classList.toggle('has-breakpoint', marked);
+      gutter.setAttribute('aria-pressed', String(marked));
     }
   }
   const isExecuting =
