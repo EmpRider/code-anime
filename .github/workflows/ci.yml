@@ -12,8 +12,6 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         node: [22, 24]
     runs-on: ${{ matrix.os }}
-    env:
-      CODE_ANIME_DEBUG_RECORDER: ${{ runner.os == 'Linux' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,6 +23,8 @@ jobs:
           python-version: '3.12'
       - run: npm ci
       - run: npm run check
+        env:
+          CODE_ANIME_DEBUG_RECORDER: ${{ runner.os == 'Linux' && '1' || '0' }}
       - run: npm run package:check
 
   browser:
