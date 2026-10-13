@@ -987,7 +987,12 @@ function renderSource(state, event, initial = false) {
         line: Number(focused.parentElement.dataset.line),
         sameSource: sourceKey === shownSource,
       };
-    if (sourceKey !== shownSource) $('snippet').scrollLeft = 0;
+    if (sourceKey !== shownSource) {
+      $('snippet').scrollLeft = 0;
+      // A manual cross-file inspection must not inherit another file's
+      // vertical position. Automatic following handles its own active line.
+      if (!$('follow').checked) $('snippet').scrollTop = 0;
+    }
     shownSource = sourceKey;
     shownFirstLine = firstLine;
     sourceRows.clear();

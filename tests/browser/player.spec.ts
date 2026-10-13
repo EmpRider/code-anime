@@ -411,6 +411,80 @@ test('source gutter clears individual breakpoints from repeated loop iterations'
   );
 });
 
+test('manually inspecting another source file starts with its own viewport', async ({
+  page,
+}) => {
+  const session = await runtime.store.create(
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'browser-test',
+        projectRoot: 'fixture',
+        sourceHash: 'manual-source-viewport',
+        target: 'A.m',
+        scenario: {},
+        events: [
+          {
+            id: 'a-enter',
+            kind: 'enter',
+            callId: 'a',
+            symbolId: 'A.m',
+            label: 'A.m',
+            source: { file: 'A.ts', line: 1, endLine: 1 },
+            values: {},
+            stack: ['a'],
+            certainty: 'mock',
+          },
+          {
+            id: 'b-enter',
+            kind: 'enter',
+            callId: 'b',
+            parentCallId: 'a',
+            symbolId: 'B.m2',
+            label: 'B.m2',
+            source: { file: 'B.ts', line: 190, endLine: 190 },
+            values: {},
+            stack: ['a', 'b'],
+            certainty: 'mock',
+          },
+        ],
+        diagnostics: ['Simulated source inspection fixture'],
+        truncated: false,
+        filesAnalyzed: 2,
+        cacheHits: 0,
+        sourceFiles: Object.fromEntries(
+          ['A.ts', 'B.ts'].map((file) => [
+            file,
+            Array.from(
+              { length: 240 },
+              (_, i) => `// ${file} line ${i + 1}`,
+            ).join('\n'),
+          ]),
+        ),
+      },
+      'A.m',
+    ),
+  );
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await page.locator('#timeline').fill('2');
+  await expect(page.locator('#source')).toHaveText('B.ts');
+  await page.locator('#snippet').evaluate((editor) => {
+    editor.scrollTop = 1700;
+  });
+  expect(
+    await page.locator('#snippet').evaluate((editor) => editor.scrollTop),
+  ).toBeGreaterThan(400);
+
+  await page.locator('#follow').uncheck();
+  await page.locator('#source-stack .stack-link').first().click();
+  await expect(page.locator('#source')).toHaveText('A.ts');
+  await expect(page.locator('#snippet')).toContainText('A.ts line 1');
+  expect(
+    await page.locator('#snippet').evaluate((editor) => editor.scrollTop),
+  ).toBe(0);
+  await expect(page.locator('#progress')).toHaveText('2 / 2');
+});
+
 test('replay retains stack controls and scrolls only the source editor when following', async ({
   page,
 }) => {

@@ -14,6 +14,23 @@ verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
 
+## Manual cross-file source inspection viewport (October 13)
+
+With automatic source following disabled, inspecting a different invocation
+could replace the source file without changing the editor's vertical scroll
+position. After scrolling far down in a callee's source, choosing an ancestor
+from the source call stack could therefore show an unrelated distant portion of
+the ancestor's original file. A browser regression reproduced the 1,700px
+carried-over scroll offset across two captured 240-line source files. Manual
+cross-file inspection now resets the editor to the new file's starting viewport
+while leaving normal automatic active-line following unchanged. The regression
+passed after the fix, kept the replay cursor at the same event and showed the
+exact captured source text. This adds bounded evidence for requirements 11,
+12, 21, 24 and 35. Broader visual quality and assistive-technology acceptance
+remain open. The complete 48-test Chromium suite passed after the change;
+local core tests passed 148 with one optional live CodeGraph skip. Typecheck,
+build, formatting, and packed CLI/MCP/player/flow verification also passed.
+
 ## Main playback and source-line breakpoint agreement (October 13)
 
 The source gutter correctly exposed an effective line breakpoint while the
