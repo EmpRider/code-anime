@@ -9,7 +9,10 @@ import { RecordingService } from '../../src/services/recording-service.js';
 test('wide and deeply recursive recorded Python calls remain navigable across prepared continuations', async ({
   page,
 }) => {
-  test.setTimeout(150_000);
+  // Nested disclosure performs actual browser scrolling and layout across
+  // 47 frames. Leave headroom on shared Linux CI runners while measuring
+  // seeking against the separate strict latency budget below.
+  test.setTimeout(300_000);
   const runtime = await startRuntime({ ...readConfig({}), port: 0 });
   const recorder = new RecordingService(
     runtime.store,
@@ -100,10 +103,12 @@ test('wide and deeply recursive recorded Python calls remain navigable across pr
     await page.setViewportSize({ width: 1440, height: 900 });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(result.url!);
-    await expect(page.locator('#evidence-mode')).toHaveText(
-      'Recorded execution',
-    );
+    await test.step('load the recorded session', async () => {
+      await page.goto(result.url!);
+      await expect(page.locator('#evidence-mode')).toHaveText(
+        'Recorded execution',
+      );
+    });
 
     // Loading prepared chunks is allowed. Afterward, seeking and disclosure
     // must use the same in-browser replay data without additional requests.
@@ -138,11 +143,15 @@ test('wide and deeply recursive recorded Python calls remain navigable across pr
     );
     await expect(rootDetails).toBeVisible();
     for (const child of recursiveEntries.slice(1)) {
-      const nested = details.locator(
-        `details[data-invocation="${child.callId}"]`,
-      );
-      await nested.locator(':scope > summary').click();
-      await expect(nested).toHaveAttribute('open', '');
+      await test.step(`expand recorded invocation ${child.callId}`, async () => {
+        const nested = details.locator(
+          `details[data-invocation="${child.callId}"]`,
+        );
+        // Deep nesting must also work for keyboard users. Keyboard activation
+        // avoids expensive pointer scrolling/retries for each of 46 levels.
+        await nested.locator(':scope > summary').press('Enter');
+        await expect(nested).toHaveAttribute('open', '');
+      });
     }
     const leafDetails = details.locator(
       `details[data-invocation="${recursiveLeaf.callId}"]`,

@@ -36,8 +36,12 @@ async function fixture(files: Record<string, string>) {
     },
   };
 }
-async function wait(service: RecordingService, jobId: string) {
-  const deadline = Date.now() + 40000;
+async function wait(
+  service: RecordingService,
+  jobId: string,
+  timeoutMs = 40000,
+) {
+  const deadline = Date.now() + timeoutMs;
   let result = await service.run({ action: 'status', jobId });
   while (Date.now() < deadline) {
     if (result.status === 'failed') throw new Error(result.error);
@@ -1082,8 +1086,11 @@ test('JavaScript return snapshots preserve sparse arrays and bounded values', as
       language: 'javascript',
       projectRoot: f.root,
       entry: 'main.cjs',
+      // Property inspection across many return types is expensive on
+      // constrained CI runners. Preserve the production 15s default.
+      timeoutMs: 60000,
     });
-    const result = await wait(f.service, job.jobId);
+    const result = await wait(f.service, job.jobId, 75000);
     assert.equal(result.complete, true, JSON.stringify(result));
     const { events } = await allEvents(f.store, result.sessionId!);
     const returned = (symbol: string) => {

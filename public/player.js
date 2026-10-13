@@ -746,6 +746,15 @@ function renderMethodDetails() {
       };
       details.open = expandedCalls.has(callId);
       populate();
+      // Native <details> toggle events are dispatched asynchronously. Capture
+      // user activation immediately so another pending toggle cannot render
+      // against stale disclosure state and close a newly opened child.
+      details
+        .querySelector(':scope > summary')
+        .addEventListener('click', () => {
+          if (details.open) expandedCalls.delete(callId);
+          else expandedCalls.add(callId);
+        });
       details.ontoggle = () => {
         details.open ? expandedCalls.add(callId) : expandedCalls.delete(callId);
         populate();

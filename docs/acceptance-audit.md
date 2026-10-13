@@ -14,6 +14,31 @@ verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
 
+## CI and recorded deep-disclosure follow-up (October 13)
+
+GitHub Actions run `38340435972` for `d480f2d` passed Windows Node 22 and
+24, but failed on Ubuntu Node 22 (16 JavaScript recording tests), Ubuntu Node
+24 (one recording test), and the Chromium browser job (the recorded 47-level
+Python recursion test exceeded its 150-second total timeout). The recording
+failures all reported explicit incomplete traces at their configured execution
+budgets. Their Linux-only cause remains unverified; do not mark cross-platform
+CI accepted based on local success.
+
+The resumed branch fixes a delayed native `<details>` event that could undo a
+newly expanded child before its parent rendered the next recursion level.
+Method summary activation now updates the shared disclosure set synchronously,
+while the native toggle handler continues to synchronize the rendered state.
+The real recorded 4,308-event / 47-level Python browser scenario now exercises
+all nested expansions by keyboard and passed locally, with two-frame seeking
+p95 approximately 34 ms. All 42 Chromium browser tests passed locally, as did
+133 core tests (one optional live-CodeGraph skip), formatting and packed-package
+verification. The heavyweight sparse-array return snapshot test has a separate
+60-second recording budget to avoid the 15-second default on constrained CI
+runners; normal production recording budgets remain unchanged. The recorded
+browser test has a separate 300-second overall watchdog and explicit nested
+invocation steps for CI diagnostics. These are bounded regressions, not final
+manual assistive-technology or Linux recorder acceptance.
+
 ## Recorder regression follow-up (local verification, October 12)
 
 October 13 update: The Node 24 full suite passed with 133 tests and one
