@@ -1336,29 +1336,6 @@ async function connect(url) {
       pending.reject(new Error('Debugger disconnected'));
     requests.clear();
   });
-  if (process.platform === 'linux') {
-    const activeSocket = socket;
-    // Node's Inspector server can split small WebSocket replies across TCP
-    // writes. A delayed ACK from the client then leaves the second write
-    // waiting for the Linux ~40 ms timer even though the client's socket has
-    // TCP_NODELAY enabled. While a command is outstanding, a WebSocket ping
-    // supplies client traffic (and an immediate TCP ACK) without executing
-    // JavaScript or changing any debugger-observed state.
-    const ackPulse = setInterval(() => {
-      if (
-        socket !== activeSocket ||
-        activeSocket.readyState !== WebSocket.OPEN
-      ) {
-        clearInterval(ackPulse);
-        return;
-      }
-      if (requests.size > 0) activeSocket.ping();
-    }, 5);
-    ackPulse.unref();
-    activeSocket.addEventListener('close', () => clearInterval(ackPulse), {
-      once: true,
-    });
-  }
   await request('Runtime.enable');
   await request('Debugger.enable');
   const initialized = await request('Runtime.evaluate', {
