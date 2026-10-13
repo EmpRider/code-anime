@@ -14,6 +14,39 @@ verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
 
+## Node 22 async recorder stabilization (October 13)
+
+Draft PR #2, commit `1f64fc3`, corrects two independently observed
+debugger-control gaps without changing production execution budgets or
+fabricating runtime evidence. The for-await recorder previously resumed to a
+breakpoint in the loop body but did not reliably reach the statement following
+iterator completion; the parser now locates that following statement using
+the Acorn parent/statement hierarchy and installs a separate continuation
+breakpoint. In addition, `paused()` previously copied `active` into
+`lastFrame` before calculating `active.awaiting`. The subsequent step
+selector read `lastFrame.awaiting`, which was therefore stale, and could
+`Debugger.stepInto` instead of `Debugger.resume` at a suspension point.
+The snapshot's awaiting flag is now synchronized before selecting the command.
+
+Captured Ubuntu Node 22 diagnostic timelines reproduced the missing final
+continuations for both a pair of concurrent loop-await invocations and
+recursive awaited calls. The event lists stopped before the final user
+statements, while the service correctly reported timeout and incomplete
+evidence. The focused for-await return regression passed on both Windows and
+Ubuntu Node 22 after the correction; existing tests also cover the two prior
+timeout fixtures. The failure diagnostics now expose compact partial event
+timelines for future investigations.
+
+**Cross-platform CI evidence:** GitHub Actions run `38349054218`
+at commit `1f64fc3` completed successfully: Windows Node 22 and 24,
+Ubuntu Node 22 and 24, and Chromium browser all passed. The Node matrix
+includes `npm run check` and `npm run package:check`, covering core tests,
+typecheck, build, formatting, and the packed CLI/MCP/player smoke test.
+This establishes the tested CI regression gates and does not establish
+full acceptance of the original 37 requirements. Broader runtime accuracy,
+cross-language tracing, visual interaction, accessibility, and large real
+application performance remain open under the requirement status matrix below.
+
 ## Node Inspector shutdown investigation (October 13)
 
 GitHub Actions run `38343526305` at commit `54ae7ba` passed browser and both
