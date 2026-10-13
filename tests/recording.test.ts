@@ -1654,21 +1654,15 @@ test('JavaScript awaits inside loops preserve each invocation and iteration', as
     const result = await wait(f.service, job.jobId);
     if (!result.complete && result.sessionId) {
       const { events: partial } = await allEvents(f.store, result.sessionId);
-      console.error(
-        'Incomplete async recording: ' +
-          JSON.stringify({
-            test: "JavaScript awaits inside loops preserve each invocation and iteration",
-            events: partial.map((event) => ({
-              kind: event.kind,
-              symbolId: event.symbolId,
-              callId: event.callId,
-              line: event.source?.line,
-              result: event.result,
-              output: event.output,
-              note: event.note,
-            })),
-          }),
-      );
+      const compact = partial.map((event) => [
+        event.kind,
+        event.symbolId,
+        event.callId,
+        event.source?.line,
+        event.result,
+        event.output,
+      ]);
+      console.error('Incomplete async recording:', JSON.stringify(compact));
     }
     assert.equal(result.complete, true, JSON.stringify(result));
     const { events } = await allEvents(f.store, result.sessionId!);
@@ -1741,21 +1735,15 @@ test('JavaScript nested and recursive async calls retain independent invocation 
     const result = await wait(f.service, job.jobId);
     if (!result.complete && result.sessionId) {
       const { events: partial } = await allEvents(f.store, result.sessionId);
-      console.error(
-        'Incomplete async recording: ' +
-          JSON.stringify({
-            test: "JavaScript nested and recursive async calls retain independent invocation IDs",
-            events: partial.map((event) => ({
-              kind: event.kind,
-              symbolId: event.symbolId,
-              callId: event.callId,
-              line: event.source?.line,
-              result: event.result,
-              output: event.output,
-              note: event.note,
-            })),
-          }),
-      );
+      const compact = partial.map((event) => [
+        event.kind,
+        event.symbolId,
+        event.callId,
+        event.source?.line,
+        event.result,
+        event.output,
+      ]);
+      console.error('Incomplete async recording:', JSON.stringify(compact));
     }
     assert.equal(result.complete, true, JSON.stringify(result));
     const { events } = await allEvents(f.store, result.sessionId!);
