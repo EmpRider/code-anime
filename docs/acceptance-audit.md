@@ -52,9 +52,13 @@ runs `38413220790` and `38413228793` passed all five jobs (Ubuntu and Windows
 Node 22/24 plus Chromium). The formerly failing Linux large-source JavaScript
 test completed in approximately 53 seconds on both Ubuntu versions, while the
 continuation rollback test completed in approximately 44 seconds. Both retained
-their original 60-second execution budgets and full assertions. A shorter
-2 ms pulse interval is being evaluated separately to improve the time margin;
-its effect is unverified. Broader source, runtime and UI scalability remain
+their original 60-second execution budgets and full assertions. The 2 ms
+interval in `c4e7647` improved the margin further: GitHub Actions run
+`38414083429` passed all five jobs, with the same large-source JavaScript test
+finishing in 32.2 seconds (Ubuntu Node 22) and 32.1 seconds (Node 24), and the
+rollback test in 20.7 and 20.0 seconds respectively. These results verify the
+regression fix on the two Linux CI versions without increasing any budgets or
+losing observed data. Broader source, runtime and UI scalability remain
 unverified, so requirements 27 and 35 remain incomplete.
 
 ## Source display before playback (October 13)
