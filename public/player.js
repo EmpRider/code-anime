@@ -1591,7 +1591,7 @@ function render() {
   $('bookmark').disabled = $('breakpoint').disabled = !cursor;
   $('bookmark').setAttribute('aria-pressed', bookmarks.has(cursor));
   $('bookmark').textContent = bookmarks.has(cursor) ? '★' : '☆';
-  $('breakpoint').setAttribute('aria-pressed', breakpoints.has(cursor));
+  $('breakpoint').setAttribute('aria-pressed', String(hasBreakpoint(cursor)));
   setStatus(
     continuationStates.get(flow)?.error
       ? 'Continuation unavailable · ' + continuationStates.get(flow).error
@@ -1921,7 +1921,12 @@ function toggleBookmark() {
 }
 function toggleBreakpoint(index = cursor) {
   if (!index) return;
-  breakpoints.has(index) ? breakpoints.delete(index) : breakpoints.add(index);
+  if (hasBreakpoint(index)) {
+    breakpoints.delete(index);
+    sourceBreakpoints.delete(
+      sourceLocationKey(flow?.trace?.events[index - 1]?.source),
+    );
+  } else breakpoints.add(index);
   sourceBreakpointVersion++;
   render();
 }

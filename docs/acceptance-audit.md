@@ -1,6 +1,6 @@
 # Execution visualizer acceptance audit
 
-Checkpoint: 2026-10-12, branch `codex/execution-visualizer-improvements`.
+Checkpoint: 2026-10-13, branch `codex/recorded-stress-performance`.
 Multilingual source highlighting, a persisted branching-tree performance
 fixture, recorded Python execution, and experimental Node.js JavaScript
 recording are covered by tests.
@@ -13,6 +13,28 @@ Evidence labels below distinguish tested behavior from inspection and missing
 verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
+
+## Main playback and source-line breakpoint agreement (October 13)
+
+The source gutter correctly exposed an effective line breakpoint while the
+playback toolbar's breakpoint button still announced `aria-pressed="false"` at
+the very same event. The focused Chromium regression reproduced the mismatch
+before this correction. The toolbar now reflects the effective stop condition:
+either an event-specific breakpoint or a breakpoint on the event's source line.
+Activating an already pressed toolbar button clears that step's event breakpoint
+and its associated source-line breakpoint. This makes the control reversible
+without requiring a second click in the source gutter.
+
+The browser regression additionally checks a repeated source line: line
+breakpoints remain visible to the toolbar at distinct loop iterations, and
+clearing one from the toolbar removes the shared line breakpoint. All 47
+Chromium browser tests passed after this correction. The local core suite
+passed 148 tests with one optional live CodeGraph skip, alongside typecheck,
+build and formatting. This improves the bounded evidence for requirements 11,
+14, 24, 25 and 35, while wider accessibility and real-project acceptance are
+still unverified. The previous commit `e555d87` passed all five CI jobs
+([run 38419781286](https://github.com/EmpRider/code-anime/actions/runs/38419781286));
+CI for this follow-up is a separate gate.
 
 ## Source gutter breakpoint consistency (October 13)
 

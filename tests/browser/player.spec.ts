@@ -324,6 +324,24 @@ test('source gutter clears an existing step breakpoint on the same source line',
   );
 });
 
+test('playback breakpoint control reflects and clears a source-line breakpoint', async ({
+  page,
+}) => {
+  await page.goto(url);
+  await page.locator('#toggle-inspector').click();
+  await page.locator('#timeline').fill('12');
+  const gutter = page.locator('.code-row[data-line="12"] .code-gutter');
+  const button = page.locator('#breakpoint');
+
+  await gutter.click();
+  await expect(gutter).toHaveAttribute('aria-pressed', 'true');
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed', 'false');
+  await expect(gutter).toHaveAttribute('aria-pressed', 'false');
+});
+
 test('source gutter clears individual breakpoints from repeated loop iterations', async ({
   page,
 }) => {
@@ -374,6 +392,23 @@ test('source gutter clears individual breakpoints from repeated loop iterations'
       'false',
     );
   }
+  // A line breakpoint covers every recorded iteration. The playback control
+  // at any iteration must reflect and be able to clear that shared stop.
+  await gutter.click();
+  for (const step of [2, 4]) {
+    await page.locator('#timeline').fill(String(step));
+    await expect(page.locator('#breakpoint')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  }
+  await page.locator('#breakpoint').click();
+  await expect(gutter).toHaveAttribute('aria-pressed', 'false');
+  await page.locator('#timeline').fill('2');
+  await expect(page.locator('#breakpoint')).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
 });
 
 test('replay retains stack controls and scrolls only the source editor when following', async ({
