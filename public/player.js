@@ -975,7 +975,14 @@ function renderSource(state, event) {
     sourceKey !== shownSource ||
     shownFirstLine !== firstLine ||
     !$('snippet').hasChildNodes();
+  let focusedSourceGutter;
   if (needsBuild) {
+    const focused = document.activeElement;
+    if ($('snippet').contains(focused) && focused?.matches('.code-gutter'))
+      focusedSourceGutter = {
+        line: Number(focused.parentElement.dataset.line),
+        sameSource: sourceKey === shownSource,
+      };
     if (sourceKey !== shownSource) $('snippet').scrollLeft = 0;
     shownSource = sourceKey;
     shownFirstLine = firstLine;
@@ -1071,6 +1078,18 @@ function renderSource(state, event) {
       else if (rowBounds.bottom > editorBounds.bottom)
         editor.scrollTop += rowBounds.bottom - editorBounds.bottom;
     }
+  }
+  if (focusedSourceGutter) {
+    const originalGutter = focusedSourceGutter.sameSource
+      ? sourceRows.get(focusedSourceGutter.line)?.querySelector('.code-gutter')
+      : null;
+    const activeGutter = active?.querySelector('.code-gutter');
+    // A virtual-window change may retain the same line; a cross-file jump
+    // should follow the executing line. Never focus a disabled gutter.
+    const target = [originalGutter, activeGutter].find(
+      (button) => button && !button.disabled,
+    );
+    (target ?? $('follow')).focus({ preventScroll: true });
   }
   if (
     sourceStackCalls?.length !== state.stack.length ||
@@ -1322,6 +1341,12 @@ function renderFlowOverview() {
   overviewPage = Math.min(overviewPage, maxPage);
   let panel = $('canvas').querySelector('.flow-overview');
   if (!panel || overviewRenderedPage !== overviewPage) {
+    const focusedControl = panel?.contains(document.activeElement)
+      ? document.activeElement
+      : null;
+    const focusedPosition = focusedControl?.dataset.overviewPosition;
+    const focusedCallId = focusedControl?.dataset.callId;
+    const focusedPageAction = focusedControl?.dataset.overviewPage;
     panel?.remove();
     panel = text('section', '', 'flow-overview');
     panel.setAttribute('aria-label', 'Prepared execution overview');
@@ -1398,6 +1423,7 @@ function renderFlowOverview() {
     if (maxPage > 0) {
       const footer = text('div', '', 'overview-pages');
       const previous = text('button', '← Earlier', 'quiet-button');
+      previous.dataset.overviewPage = 'previous';
       previous.disabled = overviewPage === 0;
       const movePage = (delta) => {
         overviewPage += delta;
@@ -1413,6 +1439,7 @@ function renderFlowOverview() {
       };
       previous.onclick = () => movePage(-1);
       const next = text('button', 'Later →', 'quiet-button');
+      next.dataset.overviewPage = 'next';
       next.disabled = overviewPage === maxPage;
       next.onclick = () => movePage(1);
       footer.append(
@@ -1423,6 +1450,43 @@ function renderFlowOverview() {
       panel.append(footer);
     }
     $('canvas').append(panel);
+    // Following, seeking, or resizing can replace the page while a keyboard
+    // user is inspecting its controls. Restore the same control if available;
+    // otherwise move to the active transition on the newly visible page.
+    if (focusedControl) {
+      const visibleSteps = [...panel.querySelectorAll('.overview-step')];
+      const focusedStep = visibleSteps.find(
+        (button) => button.dataset.overviewPosition === focusedPosition,
+      );
+      const focusedDisclosure = [
+        ...panel.querySelectorAll('.overview-disclosure'),
+      ].find((button) => button.dataset.callId === focusedCallId);
+      const pageControls = [
+        ...panel.querySelectorAll('.overview-pages button:not(:disabled)'),
+      ];
+      const focusedPage = pageControls.find(
+        (button) => button.dataset.overviewPage === focusedPageAction,
+      );
+      const activeStep = visibleSteps.find(
+        (button) => Number(button.dataset.overviewPosition) === activePosition,
+      );
+      const nearestStep = visibleSteps.reduce((closest, button) => {
+        if (!closest) return button;
+        return Math.abs(
+          Number(button.dataset.overviewPosition) - focusedPosition,
+        ) < Math.abs(Number(closest.dataset.overviewPosition) - focusedPosition)
+          ? button
+          : closest;
+      }, null);
+      (
+        focusedStep ??
+        focusedDisclosure ??
+        focusedPage ??
+        activeStep ??
+        (focusedPageAction ? pageControls[0] : null) ??
+        nearestStep
+      )?.focus({ preventScroll: true });
+    }
     overviewRenderedPage = overviewPage;
   }
   // Only the active-row state changes during normal replay. Reuse the DOM and

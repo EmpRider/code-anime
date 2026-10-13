@@ -462,6 +462,17 @@ test('execution path stays synchronized across paging, seeking and view changes'
     'data-line',
     '2',
   );
+  // A followed cross-file call replaces source rows. Preserve keyboard access
+  // to the executing line's gutter instead of dropping focus to the document.
+  await page.locator('.executing-line .code-gutter').focus();
+  await page.evaluate(() => {
+    const timeline = document.querySelector<HTMLInputElement>('#timeline')!;
+    timeline.value = '5';
+    timeline.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(page.locator('#source')).toHaveText('A.ts');
+  await expect(page.locator('.executing-line .code-gutter')).toBeFocused();
+  await page.locator('#timeline').fill('3');
   await expect(page.locator('.overview-step.current')).toHaveAttribute(
     'data-event-index',
     '3',
@@ -486,6 +497,24 @@ test('execution path stays synchronized across paging, seeking and view changes'
     'data-event-index',
     '10',
   );
+
+  // Following a seek across overview pages replaces the focused row. Keep
+  // keyboard focus on the new page's active transition, including when the
+  // focused control was an invocation disclosure.
+  const seekWithOverviewFocus = (position: number) =>
+    page.evaluate((step) => {
+      const timeline = document.querySelector<HTMLInputElement>('#timeline')!;
+      timeline.value = String(step);
+      timeline.dispatchEvent(new Event('input', { bubbles: true }));
+    }, position);
+  await seekWithOverviewFocus(3);
+  await page.locator('.overview-step[data-event-index="3"]').focus();
+  await seekWithOverviewFocus(10);
+  await expect(page.locator('.overview-step.current')).toBeFocused();
+  await seekWithOverviewFocus(3);
+  await page.locator('.overview-disclosure[data-call-id="b"]').focus();
+  await seekWithOverviewFocus(10);
+  await expect(page.locator('.overview-step.current')).toBeFocused();
 
   await page.locator('#follow').uncheck();
   await page.locator('#timeline').fill('3');
