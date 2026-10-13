@@ -14,6 +14,23 @@ verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
 
+## Call-stack keyboard focus follow-up (October 13)
+
+The source and State inspector stack controls previously replaced focused
+buttons whenever a call entered or returned. A browser regression reproduced
+focus loss when a selected child invocation was replaced by a sibling. The
+player now moves focus to the same invocation if it survives, otherwise to
+the closest surviving caller, and finally to Play when the stack empties.
+Buttons elsewhere retain their focus; replacement uses `preventScroll`.
+
+The regression verifies source and State stack controls, both same-call and
+returned-child transitions, and empty-stack fallback without requesting new
+analysis. Local `npm run check` passed (133 tests, one optional live-CodeGraph
+skip), all 42 browser tests passed, `npm run package:check` passed the packed
+CLI/MCP/player checks, and `git diff --check` passed. These are local Windows
+results. Native screen-reader review, wider keyboard/device coverage, and the
+remaining 37-requirement acceptance work are still open.
+
 ## Node Inspector shutdown investigation (October 13)
 
 GitHub Actions run `38343526305` at commit `54ae7ba` passed browser and both
@@ -529,6 +546,11 @@ realistic paint/heap performance acceptance requirements.
     announcement unchanged and avoid rewriting an identical status message;
     autoplay does not narrate every frame. These are DOM/keyboard assertions,
     not a complete assistive-technology acceptance test.
+    Source and State call-stack buttons now preserve keyboard focus across
+    invocation replacement, redirect focus to the closest surviving ancestor,
+    and fall back to Play when the execution stack empties. The browser path
+    regression tests those transitions without loading additional trace data.
+    Cross-browser and native screen-reader acceptance remain open.
 26. **Responsive workspace — partial.**
     Browser tests cover 1440x900, 820x1180, and 390x844, panel switching, playback
     visibility, and page overflow. Desktop side-by-side flow and a dedicated

@@ -74,6 +74,27 @@ const text = (tag, value, className) => {
   if (className) element.className = className;
   return element;
 };
+// Stack rows are rebuilt when an invocation enters or returns. When a
+// keyboard user is inspecting one of those rows, move focus to the same
+// invocation or its closest surviving caller rather than losing focus with
+// the detached DOM node. Other focused controls are never disturbed.
+function replaceStackControls(container, previous, current, fragment) {
+  const buttons = [...container.querySelectorAll('button.stack-link')];
+  const focusedIndex = buttons.indexOf(document.activeElement);
+  let nextIndex = -1;
+  if (focusedIndex >= 0) {
+    for (let index = focusedIndex; index >= 0; index--) {
+      nextIndex = current.indexOf(previous?.[index]);
+      if (nextIndex >= 0) break;
+    }
+  }
+  container.replaceChildren(fragment);
+  if (focusedIndex >= 0) {
+    const target =
+      container.querySelectorAll('button.stack-link')[nextIndex] ?? $('play');
+    target.focus({ preventScroll: true });
+  }
+}
 function setStatus(value) {
   // Status is a live region. Writing the same text for every render can
   // repeatedly announce it when a user steps or resizes the workspace.
@@ -1003,6 +1024,7 @@ function renderSource(state, event) {
     sourceStackCalls?.length !== state.stack.length ||
     state.stack.some((callId, index) => sourceStackCalls[index] !== callId)
   ) {
+    const previous = sourceStackCalls;
     sourceStackCalls = [...state.stack];
     const fragment = document.createDocumentFragment();
     for (const callId of state.stack) {
@@ -1012,7 +1034,12 @@ function renderSource(state, event) {
       button.onclick = () => inspectFrame(callId);
       fragment.append(button);
     }
-    $('source-stack').replaceChildren(fragment);
+    replaceStackControls(
+      $('source-stack'),
+      previous,
+      sourceStackCalls,
+      fragment,
+    );
   }
   for (const [index, button] of [
     ...$('source-stack').querySelectorAll('button'),
@@ -1477,8 +1504,8 @@ function render() {
     sourceRows.clear();
     highlightedSourceRow = undefined;
     $('snippet').replaceChildren();
-    $('source-stack').replaceChildren();
-    $('frame-list').replaceChildren();
+    replaceStackControls($('source-stack'), sourceStackCalls, [], undefined);
+    replaceStackControls($('frame-list'), inspectorStackCalls, [], undefined);
     sourceStackCalls = [];
     inspectorStackCalls = [];
     $('source').textContent = 'Select a step to inspect its source';
@@ -1515,6 +1542,7 @@ function render() {
     inspectorStackCalls?.length !== state.stack.length ||
     state.stack.some((callId, index) => inspectorStackCalls[index] !== callId)
   ) {
+    const previous = inspectorStackCalls;
     inspectorStackCalls = [...state.stack];
     const fragment = document.createDocumentFragment();
     state.stack.forEach((frame, i) => {
@@ -1530,7 +1558,12 @@ function render() {
       row.querySelector('button').onclick = () => inspectFrame(frame);
       fragment.append(row);
     });
-    $('frame-list').replaceChildren(fragment);
+    replaceStackControls(
+      $('frame-list'),
+      previous,
+      inspectorStackCalls,
+      fragment,
+    );
   }
   if (inspectorChanged || inspectedFrame !== currentFrame) {
     inspectedFrame = currentFrame;

@@ -527,6 +527,34 @@ test('execution path stays synchronized across paging, seeking and view changes'
   await expect(
     page.locator('#frame-list .frame-item:last-child'),
   ).not.toHaveAttribute('data-old-frame', 'b');
+  // Changing the active invocation rebuilds stack links. Keep focus on its
+  // surviving ancestor when the focused invocation has already returned.
+  const seekWithStackFocus = (position: number) =>
+    page.evaluate((step) => {
+      const timeline = document.querySelector<HTMLInputElement>('#timeline')!;
+      timeline.value = String(step);
+      timeline.dispatchEvent(new Event('input', { bubbles: true }));
+    }, position);
+  await page.locator('#source-stack .stack-link:last-child').focus();
+  await seekWithStackFocus(3);
+  await expect(
+    page.locator('#source-stack .stack-link:first-child'),
+  ).toBeFocused();
+  await seekWithStackFocus(8);
+  await expect(
+    page.locator('#source-stack .stack-link:first-child'),
+  ).toBeFocused();
+  await page.locator('#toggle-inspector').click();
+  await page.locator('#tab-state').click();
+  await expect(page.locator('#frame-list')).toBeVisible();
+  await page.locator('#frame-list .frame-item:last-child .stack-link').focus();
+  await seekWithStackFocus(5);
+  await expect(
+    page.locator('#frame-list .frame-item:first-child .stack-link'),
+  ).toBeFocused();
+  await page.locator('#source-stack .stack-link:first-child').focus();
+  await seekWithStackFocus(11);
+  await expect(page.locator('#play')).toBeFocused();
   await page.locator('#timeline').fill('5');
   await expect(page.locator('#source-stack .stack-link')).toHaveCount(1);
   await expect(page.locator('#frame-list .frame-item')).toHaveCount(1);
