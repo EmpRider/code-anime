@@ -46,6 +46,45 @@ let previousPause;
 let repeatedPause = 0;
 let pausedInFlight = 0;
 let closeRequested = false;
+// Diagnostics are opt-in and contain only protocol methods, counters, and
+// project-relative source locations. Never emit inspected values or source text.
+const debugRecorder = process.env.CODE_ANIME_DEBUG_RECORDER === '1';
+const diagnosticStart = Date.now();
+let diagnosticPauses = 0;
+let diagnosticPhase = 'startup';
+let diagnosticStep = 'none';
+let diagnosticLastPause = 0;
+if (debugRecorder)
+  setInterval(() => {
+    const pending = [...requests.values()].reduce((counts, request) => {
+      counts[request.method] = (counts[request.method] || 0) + 1;
+      return counts;
+    }, {});
+    process.stderr.write(
+      '[code-anime-recorder] ' +
+        JSON.stringify({
+          elapsedMs: Date.now() - diagnosticStart,
+          lastPauseAgeMs: diagnosticLastPause
+            ? Date.now() - diagnosticLastPause
+            : null,
+          pauses: diagnosticPauses,
+          events: eventCount,
+          phase: diagnosticPhase,
+          step: diagnosticStep,
+          inFlight: pausedInFlight,
+          repeatedPause,
+          location: lastFrame
+            ? {
+                file: lastFrame.file,
+                line: lastFrame.line,
+                symbol: lastFrame.symbol,
+              }
+            : null,
+          pending,
+        }) +
+        '\n',
+    );
+  }, 10000).unref();
 let resolveDebuggerShutdown;
 const debuggerShutdown = new Promise((resolve) => {
   resolveDebuggerShutdown = resolve;
@@ -111,7 +150,7 @@ function request(method, params = {}) {
     return Promise.reject(new Error('Debugger disconnected'));
   const id = ++nextId;
   return new Promise((resolve, reject) => {
-    requests.set(id, { resolve, reject });
+    requests.set(id, { resolve, reject, method });
     socket.send(JSON.stringify({ id, method, params }));
   });
 }
@@ -1200,24 +1239,29 @@ async function connect(url) {
     } else if (packet.method === 'Debugger.scriptParsed') {
       scripts.set(packet.params.scriptId, { url: packet.params.url });
     } else if (packet.method === 'Debugger.paused') {
+      diagnosticPauses++;
+      diagnosticLastPause = Date.now();
+      diagnosticPhase = 'inspecting pause';
       pausedInFlight++;
       void (async () => {
         try {
           await paused(packet.params);
+          diagnosticPhase = 'stepping';
           if (!stopped && !closeRequested) {
-            const step = request(
+            diagnosticStep =
               !lastFrame || lastFrame.awaiting
                 ? 'Debugger.resume'
                 : repeatedPause > 0
                   ? 'Debugger.stepOver'
-                  : 'Debugger.stepInto',
-            );
+                  : 'Debugger.stepInto';
+            const step = request(diagnosticStep);
             // A finished Node process may keep its Inspector connection open
             // until we disconnect while never replying to the final step.
             // Shutdown is authoritative only after Node announces it; a live
             // debugger error must still make the recording incomplete.
             try {
               await Promise.race([step, debuggerShutdown]);
+              diagnosticPhase = 'awaiting next pause';
             } catch (error) {
               if (!closeRequested) throw error;
             }
