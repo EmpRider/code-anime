@@ -172,6 +172,7 @@ test('mobile console history navigates every saved page without changing playbac
   await page.locator('#console-older').click();
   await expect(page.locator('#console-range')).toHaveText('1–55 of 655 events');
   await expect(page.locator('#console-older')).toBeDisabled();
+  await expect(page.locator('#console-newer')).toBeFocused();
   expect(
     await output.evaluate((element) =>
       element.textContent?.startsWith('event-1\n'),
@@ -182,7 +183,23 @@ test('mobile console history navigates every saved page without changing playbac
   await expect(page.locator('#console-range')).toHaveText(
     '56–355 of 655 events',
   );
+  await page.locator('#console-newer').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#console-range')).toHaveText(
+    '356–655 of 655 events',
+  );
+  await expect(page.locator('#console-older')).toBeFocused();
   await expect(page.locator('#progress')).toHaveText('655 / 655');
+  // Seeking can remove history paging altogether. Keep keyboard focus in the
+  // still-visible console rather than leaving it in the hidden navigation.
+  await page.evaluate(() => {
+    const timeline = document.querySelector<HTMLInputElement>('#timeline')!;
+    timeline.value = '100';
+    timeline.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(page.locator('#console-history')).toBeHidden();
+  await expect(page.locator('#console-panel > summary')).toBeFocused();
+  await expect(page.locator('#progress')).toHaveText('100 / 655');
   await page.locator('#timeline').fill('400');
   await expect(page.locator('#console-range')).toHaveText(
     '101–400 of 400 events',

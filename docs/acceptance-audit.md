@@ -14,6 +14,26 @@ verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
 
+## Console history keyboard continuity (October 13)
+
+The 655-event mobile console-history fixture exposed a keyboard-focus gap:
+reaching the oldest or newest page disabled the activated paging button, so
+focus dropped to the document. The player now moves focus to the remaining
+enabled paging action. When seeking back before the history controls are
+needed, it transfers focus to the still-visible console disclosure summary.
+Focus in unrelated controls is unaffected, and ordinary console navigation
+continues to reuse prepared trace data.
+
+The focused browser regression failed before the fix and passed afterward.
+It verifies both paging boundaries, disappearing history navigation, playback
+position and absence of additional flow requests. This extends bounded
+keyboard evidence for requirements 24–26; manual screen-reader acceptance
+and broader mobile device coverage remain open.
+Full local verification passed: 134 core tests (one optional live CodeGraph
+skip), 42 browser tests, TypeScript typecheck, build, Prettier, and packed
+CLI/MCP/player/flow verification. Cross-platform CI remains to be checked
+on the pushed change.
+
 ## Runtime shutdown during pending browser requests (October 13)
 
 The older Chromium push run `38354004675` timed out after 120 seconds in the

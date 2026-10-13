@@ -1121,6 +1121,14 @@ function renderSource(state, event) {
     );
 }
 function renderConsole() {
+  const history = $('console-history');
+  const older = $('console-older');
+  const newer = $('console-newer');
+  // Capture focus before disabling a boundary button or hiding the history
+  // navigation; either action can drop keyboard focus to the document body.
+  const focusedHistoryButton = [older, newer].find(
+    (button) => button === document.activeElement,
+  );
   let lo = 0,
     hi = consoleEvents.length;
   while (lo < hi) {
@@ -1141,10 +1149,20 @@ function renderConsole() {
     lastConsoleText = value;
   }
   $('console-count').textContent = lo + ' events';
-  $('console-history').hidden = lo <= CONSOLE_PAGE_SIZE;
+  history.hidden = lo <= CONSOLE_PAGE_SIZE;
   $('console-range').textContent = `${start + 1}–${end} of ${lo} events`;
-  $('console-older').disabled = start === 0;
-  $('console-newer').disabled = consolePageBack === 0;
+  older.disabled = start === 0;
+  newer.disabled = consolePageBack === 0;
+  if (focusedHistoryButton) {
+    if (history.hidden)
+      $('console-panel').querySelector('summary')?.focus({
+        preventScroll: true,
+      });
+    else if (focusedHistoryButton.disabled)
+      (focusedHistoryButton === older ? newer : older).focus({
+        preventScroll: true,
+      });
+  }
 }
 $('console-older').onclick = () => {
   consolePageBack++;
