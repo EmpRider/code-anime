@@ -28,6 +28,10 @@ count = 0
 calls = 0
 size = 0
 source_bytes = 0
+# Keep source snapshots bounded beneath the 10 MiB stored-session budget;
+# execution events have their own separately configurable trace-byte budget.
+MAX_SOURCE_FILE_BYTES = 2 * 1024 * 1024
+MAX_SOURCE_TOTAL_BYTES = 4 * 1024 * 1024
 active = True
 scope = "Main-thread Python user code for this input, including generator/coroutine suspension and single-thread asyncio tasks. Line events show state BEFORE the highlighted line; return events show state after returning. Coroutine await/suspend events are scheduler transitions, not awaited results. Async task stacks are observed Python frames, not inferred causal chains. Native/dependency internals, additional threads or processes, binary console writes and object internals are not captured. Values are bounded; unavailable fields are explicitly marked."
 
@@ -105,13 +109,13 @@ def user_file(filename):
         return None
     relative = relative.replace(os.sep, '/')
     if relative not in sources:
-        if os.path.getsize(actual) > 512 * 1024:
-            raise Boundary('Source file exceeds 512 KiB snapshot budget: ' + relative)
+        if os.path.getsize(actual) > MAX_SOURCE_FILE_BYTES:
+            raise Boundary('Source file exceeds 2 MiB snapshot budget: ' + relative)
         with tokenize.open(actual) as source:
             content = source.read()
         source_bytes += len(content.encode('utf8'))
-        if source_bytes > 2 * 1024 * 1024:
-            raise Boundary('Source snapshots exceed 2 MiB budget')
+        if source_bytes > MAX_SOURCE_TOTAL_BYTES:
+            raise Boundary('Source snapshots exceed 4 MiB budget')
         sources[relative] = content
         send({'type': 'source', 'file': relative, 'content': content})
     paths[filename] = relative

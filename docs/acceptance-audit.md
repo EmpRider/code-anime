@@ -14,6 +14,62 @@ verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
 
+## Source display before playback (October 13)
+
+The player now shows a captured original source file at cursor zero, preferring
+the first recorded source location, then the captured target or another captured
+file. Its line-numbered, bounded editor window is populated without presenting
+any statement as currently executing or attaching a fabricated stack frame.
+Rewinding to zero restores the initial source view and clears execution-line
+highlighting. Traces without captured original source retain their existing
+empty-state explanation. The recorded large-Python browser regression exercises
+first load, cross-file navigation and rewind without replay requests.
+
+This improves requirements 11, 15 and 31 for captured source; it does not
+establish broad syntax coverage, source-map correctness, screen-reader behavior,
+or complete VisualJS-style interaction acceptance.
+
+## Large original-source recording (October 13)
+
+GitHub Actions run `38364317171` passed Chromium, Windows Node 22/24 and Ubuntu
+Node 22/24 for PR #6 at `0fd7803`. The current work extends that checkpoint;
+CI for these additional changes remains to be verified.
+
+Previously, the Python and JavaScript runtime recorders refused any executed
+source file larger than 512 KiB, and all recording sources shared a 2 MiB
+snapshot limit. The recording service independently enforced the same 2 MiB
+aggregate limit. The limits are now 2 MiB per original file and 4 MiB total,
+with the existing 10 MiB per-session quota and 64 MiB maximum protocol budget
+unchanged. Excess sources still produce explicit recording diagnostics.
+
+`tests/large-source-recording.test.ts` exercises real Python and JavaScript
+recordings across three original source modules (over 2.2 MiB together),
+executed cross-module calls, 550 loop iterations, original exact source
+snapshots in each stored continuation, observed evidence, and exact output.
+`tests/browser/recorded-large-source.spec.ts` checks real Python source
+following across those modules and prepared continuations, bounded 301-row
+source rendering, active-line accuracy, console output, and no replay requests
+after prepared data is loaded. Both core regressions failed before the source
+limit changes; the focused tests then passed locally. Broad validation and
+cross-platform CI remain separate requirements.
+
+`tests/recording-boundaries.test.ts` adds six actual-recorder regressions across
+Python and JavaScript: an entry source above the 2 MiB per-file limit fails
+without a misleading session, 4 MiB aggregate overflow after observed work
+retains a clearly incomplete recorded trace, and a failed second session write
+rolls back previously saved continuation chunks. All six passed locally.
+These exercise source-budget error paths and transactional cleanup, not an
+unbounded source-capacity guarantee. Cross-platform CI for this change is
+pending.
+
+This expands evidence for requirement 27; it does not establish performance for
+arbitrary applications. Large files remain bounded by per-file, aggregate and
+session budgets, and source text is still repeated in stored continuation
+chunks. Very large or escaping-heavy source content can still hit storage
+quotas. JavaScript source-map coverage for large transpiled projects, broader
+runtime languages, larger applications, and manual UI accessibility remain
+open.
+
 ## Console history keyboard continuity (October 13)
 
 The 655-event mobile console-history fixture exposed a keyboard-focus gap:
@@ -757,7 +813,12 @@ realistic paint/heap performance acceptance requirements.
     5,538 to 5,790 retained nodes. These are workload-specific diagnostic measurements,
     not universal paint or memory guarantees. The source files remain small,
     so real large-codebase source navigation and diverse application workloads
-    still need profiling before requirement 27 can be accepted.
+    still need profiling before requirement 27 can be accepted. The later
+    large-source regressions documented above extend actual Python and
+    JavaScript recording to more than 2.2 MiB of original source across three
+    modules, and verify browser source following with bounded rendered rows.
+    Realistic full-application profiling and scalable snapshot storage remain
+    outstanding.
     Continue measuring longer stacks, large objects, substantially
     larger recorded output, and diverse real applications before accepting this.
     Value-tree DOM creation is now bounded to visible pages and explicitly

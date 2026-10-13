@@ -26,6 +26,8 @@ const startSchema = z
       .default(16 * 1024 * 1024),
   })
   .strict();
+// Both bundled runtime recorders enforce the same aggregate source budget.
+const MAX_SOURCE_TOTAL_BYTES = 4 * 1024 * 1024;
 interface RecordingJob {
   id: string;
   status: 'running' | 'saving' | 'ready' | 'failed';
@@ -220,7 +222,7 @@ export class RecordingService {
             .object({ file: z.string(), content: z.string() })
             .parse(message);
           sourceBytes += Buffer.byteLength(source.content);
-          if (sourceBytes > 2 * 1024 * 1024)
+          if (sourceBytes > MAX_SOURCE_TOTAL_BYTES)
             throw new Error('Source budget exceeded');
           Object.defineProperty(sourceFiles, source.file, {
             value: source.content,

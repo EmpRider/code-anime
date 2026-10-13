@@ -809,6 +809,20 @@ test('JavaScript for-await loops retain observed user statements and returns', a
       [2, 3],
       JSON.stringify(iterations),
     );
+    if (process.env.CODE_ANIME_RECORDING_TRACE_DEBUG === '1')
+      console.log(
+        'for-await collection events:',
+        JSON.stringify(
+          events.map((event) => ({
+            kind: event.kind,
+            symbolId: event.symbolId,
+            callId: event.callId,
+            line: event.source?.line,
+            result: event.result,
+            note: event.note,
+          })),
+        ),
+      );
     assert.deepEqual(
       events
         .filter((event) => event.kind === 'return' && event.callId === callId)

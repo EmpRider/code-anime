@@ -32,6 +32,10 @@ let nextCall = 0;
 let eventCount = 0;
 let written = 0;
 let sourceBytes = 0;
+// Constrain original sources separately from the configured event/trace budget
+// and below the 10 MiB per-session storage limit.
+const MAX_SOURCE_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_SOURCE_TOTAL_BYTES = 4 * 1024 * 1024;
 let lastFrame;
 let stopped = false;
 let stopReason = '';
@@ -321,8 +325,8 @@ async function prepareFunctionEntries(scriptId, source) {
 async function snapshotSource(file, content) {
   if (sources.has(file)) return;
   sourceBytes += Buffer.byteLength(content);
-  if (sourceBytes > 2 * 1024 * 1024)
-    throw new Error('Source snapshots exceed 2 MiB budget');
+  if (sourceBytes > MAX_SOURCE_TOTAL_BYTES)
+    throw new Error('Source snapshots exceed 4 MiB budget');
   send({ type: 'source', file, content });
   sources.add(file);
 }
@@ -349,7 +353,7 @@ async function verifiedSourceMap(filename, compiled) {
       );
       if (!projectPath(mapFile)) return undefined;
       const info = await stat(mapFile);
-      if (!info.isFile() || info.size > 512 * 1024) return undefined;
+      if (!info.isFile() || info.size > MAX_SOURCE_FILE_BYTES) return undefined;
       payload = JSON.parse(await readFile(mapFile, 'utf8'));
     }
     if (
@@ -366,14 +370,14 @@ async function verifiedSourceMap(filename, compiled) {
       const source = payload.sources[i];
       const expected = payload.sourcesContent[i];
       if (typeof source !== 'string' || typeof expected !== 'string') continue;
-      if (Buffer.byteLength(expected) > 512 * 1024) continue;
+      if (Buffer.byteLength(expected) > MAX_SOURCE_FILE_BYTES) continue;
       const path = resolve(dirname(mapFile), payload.sourceRoot || '', source);
       const actual = await realpath(path).catch(() => undefined);
       if (!actual) continue;
       const file = projectPath(actual);
       if (!file || file.split('/').includes('dist')) continue;
       const info = await stat(actual);
-      if (!info.isFile() || info.size > 512 * 1024) continue;
+      if (!info.isFile() || info.size > MAX_SOURCE_FILE_BYTES) continue;
       // An old map or a changed source file can point the player at a line
       // unrelated to the JavaScript that V8 actually executed.
       if ((await readFile(actual, 'utf8')) !== expected) continue;
@@ -402,8 +406,8 @@ async function projectSource(scriptId, location) {
     const file = projectPath(filename);
     if (!file) return undefined;
     const info = await stat(filename);
-    if (!info.isFile() || info.size > 512 * 1024)
-      throw new Error('Source exceeds 512 KiB budget: ' + file);
+    if (!info.isFile() || info.size > MAX_SOURCE_FILE_BYTES)
+      throw new Error('Source exceeds 2 MiB budget: ' + file);
     const { scriptSource } = await request('Debugger.getScriptSource', {
       scriptId,
     });

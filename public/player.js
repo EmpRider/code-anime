@@ -923,25 +923,29 @@ function precedingIndexedEvent(index, key, before) {
   }
   return low ? flow.trace.events[positions[low - 1]] : undefined;
 }
-function renderSource(state, event) {
+function renderSource(state, event, initial = false) {
   const trace = flow.trace;
-  if (!$('follow').checked && !pinnedCallId) pinnedCallId = event?.callId;
+  if (!initial && !$('follow').checked && !pinnedCallId)
+    pinnedCallId = event?.callId;
   const frameId = pinnedCallId ?? activeFrame(state, event);
   const selected = pinnedCallId
     ? precedingIndexedEvent(frameSources, frameId, cursor)
     : event;
-  let sourceEvent = selected?.source
-    ? selected
-    : precedingIndexedEvent(frameSources, frameId, cursor);
+  let sourceEvent = initial
+    ? event
+    : selected?.source
+      ? selected
+      : precedingIndexedEvent(frameSources, frameId, cursor);
   if (!$('follow').checked && !sourceEvent) sourceEvent = inspectedSourceEvent;
-  if (sourceEvent) inspectedSourceEvent = sourceEvent;
+  if (sourceEvent && !initial) inspectedSourceEvent = sourceEvent;
   const location = sourceEvent?.source;
   const sourceCode = location ? trace?.sourceFiles?.[location.file] : undefined;
   $('source').textContent = location?.file ?? 'No source location recorded';
   $('source').title = location?.generated
     ? `Original source mapped from V8 location ${location.generated.file}:${location.generated.line}; source-map content verified against the project file`
     : '';
-  $('source-line').textContent = location ? 'L' + location.line : '—';
+  $('source-line').textContent =
+    location && !initial ? 'L' + location.line : '—';
   const sourceKey =
     sourceCode === undefined
       ? 'excerpt:' + (location?.file ?? '') + ':' + (sourceEvent?.snippet ?? '')
@@ -1054,6 +1058,7 @@ function renderSource(state, event) {
     }
   }
   const isExecuting =
+    !initial &&
     sourceEvent?.callId === event?.callId &&
     location?.file === event?.source?.file;
   const active =
@@ -1634,17 +1639,36 @@ function render() {
     : 'NO STEP SELECTED';
   if (!cursor) {
     inspectedFields = undefined;
-    shownSource = '';
-    sourceRows.clear();
-    highlightedSourceRow = undefined;
-    $('snippet').replaceChildren();
     replaceStackControls($('source-stack'), sourceStackCalls, [], undefined);
     replaceStackControls($('frame-list'), inspectorStackCalls, [], undefined);
     sourceStackCalls = [];
     inspectorStackCalls = [];
-    $('source').textContent = 'Select a step to inspect its source';
-    $('source-line').textContent = '—';
-    $('source-empty').hidden = false;
+    const sources = flow.trace?.sourceFiles;
+    const observedSource = flow.trace?.events.find(
+      (entry) =>
+        entry.source?.file &&
+        Object.prototype.hasOwnProperty.call(sources ?? {}, entry.source.file),
+    )?.source;
+    const initialFile =
+      observedSource?.file ??
+      (Object.prototype.hasOwnProperty.call(sources ?? {}, flow.trace?.target)
+        ? flow.trace.target
+        : Object.keys(sources ?? {})[0]);
+    if (initialFile) {
+      renderSource(
+        { stack: [] },
+        { source: observedSource ?? { file: initialFile, line: 1 } },
+        true,
+      );
+    } else {
+      shownSource = '';
+      sourceRows.clear();
+      highlightedSourceRow = undefined;
+      $('snippet').replaceChildren();
+      $('source').textContent = 'Select a step to inspect its source';
+      $('source-line').textContent = '—';
+      $('source-empty').hidden = false;
+    }
     $('packet-title').textContent = 'Ready to explore';
     $('event-kind').textContent = 'READY';
     $('playback-label').textContent = 'Ready when you are';
