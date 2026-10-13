@@ -42,6 +42,10 @@ let previousPause;
 let repeatedPause = 0;
 let pausedInFlight = 0;
 let closeRequested = false;
+let resolveDebuggerShutdown;
+const debuggerShutdown = new Promise((resolve) => {
+  resolveDebuggerShutdown = resolve;
+});
 
 const coverage =
   'Node.js JavaScript execution observed via V8 Inspector, in one process for this input. ' +
@@ -110,9 +114,11 @@ function request(method, params = {}) {
 
 function closeDebuggerWhenIdle() {
   // Node may announce shutdown while the response to the final step request
-  // is still in flight. Closing here would reject that request and turn a
-  // successfully completed recording into "Debugger disconnected".
+  // is still in flight. Signal that the program has finished first, allowing
+  // an unanswered step request to stop waiting before the socket is closed.
+  // Paused-frame inspections still finish before closing the debugger.
   closeRequested = true;
+  resolveDebuggerShutdown();
   if (pausedInFlight === 0) socket?.close();
 }
 
@@ -1143,14 +1149,24 @@ async function connect(url) {
       void (async () => {
         try {
           await paused(packet.params);
-          if (!stopped)
-            await request(
+          if (!stopped && !closeRequested) {
+            const step = request(
               lastFrame?.awaiting
                 ? 'Debugger.resume'
                 : repeatedPause > 0
                   ? 'Debugger.stepOver'
                   : 'Debugger.stepInto',
             );
+            // A finished Node process may keep its Inspector connection open
+            // until we disconnect while never replying to the final step.
+            // Shutdown is authoritative only after Node announces it; a live
+            // debugger error must still make the recording incomplete.
+            try {
+              await Promise.race([step, debuggerShutdown]);
+            } catch (error) {
+              if (!closeRequested) throw error;
+            }
+          }
         } catch (error) {
           stop(error.message);
         } finally {
