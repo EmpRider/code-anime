@@ -9,6 +9,7 @@ import { SourceMap } from 'node:module';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'acorn';
+import WebSocket from 'ws';
 import { createInspectorStderrHandler } from './inspector-stderr.mjs';
 
 const [rootArg, entry, eventLimitArg, byteLimitArg, ...arguments_] =
@@ -1222,6 +1223,9 @@ async function connect(url) {
   for (let attempt = 0; attempt < 10; attempt++) {
     if (stopped || child.exitCode !== null)
       throw new Error('Inspector connection stopped before attachment');
+    // ws explicitly disables TCP Nagle when attaching its socket. On Linux
+    // loopback, the built-in WebSocket transport delayed Inspector value reads
+    // by ~40 ms each, dominating the cost of every debugger pause.
     const candidate = new WebSocket(url);
     socket = candidate;
     try {
