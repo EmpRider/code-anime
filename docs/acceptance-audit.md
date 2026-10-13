@@ -739,6 +739,25 @@ realistic paint/heap performance acceptance requirements.
     performance sample; the full 40-test browser suite passed after adding the
     original benchmark, prior to the recursion extension. It does not establish
     performance for arbitrary projects or directly measure per-frame paint time.
+    A second **actual Python recording** stress fixture runs 480 real
+    cross-file worker calls with nested calculations, bounded nested local values,
+    and an output for every iteration. The recorded 11,724 events include 960
+    worker entries and 964 console events; all events retain observed evidence.
+    A browser regression checks exact final output and invocation counts,
+    retrieves every prepared continuation, pages to the oldest and newest console
+    output, switches among 480 recorded invocations, repeatedly expands/collapses
+    a selected invocation, and performs 36 two-frame seeks. Chromium tracing
+    captures actual Paint events, while DevTools measures layout, heap and DOM
+    node counts before/after seeking, with explicit garbage collection for
+    comparable retained-node and heap measurements. The test also checks desktop/mobile
+    viewports, bounded connected DOM, consistent playback position, and zero
+    replay API requests after all continuations have loaded. One local Windows
+    sample measured 50.2 ms seek p95, 196 Paint events totaling 267.6 ms,
+    123 additional layouts, 13 to 13 MiB retained JavaScript heap, and DOM counters
+    5,538 to 5,790 retained nodes. These are workload-specific diagnostic measurements,
+    not universal paint or memory guarantees. The source files remain small,
+    so real large-codebase source navigation and diverse application workloads
+    still need profiling before requirement 27 can be accepted.
     Continue measuring longer stacks, large objects, substantially
     larger recorded output, and diverse real applications before accepting this.
     Value-tree DOM creation is now bounded to visible pages and explicitly

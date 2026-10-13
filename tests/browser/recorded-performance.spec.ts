@@ -236,3 +236,222 @@ test('wide and deeply recursive recorded Python calls remain navigable across pr
     await runtime.close();
   }
 });
+
+test('recorded high-volume calls and console history keep painted replay bounded', async ({
+  page,
+}) => {
+  test.setTimeout(300_000);
+  const runtime = await startRuntime({ ...readConfig({}), port: 0 });
+  const recorder = new RecordingService(
+    runtime.store,
+    runtime.baseUrl,
+    realpath,
+  );
+  try {
+    const started = await recorder.run({
+      action: 'start',
+      language: 'python',
+      projectRoot: fileURLToPath(
+        new URL('../fixtures/runtime/', import.meta.url),
+      ),
+      entry: 'performance_stress_main.py',
+      maxEvents: 50_000,
+      maxTraceBytes: 64 * 1024 * 1024,
+      timeoutMs: 120_000,
+    });
+    let result = started;
+    await expect
+      .poll(
+        async () => {
+          result = await recorder.run({
+            action: 'status',
+            jobId: started.jobId,
+          });
+          if (result.status === 'failed') throw new Error(result.error);
+          return result.status;
+        },
+        { timeout: 140_000 },
+      )
+      .toBe('ready');
+    expect(result.complete).toBe(true);
+    expect(result.eventCount).toBeGreaterThan(8_500);
+    expect(result.chunks).toBeGreaterThan(3);
+
+    const events: TraceEvent[] = [];
+    let session = await runtime.store.get(result.sessionId!);
+    while (session) {
+      events.push(...session.flow.trace!.events);
+      session = await runtime.store.next(session.id);
+    }
+    expect(events).toHaveLength(result.eventCount);
+    const processCalls = events.filter(
+      (event) => event.kind === 'enter' && event.symbolId.endsWith('process'),
+    );
+    const calculateCalls = events.filter(
+      (event) => event.kind === 'enter' && event.symbolId.endsWith('calculate'),
+    );
+    const consoleEvents = events.filter((event) => event.kind === 'console');
+    expect(processCalls).toHaveLength(480);
+    expect(calculateCalls).toHaveLength(480);
+    expect(consoleEvents.length).toBeGreaterThanOrEqual(480);
+    expect(events.every((event) => event.certainty === 'observed')).toBe(true);
+    expect(
+      events.find(
+        (event) =>
+          event.kind === 'console' && event.output?.includes('complete'),
+      )?.output,
+    ).toContain('complete 346800');
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(result.url!);
+    await expect(page.locator('#evidence-mode')).toHaveText(
+      'Recorded execution',
+    );
+    let loaded = Number(await page.locator('#timeline').getAttribute('max'));
+    while (loaded < result.eventCount) {
+      await page.locator('#timeline').fill(String(loaded));
+      await page.locator('#next').click();
+      await expect
+        .poll(() => page.locator('#timeline').getAttribute('max'))
+        .not.toBe(String(loaded));
+      loaded = Number(await page.locator('#timeline').getAttribute('max'));
+    }
+    expect(loaded).toBe(result.eventCount);
+    await page.locator('#timeline').fill(String(loaded));
+    await expect(page.locator('#console-output')).toContainText('item 479:');
+    await page.locator('#console-panel > summary').click();
+    await expect(page.locator('#console-history')).toBeVisible();
+    while (await page.locator('#console-older').isEnabled())
+      await page.locator('#console-older').click();
+    await expect(page.locator('#console-output')).toContainText('item 0:');
+    while (await page.locator('#console-newer').isEnabled())
+      await page.locator('#console-newer').click();
+    await expect(page.locator('#console-output')).toContainText('item 479:');
+    await expect(page.locator('#progress')).toHaveText(
+      `${loaded} / ${result.eventCount}`,
+    );
+
+    // A recorded worker is invoked hundreds of times. Inspecting one exact
+    // invocation must not materialize every invocation's source/step tree.
+    await page.locator('#view-mode').selectOption('map');
+    await page
+      .getByRole('button', {
+        name: `Inspect method ${processCalls[0]!.symbolId}`,
+      })
+      .click();
+    const invocationSelector = page.locator(
+      '#method-details .method-invocation-label select',
+    );
+    await expect(invocationSelector.locator('option')).toHaveCount(480);
+    await invocationSelector.selectOption(processCalls.at(-1)!.callId);
+    const selected = page.locator(
+      `#method-details details[data-invocation="${processCalls.at(-1)!.callId}"]`,
+    );
+    await expect(selected).toBeVisible();
+    const summary = selected.locator(':scope > summary');
+    for (let i = 0; i < 8; i++) {
+      await summary.press('Enter');
+      if (i % 2) await expect(selected).toHaveAttribute('open', '');
+      else await expect(selected).not.toHaveAttribute('open', '');
+    }
+    await expect(page.locator('#progress')).toHaveText(
+      `${loaded} / ${result.eventCount}`,
+    );
+
+    await page.locator('#view-mode').selectOption('path');
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Performance.enable');
+    await cdp.send('HeapProfiler.enable');
+    const metrics = async () => {
+      const { metrics: items } = await cdp.send('Performance.getMetrics');
+      return Object.fromEntries(
+        items.map((metric: { name: string; value: number }) => [
+          metric.name,
+          metric.value,
+        ]),
+      ) as Record<string, number>;
+    };
+    // Detached nodes can remain in the browser's heap until a normal GC cycle.
+    // Compare live retained nodes after collection, not incidental GC timing.
+    await cdp.send('HeapProfiler.collectGarbage');
+    const before = await metrics();
+    const initialDom = await cdp.send('Memory.getDOMCounters');
+    const paint = { count: 0, durationMs: 0 };
+    cdp.on('Tracing.dataCollected', ({ value }) => {
+      for (const event of value) {
+        if (event.name !== 'Paint') continue;
+        paint.count++;
+        paint.durationMs += Number(event.dur ?? 0) / 1000;
+      }
+    });
+    const finishedTracing = new Promise<void>((resolve) =>
+      cdp.once('Tracing.tracingComplete', () => resolve()),
+    );
+    await cdp.send('Tracing.start', {
+      categories: 'devtools.timeline',
+      transferMode: 'ReportEvents',
+    });
+    const requests: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/api/flow/')) requests.push(request.url());
+    });
+    const positions = Array.from({ length: 36 }, (_, i) =>
+      i % 2 === 0 ? 200 + i * 31 : loaded - 200 - i * 29,
+    );
+    const samples = await page.evaluate(async (values) => {
+      const input = document.querySelector<HTMLInputElement>('#timeline')!;
+      const durations: number[] = [];
+      for (const value of values) {
+        const start = performance.now();
+        input.value = String(value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+        durations.push(performance.now() - start);
+      }
+      return durations.sort((a, b) => a - b);
+    }, positions);
+    await cdp.send('Tracing.end');
+    await finishedTracing;
+    await cdp.send('HeapProfiler.collectGarbage');
+    const after = await metrics();
+    const finalDom = await cdp.send('Memory.getDOMCounters');
+    const p95 = samples[Math.floor(samples.length * 0.95)]!;
+    const layoutBefore = before.LayoutCount ?? 0;
+    const layoutAfter = after.LayoutCount ?? 0;
+    const heapBefore = before.JSHeapUsedSize ?? 0;
+    const heapAfter = after.JSHeapUsedSize ?? 0;
+    console.log(
+      `recorded stress: ${events.length} events, ${processCalls.length + calculateCalls.length} worker calls, ` +
+        `${consoleEvents.length} console events, seek p95=${p95.toFixed(1)}ms, ` +
+        `paint ${paint.count} events/${paint.durationMs.toFixed(1)}ms, ` +
+        `layout +${(layoutAfter - layoutBefore).toFixed(0)}, ` +
+        `heap ${Math.round(heapBefore / 1024 / 1024)}→${Math.round(heapAfter / 1024 / 1024)} MiB, ` +
+        `DOM nodes ${initialDom.nodes}→${finalDom.nodes}`,
+    );
+    expect(p95).toBeLessThan(800);
+    expect(paint.count).toBeGreaterThan(0);
+    expect(layoutAfter).toBeGreaterThanOrEqual(layoutBefore);
+    expect(finalDom.nodes).toBeLessThan(initialDom.nodes + 3000);
+    expect(await page.locator('body *').count()).toBeLessThan(10_000);
+    await expect(page.locator('#progress')).toHaveText(
+      `${positions.at(-1)} / ${result.eventCount}`,
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('#progress')).toHaveText(
+      `${positions.at(-1)} / ${result.eventCount}`,
+    );
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
+    expect(requests).toEqual([]);
+    expect(errors).toEqual([]);
+  } finally {
+    recorder.close();
+    await runtime.close();
+  }
+});
