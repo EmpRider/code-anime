@@ -64,8 +64,17 @@ pending.
 
 This expands evidence for requirement 27; it does not establish performance for
 arbitrary applications. Large files remain bounded by per-file, aggregate and
-session budgets, and source text is still repeated in stored continuation
-chunks. Very large or escaping-heavy source content can still hit storage
+session budgets. Content-addressed source snapshots are now stored once per
+distinct source set on disk and hydrated when a session is read, with the
+original source returned unchanged to clients. Persistent restart, shared
+continuations, deletion cleanup and corrupted-snapshot quarantine have focused
+regressions. Failed writes prune unreferenced snapshots, and live corruption
+or externally missing sessions schedule cleanup while retaining snapshots used
+by other continuations. On October 13 the focused storage suite passed (12
+tests), the full local core suite passed (146 tests and one optional CodeGraph
+skip), all 44 Chromium browser tests passed, and packaged CLI/MCP/player/flow
+verification passed. The logical hydrated session size quota remains unchanged. Very
+large or escaping-heavy source content can still hit storage
 quotas. JavaScript source-map coverage for large transpiled projects, broader
 runtime languages, larger applications, and manual UI accessibility remain
 open.

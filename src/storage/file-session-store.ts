@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import {
   mkdir,
@@ -32,7 +32,7 @@ export class FileSessionStore implements SessionStore {
   private shutdown?: Promise<void>;
   private readonly index = new Map<
     string,
-    { createdAt: string; previousSessionId?: string }
+    { createdAt: string; previousSessionId?: string; sourceSnapshotId?: string }
   >();
   private lockOwner: string | undefined;
   private constructor(
@@ -83,7 +83,10 @@ export class FileSessionStore implements SessionStore {
     return new FileSessionStore(directory, options);
   }
 
-  private async readSession(id: string): Promise<FlowSession> {
+  private async readStoredSession(id: string): Promise<{
+    session: FlowSession;
+    sourceSnapshotId?: string;
+  }> {
     const path = join(this.directory, id + '.json');
     const info = await lstat(path);
     if (!info.isFile() || info.size > this.options.maxSessionBytes)
@@ -110,14 +113,147 @@ export class FileSessionStore implements SessionStore {
     }
     if (Buffer.byteLength(contents) > this.options.maxSessionBytes)
       throw new Error(`Oversized stored session: ${id}`);
-    const raw = JSON.parse(contents) as FlowSession;
+    const raw = JSON.parse(contents) as FlowSession & {
+      sourceSnapshotId?: unknown;
+    };
     if (
       raw.id !== id ||
       typeof raw.createdAt !== 'string' ||
       !Number.isFinite(Date.parse(raw.createdAt))
     )
       throw new Error(`Invalid stored session metadata: ${id}`);
-    return { id, createdAt: raw.createdAt, flow: flowSchema.parse(raw.flow) };
+    if (raw.sourceSnapshotId !== undefined) {
+      if (
+        typeof raw.sourceSnapshotId !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(raw.sourceSnapshotId) ||
+        !raw.flow?.trace ||
+        raw.flow.trace.sourceFiles !== undefined
+      )
+        throw new Error(`Invalid stored source reference: ${id}`);
+      raw.flow.trace.sourceFiles = await this.readSourceSnapshot(
+        raw.sourceSnapshotId,
+      );
+      // Quotas remain based on the complete, hydrated session representation.
+      const hydrated = { id, createdAt: raw.createdAt, flow: raw.flow };
+      if (
+        Buffer.byteLength(JSON.stringify(hydrated)) >
+        this.options.maxSessionBytes
+      )
+        throw new Error(`Oversized stored session: ${id}`);
+    }
+    return {
+      session: {
+        id,
+        createdAt: raw.createdAt,
+        flow: flowSchema.parse(raw.flow),
+      },
+      ...(typeof raw.sourceSnapshotId === 'string'
+        ? { sourceSnapshotId: raw.sourceSnapshotId }
+        : {}),
+    };
+  }
+
+  private async readSession(id: string): Promise<FlowSession> {
+    return (await this.readStoredSession(id)).session;
+  }
+
+  private sourceDirectory() {
+    return join(this.directory, '.code-anime-sources');
+  }
+
+  private async readSourceSnapshot(
+    id: string,
+  ): Promise<Record<string, string>> {
+    if (!(await lstat(this.sourceDirectory())).isDirectory())
+      throw new Error('Invalid source snapshot directory');
+    const path = join(this.sourceDirectory(), id + '.json');
+    const info = await lstat(path);
+    if (!info.isFile() || info.size > this.options.maxSessionBytes)
+      throw new Error(`Invalid source snapshot: ${id}`);
+    const handle = await open(
+      path,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+    );
+    let contents: string;
+    try {
+      const opened = await handle.stat();
+      if (
+        !opened.isFile() ||
+        opened.size > this.options.maxSessionBytes ||
+        opened.dev !== info.dev ||
+        opened.ino !== info.ino
+      )
+        throw new Error(`Invalid source snapshot: ${id}`);
+      contents = await handle.readFile({ encoding: 'utf8' });
+    } finally {
+      await handle.close();
+    }
+    if (createHash('sha256').update(contents).digest('hex') !== id)
+      throw new Error(`Source snapshot checksum mismatch: ${id}`);
+    const parsed = JSON.parse(contents) as Record<string, unknown>;
+    if (
+      !parsed ||
+      Array.isArray(parsed) ||
+      typeof parsed !== 'object' ||
+      Object.values(parsed).some((source) => typeof source !== 'string')
+    )
+      throw new Error(`Invalid source snapshot content: ${id}`);
+    return parsed as Record<string, string>;
+  }
+
+  private async saveSourceSnapshot(contents: string, id: string) {
+    const directory = this.sourceDirectory();
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    if (!(await lstat(directory)).isDirectory())
+      throw new Error('Invalid source snapshot directory');
+    const target = join(directory, id + '.json');
+    try {
+      await this.readSourceSnapshot(id);
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    const temporary = join(directory, randomUUID() + '.tmp');
+    try {
+      await writeFile(temporary, contents, {
+        encoding: 'utf8',
+        mode: 0o600,
+        flag: 'wx',
+      });
+      await rename(temporary, target);
+    } finally {
+      await rm(temporary, { force: true });
+    }
+  }
+
+  private async pruneSourceSnapshots() {
+    const directory = this.sourceDirectory();
+    let names: string[];
+    try {
+      if (!(await lstat(directory)).isDirectory())
+        throw new Error('Invalid source snapshot directory');
+      names = await readdir(directory);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw error;
+    }
+    const used = new Set(
+      [...this.index.values()].map((metadata) => metadata.sourceSnapshotId),
+    );
+    for (const name of names) {
+      if (/^[a-f0-9]{64}\.json$/.test(name) && !used.has(name.slice(0, -5)))
+        await rm(join(directory, name), { force: true });
+      // An interrupted write leaves no valid reference to its temporary file.
+      if (/^[a-f0-9-]{36}\.tmp$/.test(name))
+        await rm(join(directory, name), { force: true });
+    }
+  }
+
+  private scheduleSourcePrune() {
+    // A concurrent session write may already have created a snapshot that it
+    // has not yet referenced. Prune only after that write has settled.
+    const cleanup = this.queue.then(() => this.pruneSourceSnapshots());
+    this.queue = cleanup.catch(() => undefined);
   }
 
   private async quarantine(id: string, reason: unknown) {
@@ -152,9 +288,10 @@ export class FileSessionStore implements SessionStore {
       }
       if (entry.name !== id + '.json') continue;
       try {
-        const session = await this.readSession(id);
+        const { session, sourceSnapshotId } = await this.readStoredSession(id);
         this.index.set(id, {
           createdAt: session.createdAt,
+          ...(sourceSnapshotId ? { sourceSnapshotId } : {}),
           ...((session.flow.trace?.recording ?? session.flow.trace?.simulation)
             ?.previousSessionId
             ? {
@@ -170,6 +307,7 @@ export class FileSessionStore implements SessionStore {
       }
     }
     await this.pruneExpired();
+    await this.pruneSourceSnapshots();
   }
 
   private async releaseLock() {
@@ -201,32 +339,64 @@ export class FileSessionStore implements SessionStore {
       createdAt: new Date().toISOString(),
       flow,
     };
-    const data = JSON.stringify(session);
-    if (Buffer.byteLength(data) > this.options.maxSessionBytes)
+    // Enforce the original per-session quota before splitting a shared source
+    // snapshot out of the on-disk continuation envelope.
+    if (
+      Buffer.byteLength(JSON.stringify(session)) > this.options.maxSessionBytes
+    )
       throw new Error('Flow exceeds session size limit');
+    const sourceFiles = flow.trace?.sourceFiles;
+    const sourceContents = sourceFiles
+      ? JSON.stringify(sourceFiles)
+      : undefined;
+    const sourceSnapshotId = sourceContents
+      ? createHash('sha256').update(sourceContents).digest('hex')
+      : undefined;
+    const storedFlow = sourceSnapshotId
+      ? {
+          ...flow,
+          trace: { ...flow.trace!, sourceFiles: undefined },
+        }
+      : flow;
+    const data = JSON.stringify({
+      ...session,
+      flow: storedFlow,
+      ...(sourceSnapshotId ? { sourceSnapshotId } : {}),
+    });
     await this.pruneExpired();
     if (this.index.size >= this.options.maxSessions)
       throw new Error(
         'Session limit reached; delete saved sessions or wait for expiry',
       );
-    const target = join(this.directory, session.id + '.json');
-    const temporary = target + '.tmp';
     try {
-      await writeFile(temporary, data, {
-        encoding: 'utf8',
-        mode: 0o600,
-        flag: 'wx',
-      });
-      await rename(temporary, target);
-      const previousSessionId = (
-        flow.trace?.recording ?? flow.trace?.simulation
-      )?.previousSessionId;
-      this.index.set(session.id, {
-        createdAt: session.createdAt,
-        ...(previousSessionId ? { previousSessionId } : {}),
-      });
-    } finally {
-      await rm(temporary, { force: true });
+      if (sourceSnapshotId && sourceContents)
+        await this.saveSourceSnapshot(sourceContents, sourceSnapshotId);
+      const target = join(this.directory, session.id + '.json');
+      const temporary = target + '.tmp';
+      try {
+        await writeFile(temporary, data, {
+          encoding: 'utf8',
+          mode: 0o600,
+          flag: 'wx',
+        });
+        await rename(temporary, target);
+        const previousSessionId = (
+          flow.trace?.recording ?? flow.trace?.simulation
+        )?.previousSessionId;
+        this.index.set(session.id, {
+          createdAt: session.createdAt,
+          ...(sourceSnapshotId ? { sourceSnapshotId } : {}),
+          ...(previousSessionId ? { previousSessionId } : {}),
+        });
+      } finally {
+        await rm(temporary, { force: true });
+      }
+    } catch (error) {
+      // A snapshot can be saved before its session envelope fails to commit.
+      // Keep shared snapshots referenced by other sessions, but remove any
+      // orphan immediately rather than waiting for a process restart.
+      await this.pruneSourceSnapshots().catch(() => undefined);
+      throw error;
     }
     return session;
   }
@@ -240,17 +410,22 @@ export class FileSessionStore implements SessionStore {
       if (Date.now() - Date.parse(session.createdAt) >= this.options.ttlMs) {
         await rm(path, { force: true });
         this.index.delete(id);
+        // Run cleanup after any active save, so an in-progress write cannot
+        // lose the snapshot it is about to reference.
+        this.scheduleSourcePrune();
         return undefined;
       }
       return session;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         this.index.delete(id);
+        this.scheduleSourcePrune();
         return undefined;
       }
       // Another process may have edited a saved file after recovery. Remove
       // that session from the live index while keeping its bytes for diagnosis.
       await this.quarantine(id, error);
+      this.scheduleSourcePrune();
       return undefined;
     }
   }
@@ -262,6 +437,7 @@ export class FileSessionStore implements SessionStore {
         this.index.delete(id);
       }
     }
+    await this.pruneSourceSnapshots();
   }
 
   private async sessions(): Promise<FlowSession[]> {
@@ -287,12 +463,19 @@ export class FileSessionStore implements SessionStore {
   async list(): Promise<FlowSession[]> {
     return this.closed ? [] : this.sessions();
   }
-  async delete(id: string): Promise<boolean> {
+  delete(id: string): Promise<boolean> {
     sessionIdSchema.parse(id);
-    if (!(await this.get(id))) return false;
-    await rm(join(this.directory, id + '.json'), { force: true });
-    this.index.delete(id);
-    return true;
+    // A rollback can delete a chunk while another writer is saving an equal
+    // content-addressed snapshot. Serialize GC with those pending writes.
+    const pending = this.queue.then(async () => {
+      if (!(await this.get(id))) return false;
+      await rm(join(this.directory, id + '.json'), { force: true });
+      this.index.delete(id);
+      await this.pruneSourceSnapshots();
+      return true;
+    });
+    this.queue = pending.catch(() => undefined);
+    return pending;
   }
 
   async latest(): Promise<FlowSession | undefined> {

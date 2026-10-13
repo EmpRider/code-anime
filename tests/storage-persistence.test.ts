@@ -98,6 +98,217 @@ test('persistent sessions and continuation index survive a normal close and rest
   });
 });
 
+test('stored continuations share one exact source snapshot across restarts and deletion', async () => {
+  await withDirectory(async (directory) => {
+    const config = {
+      ...options,
+      maxSessionBytes: 2 * 1024 * 1024,
+      persistentDirectory: directory,
+    };
+    const sources = {
+      'main.cjs': 'const value = 42;\n' + '// padding\n'.repeat(120_000),
+      'helper.cjs': 'exports.answer = () => 42;\n',
+    };
+    const firstFlow = flowSchema.parse({
+      ...sample,
+      trace: {
+        ...continuation(randomUUID()).trace!,
+        sourceFiles: sources,
+        simulation: {
+          mode: 'ai-mock',
+          complete: true,
+          coverage: 'Test trace',
+          evidenceIds: [],
+        },
+      },
+    });
+    const firstStore = await FileSessionStore.open(tmpdir(), config);
+    let firstId: string;
+    let secondId: string;
+    try {
+      firstId = (await firstStore.create(firstFlow)).id;
+      secondId = (
+        await firstStore.create({
+          ...firstFlow,
+          trace: {
+            ...firstFlow.trace!,
+            simulation: {
+              ...firstFlow.trace!.simulation!,
+              previousSessionId: firstId,
+            },
+          },
+        })
+      ).id;
+    } finally {
+      await firstStore.close();
+    }
+
+    const files = (
+      await readdir(join(directory, '.code-anime-sources'))
+    ).filter((name) => name.endsWith('.json'));
+    assert.equal(files.length, 1);
+    const storedFirst = JSON.parse(
+      await readFile(join(directory, firstId + '.json'), 'utf8'),
+    );
+    const storedSecond = JSON.parse(
+      await readFile(join(directory, secondId + '.json'), 'utf8'),
+    );
+    assert.equal(storedFirst.sourceSnapshotId, storedSecond.sourceSnapshotId);
+    assert.equal(storedFirst.flow.trace.sourceFiles, undefined);
+    assert.equal(storedSecond.flow.trace.sourceFiles, undefined);
+    assert.ok(
+      Buffer.byteLength(JSON.stringify(storedSecond)) < 10_000,
+      'A continuation should store its events and a compact source reference',
+    );
+
+    const restored = await FileSessionStore.open(tmpdir(), config);
+    try {
+      assert.deepEqual((await restored.get(firstId))?.flow, firstFlow);
+      assert.deepEqual(
+        (await restored.next(firstId))?.flow.trace?.sourceFiles,
+        sources,
+      );
+      assert.equal(await restored.delete(firstId), true);
+      assert.deepEqual(
+        (await restored.get(secondId))?.flow.trace?.sourceFiles,
+        sources,
+        'Deleting one continuation must preserve sources used by another',
+      );
+      assert.equal(await restored.delete(secondId), true);
+      assert.deepEqual(
+        await readdir(join(directory, '.code-anime-sources')),
+        [],
+      );
+    } finally {
+      await restored.close();
+    }
+  });
+});
+
+test('recovery quarantines a session with a corrupted shared source snapshot', async () => {
+  await withDirectory(async (directory) => {
+    const config = { ...options, persistentDirectory: directory };
+    const initial = await FileSessionStore.open(tmpdir(), config);
+    let id: string;
+    try {
+      id = (
+        await initial.create(
+          flowSchema.parse({
+            ...sample,
+            trace: {
+              ...continuation(randomUUID()).trace!,
+              sourceFiles: { 'main.py': 'print(42)\n' },
+            },
+          }),
+        )
+      ).id;
+    } finally {
+      await initial.close();
+    }
+    const sources = join(directory, '.code-anime-sources');
+    const [filename] = await readdir(sources);
+    assert.ok(filename);
+    await writeFile(join(sources, filename), '{"main.py":"altered"}');
+    const originalWarn = console.warn;
+    const warnings: string[] = [];
+    console.warn = (message) => warnings.push(String(message));
+    let restored: FileSessionStore;
+    try {
+      restored = await FileSessionStore.open(tmpdir(), config);
+    } finally {
+      console.warn = originalWarn;
+    }
+    try {
+      assert.equal(await restored.get(id), undefined);
+      assert.equal((await restored.list()).length, 0);
+      assert.equal(warnings.length, 1);
+      assert.match(warnings[0]!, /checksum mismatch/);
+      assert.deepEqual(await readdir(sources), []);
+    } finally {
+      await restored.close();
+    }
+  });
+});
+
+test('a session write failure prunes an orphan snapshot without affecting the queue', async () => {
+  await withDirectory(async (directory) => {
+    const store = await FileSessionStore.open(tmpdir(), {
+      ...options,
+      persistentDirectory: directory,
+    });
+    const flow = flowSchema.parse({
+      ...sample,
+      trace: {
+        ...continuation(randomUUID()).trace!,
+        sourceFiles: { 'entry.js': 'console.log(42);\n' },
+      },
+    });
+    // Inject a failure after the snapshot has been persisted, before the
+    // session envelope can commit. The real snapshot writer still runs.
+    const writer = store as unknown as {
+      saveSourceSnapshot(contents: string, id: string): Promise<void>;
+    };
+    const original = writer.saveSourceSnapshot.bind(store);
+    writer.saveSourceSnapshot = async (contents, id) => {
+      await original(contents, id);
+      throw new Error('Injected session write failure');
+    };
+    try {
+      await assert.rejects(
+        store.create(flow),
+        /Injected session write failure/,
+      );
+      assert.deepEqual(
+        await readdir(join(directory, '.code-anime-sources')),
+        [],
+      );
+      writer.saveSourceSnapshot = original;
+      assert.deepEqual((await store.create(flow)).flow, flow);
+    } finally {
+      await store.close();
+    }
+  });
+});
+
+test('runtime corruption and missing sessions release unused source snapshots', async () => {
+  await withDirectory(async (directory) => {
+    const store = await FileSessionStore.open(tmpdir(), {
+      ...options,
+      persistentDirectory: directory,
+    });
+    const sourceDir = join(directory, '.code-anime-sources');
+    const flow = flowSchema.parse({
+      ...sample,
+      trace: {
+        ...continuation(randomUUID()).trace!,
+        sourceFiles: { 'entry.js': 'console.log(42);\n' },
+      },
+    });
+    const first = await store.create(flow);
+    const second = await store.create(flow);
+    try {
+      await writeFile(join(directory, first.id + '.json'), '{invalid');
+      const originalWarn = console.warn;
+      console.warn = () => {};
+      try {
+        assert.equal(await store.get(first.id), undefined);
+      } finally {
+        console.warn = originalWarn;
+      }
+      assert.deepEqual((await store.get(second.id))?.flow, flow);
+      await rm(join(directory, second.id + '.json'));
+      assert.equal(await store.get(second.id), undefined);
+    } finally {
+      await store.close(); // Drains queued source cleanup after live reads.
+    }
+    assert.deepEqual(await readdir(sourceDir), []);
+    assert.equal(
+      (await readdir(join(directory, '.code-anime-corrupt'))).length,
+      1,
+    );
+  });
+});
+
 test('saved HTTP flow and independently continued comparison reopen across runtime restarts', async () => {
   await withDirectory(async (directory) => {
     const config = {
