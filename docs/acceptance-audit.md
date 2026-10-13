@@ -14,6 +14,40 @@ verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
 
+## Recorder regression follow-up (local verification, October 12)
+
+October 13 update: The Node 24 full suite passed with 133 tests and one
+optional CodeGraph skip after increasing the Inspector connection retry window.
+The Node 26 default-concurrency run intermittently failed three Inspector
+WebSocket handshakes; serial execution passed all 133 active tests. Core test
+files now run serially to avoid competing V8 Inspector startups in constrained
+CI runners, and failed WebSocket handshakes retain the underlying error text
+when available. The final Node 26 `npm run check` passed 133 tests with one
+optional CodeGraph skip, typecheck, build, and formatting. The packed-package
+MCP/CLI/player smoke test passed. Playwright passed all 42 browser tests,
+including a 4,308-event recorded performance fixture and a 20,000-event
+prepared trace. Node 22 and GitHub Actions still require fresh verification.
+The CI failure at `eee6421` predates all of these local changes; it does not
+prove the amended worktree is green on Ubuntu or Node 22.
+
+The JavaScript V8 recorder now tolerates an already-installed post-await
+breakpoint without terminating the recording. Await candidates retain their
+own enclosing statement source ranges, so an unreachable await after an
+earlier throw or return on the same line is not reported as a suspension.
+A regression covers the early-return case alongside the existing throw,
+async sibling, loop, and concurrent-invocation cases.
+
+Local validation: the final Node 26 core check passed 133 tests with one
+optional CodeGraph integration skip; all 43 recording tests passed under
+Node 24. The 42 Playwright browser tests passed, including the recorded-trace
+performance fixture. The production build, typecheck, Prettier check,
+packed-package check and git diff whitespace check also passed.
+
+The failed GitHub Actions run at commit `eee6421` predates these local
+changes. Node 22 and Ubuntu/Windows CI remain unverified on the amended
+worktree. These focused changes do not close the remaining 37-requirement
+visual, accessibility, cross-language and scale acceptance work.
+
 ## Requirement status matrix
 
 This table summarizes the 37 original requirements. **Bounded** means the

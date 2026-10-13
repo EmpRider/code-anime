@@ -37,13 +37,15 @@ async function fixture(files: Record<string, string>) {
   };
 }
 async function wait(service: RecordingService, jobId: string) {
-  for (let i = 0; i < 1000; i++) {
-    const result = await service.run({ action: 'status', jobId });
+  const deadline = Date.now() + 40000;
+  let result = await service.run({ action: 'status', jobId });
+  while (Date.now() < deadline) {
     if (result.status === 'failed') throw new Error(result.error);
     if (result.status === 'ready') return result;
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    result = await service.run({ action: 'status', jobId });
   }
-  throw new Error('Recording did not finish');
+  throw new Error('Recording did not finish: ' + JSON.stringify(result));
 }
 async function allEvents(store: FileSessionStore, sessionId: string) {
   let current = await store.get(sessionId);
@@ -626,6 +628,38 @@ test('JavaScript unreachable await later on the same line cannot suspend a throw
   }
 });
 
+test('JavaScript early return before an unreachable await does not invent suspension', async () => {
+  const f = await fixture({
+    'main.mjs': [
+      'async function early() { return 42; await Promise.resolve(3); }',
+      'console.log(await early());',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'javascript',
+      projectRoot: f.root,
+      entry: 'main.mjs',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const early = events.filter((event) => event.symbolId === 'main.mjs:early');
+    assert.equal(early.filter((event) => event.kind === 'enter').length, 1);
+    assert.equal(early.filter((event) => event.kind === 'await').length, 0);
+    assert.equal(early.filter((event) => event.kind === 'resume').length, 0);
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      '42\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
 test('JavaScript recording follows user callbacks invoked through native event infrastructure', async () => {
   const f = await fixture({
     'main.mjs': [

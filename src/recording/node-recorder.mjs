@@ -155,12 +155,16 @@ function functionEntries(source) {
     // The V8 debugger remains authoritative for syntax Acorn cannot parse.
     return { entries: [], awaitSites: new Map(), functionRanges: [] };
   }
-  const pending = [{ node: ast, scope: null }];
+  const pending = [{ node: ast, scope: null, statement: null }];
   const entries = new Map();
   const awaitSites = new Map();
   const functionRanges = [];
   while (pending.length) {
-    const { node, scope: parentScope } = pending.pop();
+    const {
+      node,
+      scope: parentScope,
+      statement: parentStatement,
+    } = pending.pop();
     const isFunction =
       node.type === 'FunctionDeclaration' ||
       node.type === 'FunctionExpression' ||
@@ -168,6 +172,13 @@ function functionEntries(source) {
     // Two different functions can share a line. Associate each await with its
     // nearest lexical function, so a sibling throw cannot look like a suspend.
     const scope = isFunction ? `${node.start}:${node.end}` : parentScope;
+    const statement = isFunction
+      ? null
+      : node.type.endsWith('Statement') && node.type !== 'BlockStatement'
+        ? node
+        : node.type === 'VariableDeclaration'
+          ? node
+          : parentStatement;
     if (isFunction) {
       functionRanges.push({
         scope,
@@ -185,8 +196,12 @@ function functionEntries(source) {
         (node.type === 'ForOfStatement' && node.await === true))
     ) {
       const line = node.loc.start.line;
-      if (!awaitSites.has(line)) awaitSites.set(line, new Set());
-      awaitSites.get(line).add(scope);
+      if (!awaitSites.has(line)) awaitSites.set(line, []);
+      awaitSites.get(line).push({
+        scope,
+        start: statement?.loc?.start || node.loc.start,
+        end: statement?.loc?.end || node.loc.end,
+      });
     }
     if (isFunction) {
       const body = node.body;
@@ -210,7 +225,7 @@ function functionEntries(source) {
           typeof child === 'object' &&
           typeof child.type === 'string'
         )
-          pending.push({ node: child, scope });
+          pending.push({ node: child, scope, statement });
       }
     }
   }
@@ -624,7 +639,18 @@ async function breakpointAfterAwait(frame) {
       currentScope = scope;
     }
   }
-  if (!candidates.has(currentScope)) return false;
+  if (
+    !candidates.some(
+      ({ scope, start, end }) =>
+        scope === currentScope &&
+        positionInRange(
+          { line: lineNumber + 1, column: columnNumber },
+          start,
+          end,
+        ),
+    )
+  )
+    return false;
   const next = lines.findIndex(
     (line, index) =>
       index >= frame.generatedLine &&
@@ -634,9 +660,18 @@ async function breakpointAfterAwait(frame) {
   if (next < 0) return false;
   const key = `${frame.raw.location.scriptId}:${next}`;
   if (!resumeBreakpoints.has(key)) {
-    await request('Debugger.setBreakpoint', {
-      location: { scriptId: frame.raw.location.scriptId, lineNumber: next },
-    });
+    try {
+      await request('Debugger.setBreakpoint', {
+        location: { scriptId: frame.raw.location.scriptId, lineNumber: next },
+      });
+    } catch (error) {
+      if (
+        !String(error.message).includes(
+          'Breakpoint at specified location already exists.',
+        )
+      )
+        throw error;
+    }
     resumeBreakpoints.add(key);
   }
   return true;
@@ -701,7 +736,6 @@ async function paused(params) {
     !(
       (stack[common].awaiting ||
         Object.hasOwn(stack[common], 'observedReturn')) &&
-      frames[common].generatedLine === stack[common].entryLine &&
       [
         ...(entryBreakpoints.get(
           `${frames[common].raw.location.scriptId}:${frames[common].generatedLine - 1}`,
@@ -781,9 +815,6 @@ async function paused(params) {
             current.generatedColumn > suspension.generatedColumn));
       current.resuming = resuming;
       current.callId = resuming ? suspension.callId : `call-${++nextCall}`;
-      current.entryLine = resuming
-        ? suspension.entryLine
-        : current.generatedLine;
       stack.push(current);
       if (resuming) {
         suspendedCalls.delete(current.callId);
@@ -1012,7 +1043,7 @@ async function connect(url) {
   // The Inspector can announce its listening URL before it is able to accept
   // the WebSocket upgrade under heavy startup load. Retry only the initial
   // connection, with a small bounded delay; never replay debugger commands.
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 10; attempt++) {
     if (stopped || child.exitCode !== null)
       throw new Error('Inspector connection stopped before attachment');
     const candidate = new WebSocket(url);
@@ -1022,7 +1053,13 @@ async function connect(url) {
         candidate.addEventListener('open', resolve, { once: true });
         candidate.addEventListener(
           'error',
-          () => reject(new Error('WebSocket connection failed')),
+          (event) =>
+            reject(
+              new Error(
+                'WebSocket connection failed' +
+                  (event.error?.message ? ': ' + event.error.message : ''),
+              ),
+            ),
           { once: true },
         );
       });
@@ -1041,8 +1078,10 @@ async function connect(url) {
       } catch {
         /* A failed handshake may already have closed the socket. */
       }
-      if (attempt === 3 || stopped || child.exitCode !== null) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 80 * (attempt + 1)));
+      if (attempt === 9 || stopped || child.exitCode !== null) throw error;
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(150 * (attempt + 1), 600)),
+      );
     }
   }
   socket.addEventListener('message', (message) => {
