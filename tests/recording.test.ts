@@ -1652,6 +1652,18 @@ test('JavaScript awaits inside loops preserve each invocation and iteration', as
       entry: 'main.mjs',
     });
     const result = await wait(f.service, job.jobId);
+    if (!result.complete && result.sessionId) {
+      const { events: partial } = await allEvents(f.store, result.sessionId);
+      const compact = partial.map((event) => [
+        event.kind,
+        event.symbolId,
+        event.callId,
+        event.source?.line,
+        event.result,
+        event.output,
+      ]);
+      console.error('Incomplete async recording:', JSON.stringify(compact));
+    }
     assert.equal(result.complete, true, JSON.stringify(result));
     const { events } = await allEvents(f.store, result.sessionId!);
     const workers = events.filter(
@@ -1721,6 +1733,18 @@ test('JavaScript nested and recursive async calls retain independent invocation 
       maxEvents: 3000,
     });
     const result = await wait(f.service, job.jobId);
+    if (!result.complete && result.sessionId) {
+      const { events: partial } = await allEvents(f.store, result.sessionId);
+      const compact = partial.map((event) => [
+        event.kind,
+        event.symbolId,
+        event.callId,
+        event.source?.line,
+        event.result,
+        event.output,
+      ]);
+      console.error('Incomplete async recording:', JSON.stringify(compact));
+    }
     assert.equal(result.complete, true, JSON.stringify(result));
     const { events } = await allEvents(f.store, result.sessionId!);
     const enters = events.filter(

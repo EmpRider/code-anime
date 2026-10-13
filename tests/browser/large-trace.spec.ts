@@ -252,6 +252,9 @@ test('five persisted continuations preserve 1,500 invocations and reversible nav
   page,
 }) => {
   test.setTimeout(120_000);
+  const startTime = Date.now();
+  const checkpoint = (phase: string) =>
+    console.log(`persisted continuation ${phase}: ${Date.now() - startTime}ms`);
   const runtime = await startRuntime({ ...readConfig({}), port: 0 });
   try {
     const sourceText = Array.from(
@@ -358,6 +361,7 @@ test('five persisted continuations preserve 1,500 invocations and reversible nav
       );
       firstSessionId ??= session.id;
       previousSessionId = session.id;
+      checkpoint(`saved chunk ${chunkIndex + 1}`);
     }
     const requests: string[] = [];
     const errors: string[] = [];
@@ -367,6 +371,7 @@ test('five persisted continuations preserve 1,500 invocations and reversible nav
       await route.continue();
     });
     await page.goto(`${runtime.baseUrl}/flow/${firstSessionId}`);
+    checkpoint('opened initial page');
     await expect(page.locator('#progress')).toHaveText('0 / 1501');
     let loaded = 1501;
     for (let i = 1; i < 5; i++) {
@@ -382,9 +387,11 @@ test('five persisted continuations preserve 1,500 invocations and reversible nav
         'max',
         String(loaded),
       );
+      checkpoint(`loaded continuation ${i + 1}`);
     }
     expect(loaded).toBe(7503);
     expect(requests).toHaveLength(5);
+    checkpoint('loaded full trace');
     const timings = await page.evaluate(() => {
       const timeline = document.querySelector<HTMLInputElement>('#timeline')!;
       return Array.from({ length: 20 }, (_, i) => {
@@ -396,10 +403,12 @@ test('five persisted continuations preserve 1,500 invocations and reversible nav
     });
     console.log(`persisted continuation seek p95=${timings[18]!.toFixed(1)}ms`);
     expect(timings[18]).toBeLessThan(700);
+    checkpoint('completed seek measurement');
     await page.locator('#view-mode').selectOption('map');
     await page
       .getByRole('button', { name: 'Inspect method worker_1499' })
       .click();
+    checkpoint('opened final invocation');
     const finalInvocation = page.locator(
       '#method-details details[data-invocation="call-1499"]',
     );
@@ -425,6 +434,7 @@ test('five persisted continuations preserve 1,500 invocations and reversible nav
     await expect(page.locator('#status')).toHaveText('Replay complete');
     expect(requests).toHaveLength(5);
     expect(errors).toEqual([]);
+    checkpoint('completed assertions');
   } finally {
     await runtime.close();
   }
