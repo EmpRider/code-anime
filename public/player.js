@@ -88,7 +88,8 @@ function replaceStackControls(container, previous, current, fragment) {
       if (nextIndex >= 0) break;
     }
   }
-  container.replaceChildren(fragment);
+  if (fragment) container.replaceChildren(fragment);
+  else container.replaceChildren();
   if (focusedIndex >= 0) {
     const target =
       container.querySelectorAll('button.stack-link')[nextIndex] ?? $('play');

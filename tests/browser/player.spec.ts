@@ -555,9 +555,16 @@ test('execution path stays synchronized across paging, seeking and view changes'
   await page.locator('#source-stack .stack-link:first-child').focus();
   await seekWithStackFocus(11);
   await expect(page.locator('#play')).toBeFocused();
+  await expect(page.locator('#source-stack')).toBeEmpty();
+  await expect(page.locator('#frame-list')).toBeEmpty();
   await page.locator('#timeline').fill('5');
   await expect(page.locator('#source-stack .stack-link')).toHaveCount(1);
   await expect(page.locator('#frame-list .frame-item')).toHaveCount(1);
+  await page.locator('#source-stack .stack-link').focus();
+  await seekWithStackFocus(0);
+  await expect(page.locator('#play')).toBeFocused();
+  await expect(page.locator('#source-stack')).toBeEmpty();
+  await expect(page.locator('#frame-list')).toBeEmpty();
   expect(requests).toEqual([]);
 });
 

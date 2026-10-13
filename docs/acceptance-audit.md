@@ -22,9 +22,10 @@ focus loss when a selected child invocation was replaced by a sibling. The
 player now moves focus to the same invocation if it survives, otherwise to
 the closest surviving caller, and finally to Play when the stack empties.
 Buttons elsewhere retain their focus; replacement uses `preventScroll`.
+Restarting playback also clears both stack panels without stray placeholder text.
 
 The regression verifies source and State stack controls, both same-call and
-returned-child transitions, and empty-stack fallback without requesting new
+returned-child transitions, and empty-stack/restart fallback without requesting new
 analysis. Local `npm run check` passed (133 tests, one optional live-CodeGraph
 skip), all 42 browser tests passed, `npm run package:check` passed the packed
 CLI/MCP/player checks, and `git diff --check` passed. These are local Windows
