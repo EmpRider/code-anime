@@ -165,6 +165,8 @@ function functionEntries(source) {
   const entries = new Map();
   const awaitSites = new Map();
   const functionRanges = [];
+  const parents = new WeakMap();
+  const forAwaitLoops = [];
   while (pending.length) {
     const {
       node,
@@ -203,11 +205,13 @@ function functionEntries(source) {
     ) {
       const line = node.loc.start.line;
       if (!awaitSites.has(line)) awaitSites.set(line, []);
-      awaitSites.get(line).push({
+      const site = {
         scope,
         start: statement?.loc?.start || node.loc.start,
         end: statement?.loc?.end || node.loc.end,
-      });
+      };
+      awaitSites.get(line).push(site);
+      if (node.type === 'ForOfStatement') forAwaitLoops.push({ node, site });
     }
     if (isFunction) {
       const body = node.body;
@@ -223,16 +227,51 @@ function functionEntries(source) {
         });
       }
     }
-    for (const value of Object.values(node)) {
+    for (const [key, value] of Object.entries(node)) {
       const candidates = Array.isArray(value) ? value : [value];
-      for (const child of candidates) {
+      for (let index = 0; index < candidates.length; index++) {
+        const child = candidates[index];
         if (
           child &&
           typeof child === 'object' &&
           typeof child.type === 'string'
-        )
+        ) {
+          parents.set(child, { parent: node, key, index });
           pending.push({ node: child, scope, statement });
+        }
       }
+    }
+  }
+  // A for-await iterator can finish without executing its body again.
+  // Break at the next lexical statement to observe post-loop source execution
+  // without deriving any returns or values from syntax.
+  for (const { node, site } of forAwaitLoops) {
+    let current = node;
+    while (parents.has(current)) {
+      const { parent, key, index } = parents.get(current);
+      if (
+        (parent.type === 'BlockStatement' || parent.type === 'Program') &&
+        key === 'body'
+      ) {
+        const following = parent.body
+          .slice(index + 1)
+          .find((candidate) => candidate.type !== 'EmptyStatement');
+        if (following?.loc) {
+          site.followUp = {
+            lineNumber: following.loc.start.line - 1,
+            columnNumber: following.loc.start.column,
+          };
+          break;
+        }
+      }
+      // A sibling of an outer function cannot be this call's continuation.
+      if (
+        parent.type === 'FunctionDeclaration' ||
+        parent.type === 'FunctionExpression' ||
+        parent.type === 'ArrowFunctionExpression'
+      )
+        break;
+      current = parent;
     }
   }
   return { entries: [...entries.values()], awaitSites, functionRanges };
@@ -681,18 +720,16 @@ async function breakpointAfterAwait(frame) {
       currentScope = scope;
     }
   }
-  if (
-    !candidates.some(
-      ({ scope, start, end }) =>
-        scope === currentScope &&
-        positionInRange(
-          { line: lineNumber + 1, column: columnNumber },
-          start,
-          end,
-        ),
-    )
-  )
-    return false;
+  const matching = candidates.filter(
+    ({ scope, start, end }) =>
+      scope === currentScope &&
+      positionInRange(
+        { line: lineNumber + 1, column: columnNumber },
+        start,
+        end,
+      ),
+  );
+  if (!matching.length) return false;
   const next = lines.findIndex(
     (line, index) =>
       index >= frame.generatedLine &&
@@ -700,11 +737,17 @@ async function breakpointAfterAwait(frame) {
       !line.trim().startsWith('//'),
   );
   if (next < 0) return false;
-  const key = `${frame.raw.location.scriptId}:${next}`;
-  if (!resumeBreakpoints.has(key)) {
+  const scriptId = frame.raw.location.scriptId;
+  const locations = [
+    { lineNumber: next },
+    ...matching.map((candidate) => candidate.followUp).filter(Boolean),
+  ];
+  for (const location of locations) {
+    const key = `${scriptId}:${location.lineNumber}:${location.columnNumber ?? 0}`;
+    if (resumeBreakpoints.has(key)) continue;
     try {
       await request('Debugger.setBreakpoint', {
-        location: { scriptId: frame.raw.location.scriptId, lineNumber: next },
+        location: { scriptId, ...location },
       });
     } catch (error) {
       if (
