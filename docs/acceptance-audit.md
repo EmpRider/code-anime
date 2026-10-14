@@ -28,6 +28,16 @@ prepared-data-only interaction. This advances requirements 11, 23, 24, and 31;
 large recorded local snapshots, non-Chromium browser and assistive-technology
 acceptance remain incomplete.
 
+## Source-less scenario isolation (October 14)
+
+A prepared comparison or scenario without captured original source now clears
+the optional inline Values panel and its expanded state when returning to the
+initial cursor. This prevents prior-run locals and annotations from lingering in
+a different run's source workspace. A Chromium comparison regression checks
+source-file changes and the transition to a source-less baseline. This advances
+requirements 11, 28, 30, and 31 within the tested scenario; full cross-language
+and comparison acceptance remain open.
+
 ## Method map inspection without replay navigation (October 14)
 
 The compact disclosure beside a recorded invocation in the prepared

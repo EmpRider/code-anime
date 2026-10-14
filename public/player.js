@@ -2180,6 +2180,15 @@ function render() {
         true,
       );
     } else {
+      // A scenario without captured source must not retain the preceding
+      // scenario's inline values, especially when its panel was expanded.
+      sourceValuesExpanded = false;
+      sourceValuesCursor = -1;
+      sourceValuesEvent = undefined;
+      $('source-values-toggle').hidden = true;
+      $('source-values-toggle').setAttribute('aria-expanded', 'false');
+      $('source-values-panel').hidden = true;
+      $('source-values-panel').replaceChildren();
       shownSource = '';
       sourceRows.clear();
       highlightedSourceRow = undefined;
