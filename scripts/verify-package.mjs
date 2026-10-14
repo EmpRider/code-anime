@@ -24,6 +24,9 @@ try {
   const paths = packed.files.map((file) => file.path);
   for (const path of [
     'dist/index.js',
+    'dist/recording/python-recorder.py',
+    'dist/recording/node-recorder.mjs',
+    'dist/recording/inspector-stderr.mjs',
     'public/index.html',
     'public/player.js',
     'public/styles.css',
@@ -78,11 +81,19 @@ try {
       join(project, 'Generator.kt'),
       'class Generator {\n fun generate(input: String): String { return normalize(input) }\n fun normalize(input: String): String { return input.trim() }\n}\n',
     );
-    execFileSync(nativeCommand, ['init', project], {
-      env: { ...process.env, CODEGRAPH_TELEMETRY: '0' },
-      stdio: 'pipe',
-      timeout: 60000,
-    });
+    execFileSync(
+      nativeCommand,
+      [
+        ...JSON.parse(process.env.CODE_ANIME_CODEGRAPH_ARGS || '[]'),
+        'init',
+        project,
+      ],
+      {
+        env: { ...process.env, CODEGRAPH_TELEMETRY: '0' },
+        stdio: 'pipe',
+        timeout: 60000,
+      },
+    );
   }
   client = new Client({ name: 'package-smoke', version: '1.0.0' });
   // Exercise the installed npm executable, not a development source file.
@@ -105,7 +116,89 @@ try {
   });
   await client.connect(transport);
   const tools = await client.listTools();
-  assert.equal(tools.tools.length, 10);
+  assert.equal(tools.tools.length, 11);
+  await writeFile(join(project, 'runtime.py'), 'print(10 + 20)\n');
+  const recordCall = async (arguments_) => {
+    const response = await client.callTool({
+      name: 'record_execution',
+      arguments: arguments_,
+    });
+    assert.notEqual(response.isError, true, JSON.stringify(response));
+    return JSON.parse(response.content[0].text);
+  };
+  const recordingJob = await recordCall({
+    action: 'start',
+    language: 'python',
+    projectRoot: project,
+    entry: 'runtime.py',
+  });
+  let recording;
+  for (let i = 0; i < 200; i++) {
+    recording = await recordCall({
+      action: 'status',
+      jobId: recordingJob.jobId,
+    });
+    if (!['running', 'saving'].includes(recording.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.equal(recording.status, 'ready', JSON.stringify(recording));
+  assert.equal(recording.complete, true);
+  const recordedFlow = await (
+    await fetch(new URL('/api/flow/' + recording.sessionId, recording.url))
+  ).json();
+  assert.equal(
+    recordedFlow.trace.events
+      .filter((event) => event.kind === 'console')
+      .map((event) => event.output)
+      .join(''),
+    '30\n',
+  );
+  await writeFile(
+    join(project, 'runtime.cjs'),
+    'function add(a, b) { return a + b; }\nconsole.log(add(10, 20));\n',
+  );
+  const javascriptJob = await recordCall({
+    action: 'start',
+    language: 'javascript',
+    projectRoot: project,
+    entry: 'runtime.cjs',
+  });
+  let javascriptRecording;
+  for (let i = 0; i < 200; i++) {
+    javascriptRecording = await recordCall({
+      action: 'status',
+      jobId: javascriptJob.jobId,
+    });
+    if (!['running', 'saving'].includes(javascriptRecording.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.equal(
+    javascriptRecording.status,
+    'ready',
+    JSON.stringify(javascriptRecording),
+  );
+  assert.equal(javascriptRecording.complete, true);
+  const javascriptFlow = await (
+    await fetch(
+      new URL(
+        '/api/flow/' + javascriptRecording.sessionId,
+        javascriptRecording.url,
+      ),
+    )
+  ).json();
+  assert.equal(javascriptFlow.trace.provider, 'node-v8-inspector');
+  assert.ok(
+    javascriptFlow.trace.events.some(
+      (event) => event.kind === 'enter' && event.symbolId === 'runtime.cjs:add',
+    ),
+  );
+  assert.equal(
+    javascriptFlow.trace.events
+      .filter((event) => event.kind === 'console')
+      .map((event) => event.output)
+      .join(''),
+    '30\n',
+  );
   const submission = await client.callTool({
     name: 'visualize_code_flow',
     arguments: {
@@ -245,5 +338,10 @@ try {
   );
 } finally {
   await client?.close();
-  await rm(temporary, { recursive: true, force: true });
+  await rm(temporary, {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 200,
+  });
 }

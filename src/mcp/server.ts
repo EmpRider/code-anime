@@ -9,6 +9,7 @@ import { type SessionStore } from '../domain/flow.js';
 import { AnimationBuilder } from '../services/animation-builder.js';
 import { SimulationService } from '../services/simulation-service.js';
 import { VisualizationService } from '../services/visualization-service.js';
+import { RecordingService } from '../services/recording-service.js';
 
 const string = { type: 'string' };
 const object = { type: 'object', additionalProperties: true };
@@ -31,11 +32,33 @@ export function createMcpServer(
     service.root(root),
   );
   const builder = new AnimationBuilder(simulation, store);
+  const recorder = new RecordingService(store, baseUrl, (root) =>
+    service.root(root),
+  );
   const server = new Server(
     { name: 'code-anime', version },
     { capabilities: { tools: {} } },
   );
   const tools = [
+    {
+      name: 'record_execution',
+      description:
+        'Execute a trusted Python or JavaScript entry file and record actual runtime events. Runs application code with local permissions and real side effects; use only when execution is requested. No CodeGraph or AI-generated steps required. Returns jobId; use status to get progress and a player URL, cancel to retain partial evidence. Python captures main-thread calls, generators, asyncio tasks, return values, exceptions, lines, locals and output. JavaScript captures V8 debugger-visible functions, pre-line locals and process output. JavaScript frame exits have no verified return value, and worker threads or child processes are outside scope.',
+      inputSchema: schema(
+        {
+          action: { type: 'string', enum: ['start', 'status', 'cancel'] },
+          language: { type: 'string', enum: ['python', 'javascript'] },
+          projectRoot: string,
+          entry: string,
+          args: { type: 'array', items: string },
+          jobId: string,
+          timeoutMs: { type: 'integer', minimum: 100, maximum: 300000 },
+          maxEvents: { type: 'integer', minimum: 10, maximum: 100000 },
+          maxTraceBytes: { type: 'integer', minimum: 4096, maximum: 67108864 },
+        },
+        ['action'],
+      ),
+    },
     {
       name: 'visualizer_capabilities',
       description:
@@ -52,7 +75,7 @@ export function createMcpServer(
           projectRoot: string,
           target: string,
           scenario: object,
-          maxDepth: { type: 'integer', minimum: 1, maximum: 30 },
+          maxDepth: { type: 'integer', minimum: 1 },
           maxEvents: { type: 'integer', minimum: 10, maximum: 2000 },
         },
         ['projectRoot', 'target'],
@@ -85,7 +108,7 @@ export function createMcpServer(
         {
           sessionId: string,
           scenario: object,
-          maxDepth: { type: 'integer', minimum: 1, maximum: 30 },
+          maxDepth: { type: 'integer', minimum: 1 },
         },
         ['sessionId', 'scenario'],
       ),
@@ -185,6 +208,7 @@ export function createMcpServer(
                     'loop',
                     'await',
                     'throw',
+                    'catch',
                     'unresolved',
                     'plan',
                   ],
@@ -206,6 +230,11 @@ export function createMcpServer(
                 set: object,
                 unset: { type: 'array', items: string },
                 assignTo: string,
+                unwindTo: {
+                  type: ['string', 'null'],
+                  description:
+                    'For throw only: retain this active callId and unwind its callees; null unwinds all frames. Omit to keep the stack, for example while executing finally blocks. Follow with catch and set to bind the exception in the handler.',
+                },
                 objectId: string,
                 fields: object,
                 unsetFields: { type: 'array', items: string },
@@ -264,6 +293,7 @@ export function createMcpServer(
                     'loop',
                     'await',
                     'throw',
+                    'catch',
                     'unresolved',
                     'plan',
                   ],
@@ -331,6 +361,9 @@ export function createMcpServer(
       const raw = request.params.arguments ?? {};
       let result: unknown;
       switch (request.params.name) {
+        case 'record_execution':
+          result = await recorder.run(raw);
+          break;
         case 'visualizer_capabilities':
           z.object({}).strict().parse(raw);
           result = service.capabilities();
@@ -360,7 +393,7 @@ export function createMcpServer(
             .object({
               sessionId: z.string().uuid(),
               scenario: z.record(z.unknown()),
-              maxDepth: z.number().int().min(1).max(30).optional(),
+              maxDepth: z.number().int().min(1).optional(),
             })
             .strict()
             .parse(raw);
@@ -437,6 +470,7 @@ export function createMcpServer(
     }
   });
   server.onclose = () => {
+    recorder.close();
     service.close();
     builder.close();
     simulation.close();

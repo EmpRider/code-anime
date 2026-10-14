@@ -11,6 +11,7 @@ import {
 } from '../analysis/contract.js';
 import { traceSchema, type TraceEvent } from '../domain/trace.js';
 import type { Flow, SessionStore } from '../domain/flow.js';
+import { collectSourceFiles } from './source-catalog.js';
 
 export const analyzeSchema = z
   .object({
@@ -18,7 +19,7 @@ export const analyzeSchema = z
     projectRoot: z.string().min(1),
     target: z.string().min(1).max(200),
     scenario: z.record(z.unknown()).optional(),
-    maxDepth: z.number().int().min(1).max(30).optional(),
+    maxDepth: z.number().int().min(1).optional(),
     maxEvents: z.number().int().min(10).max(2000).optional(),
   })
   .strict();
@@ -82,12 +83,29 @@ export class VisualizationService {
         ? 'Configured normalized MCP bridge'
         : 'Launch installed codegraph serve --mcp --path <active project> automatically; no bridge config required.',
       limits: {
-        maxDepth: 30,
+        maxDepth:
+          'Unlimited by default; optional caller-configured depth boundary',
         providerTimeoutMs: 60000,
         events: 2000,
         concurrentJobs: 2,
       },
-      tools: 10,
+      tools: 11,
+      runtimeRecording: {
+        tool: 'record_execution',
+        languages: ['python', 'javascript'],
+        scope:
+          'Opt-in Python or Node.js JavaScript runtime recording with real local side effects. Python records generators/asyncio; JavaScript records V8 Inspector source steps, parameters, bounded locals and output. JavaScript return values and worker threads are outside the observed scope. No CodeGraph required for runtime recording.',
+        unsupported: [
+          'other threads/processes',
+          'native internals',
+          'binary output',
+          'opaque object internals',
+          'JavaScript return values and exact asynchronous output-to-line timing',
+        ],
+        pythonCommand:
+          process.env.CODE_ANIME_PYTHON_COMMAND ||
+          (process.platform === 'win32' ? 'python' : 'python3'),
+      },
       workflow:
         'read_codegraph_evidence → build_mock_animation begin/append/finish → localhost URL',
       simulation:
@@ -97,8 +115,8 @@ export class VisualizationService {
       scriptFilesRequired: false,
       builderLimits: {
         operationsPerBatch: 100,
-        eventsPerBuild: 20000,
-        snapshotBytes: 40 * 1024 * 1024,
+        eventsPerBuild: 'No fixed total; batches are persisted on server disk',
+        snapshotBytesPerEvent: 3 * 1024 * 1024,
       },
     };
   }
@@ -158,6 +176,12 @@ export class VisualizationService {
       if (flow.trace!.projectRoot !== job.input.projectRoot)
         throw new Error('CodeGraph returned evidence for a different project');
       if (job.controller.signal.aborted) throw new Error('Analysis cancelled');
+      const sourceCatalog = await collectSourceFiles(
+        flow.trace!.projectRoot,
+        flow.trace!.events,
+      );
+      flow.trace!.sourceFiles = sourceCatalog.files;
+      flow.trace!.diagnostics.push(...sourceCatalog.diagnostics);
       const session = await this.store.create(flow);
       if (job.controller.signal.aborted) {
         await this.store.delete?.(session.id);
@@ -252,6 +276,10 @@ export class VisualizationService {
     if (!session?.flow.trace)
       throw new Error('Change plans require an analyzed trace baseline');
     const trace = structuredClone(session.flow.trace);
+    if (trace.recording)
+      throw new Error(
+        'Runtime recordings cannot include proposed events; prepare a separate simulated change scenario',
+      );
     if (trace.events.length + changes.length > 2000)
       throw new Error('Plan exceeds event limit');
     for (const [i, change] of changes.entries())

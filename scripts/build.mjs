@@ -1,8 +1,21 @@
-import { rmSync } from 'node:fs';
+import { rmSync, mkdirSync, copyFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 rmSync('dist', { recursive: true, force: true });
 execFileSync(
   process.execPath,
   ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.json'],
   { stdio: 'inherit' },
+);
+mkdirSync('dist/recording', { recursive: true });
+copyFileSync(
+  'src/recording/python-recorder.py',
+  'dist/recording/python-recorder.py',
+);
+copyFileSync(
+  'src/recording/node-recorder.mjs',
+  'dist/recording/node-recorder.mjs',
+);
+copyFileSync(
+  'src/recording/inspector-stderr.mjs',
+  'dist/recording/inspector-stderr.mjs',
 );

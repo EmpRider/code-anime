@@ -1,12 +1,12 @@
 # CodeGraph evidence and AI simulation
 
-Code Anime 0.4.1 uses CodeGraph for source discovery/retrieval and the host AI for mock execution. No built-in language parser or application executor exists.
+Code Anime uses CodeGraph for source discovery/retrieval and the host AI for mock execution. The default simulation workflow does not execute application code. A separate opt-in Python runtime recorder captures observed execution; see the README for its scope and limits.
 
 ## Native connection
 
 Code Anime launches the installed `codegraph serve --mcp --path <active-project>` executable with read-only tools enabled: status, node, callees, search, explore and files. It disables an extra watcher. It checks for a nonempty, usable index before accepting evidence. Already indexed projects continue automatically; missing setup stops with the actual blocker. The server does not install/index automatically.
 
-The installed CLI may use its own daemon/proxy lifecycle. Code Anime does not discover Cursor configurations or reuse a sibling MCP connection. `CODE_ANIME_CODEGRAPH_COMMAND` optionally selects a launcher outside PATH. Tests use CodeGraph 1.6.2 and Kotlin on Linux; direct Windows verification remains outstanding.
+The installed CLI may use its own daemon/proxy lifecycle. Code Anime does not discover Cursor configurations or reuse a sibling MCP connection. `CODE_ANIME_CODEGRAPH_COMMAND` optionally selects a launcher outside PATH. The npm-installed Windows `codegraph.cmd` is detected and launched through its Node shim, keeping MCP stdio connected without shell execution. Tests cover CodeGraph 1.6.2 with Kotlin on Linux and a real indexed Kotlin fixture with CodeGraph 0.9.9 on Windows (2026-10-10). The optional live test runs with `CODE_ANIME_TEST_CODEGRAPH` set to the CLI path; setting `CODE_ANIME_TEST_DEFAULT_CODEGRAPH=1` also verifies PATH discovery without command overrides.
 
 ## Evidence and simulation
 
@@ -20,7 +20,7 @@ The builder automatically splits completed traces into bounded storage chunks li
 
 ## Optional structural jobs and bridge
 
-`visualize_code_flow` walks indexed relationships. Its defaults remain depth 12/events 1000, maximum depth 30/events 2000 and a 100-request traversal budget. Those limits apply only to graph jobs; they do not set simulation depth. The graph output is labeled structural evidence.
+`visualize_code_flow` walks indexed relationships. Native traversal has no default call-depth limit; callers may supply a depth budget. The default event budget is 2,000, and individual provider calls have timeouts and bounded responses. Callee queries request up to 100 relationships and report possible truncation when that boundary is reached. Resource boundaries and unresolved relationships produce explicit incomplete-coverage diagnostics. These graph visits are structural evidence, not observed execution. They do not set simulation depth.
 
 An optional `CODE_ANIME_CODEGRAPH_CONFIG` may configure a normalized stdio/HTTP bridge for structural job tools. The v2 trace contract remains supported. The default evidence/AI workflow uses the native CLI and needs no bridge file. Importing an export preserves producer-supplied claims and is not live verification.
 

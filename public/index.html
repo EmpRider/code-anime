@@ -10,49 +10,72 @@
   <body>
     <header class="app-header">
       <a class="brand" href="/" aria-label="Code Anime home"
-        ><span class="brand-icon">▸</span>code<span>anime</span
-        ><span class="studio-label">EXECUTION STUDIO</span></a
+        ><span class="brand-icon">▸</span>code<span>anime</span></a
       >
+      <section class="session-header" aria-label="Current execution session">
+        <div class="session-heading">
+          <h1 id="title">Loading your flow…</h1>
+          <span id="evidence-mode" class="mock-badge">Trace evidence</span>
+        </div>
+        <div class="session-stats" aria-label="Trace summary">
+          <div><strong id="stat-events">—</strong><span>steps</span></div>
+          <div><strong id="stat-symbols">—</strong><span>symbols</span></div>
+          <div><strong id="stat-changes">—</strong><span>changes</span></div>
+        </div>
+      </section>
       <div class="header-actions">
+        <button
+          id="toggle-timeline"
+          class="quiet-button"
+          type="button"
+          aria-expanded="true"
+          aria-controls="timeline-panel"
+          title="Show or hide execution steps"
+        >
+          Hide steps
+        </button>
+        <button
+          id="toggle-inspector"
+          class="quiet-button"
+          aria-expanded="false"
+          aria-controls="step-inspector"
+        >
+          Inspector
+        </button>
         <span class="local-badge"><i></i> Local session</span
         ><button
           id="help"
           class="icon-button"
           aria-label="Show keyboard shortcuts"
+          aria-controls="help-panel"
+          aria-expanded="false"
           title="Keyboard shortcuts"
         >
           ?</button
         ><button
           id="export"
           class="quiet-button"
+          aria-label="Export trace as JSON"
           title="Download the current trace as JSON"
         >
-          ↓ Export trace
+          <span aria-hidden="true">↓</span>
+          <span class="export-label">Export trace</span>
         </button>
       </div>
     </header>
-    <main>
-      <section class="session-header">
-        <div class="session-heading">
-          <p class="eyebrow">WORKSPACE / FLOW EXPLORER</p>
-          <h1 id="title">Loading your flow…</h1>
-          <p class="subtitle">
-            Follow the logic. Watch the values change.
-            <span class="mock-badge">Simulated values</span>
-          </p>
-        </div>
-        <div class="session-stats">
-          <div><strong id="stat-events">—</strong><span>STEPS</span></div>
-          <div><strong id="stat-symbols">—</strong><span>SYMBOLS</span></div>
-          <div>
-            <strong id="stat-changes">—</strong><span>STATE CHANGES</span>
-          </div>
-        </div>
-      </section>
+    <main data-mobile-view="code">
+      <nav class="mobile-views" aria-label="Workspace views">
+        <button data-mobile-view="code" aria-pressed="true">Code</button>
+        <button data-mobile-view="flow" aria-pressed="false">Flow</button>
+        <button data-mobile-view="trace" aria-pressed="false">Steps</button>
+        <button data-mobile-view="state" aria-pressed="false">State</button>
+        <button data-mobile-view="console" aria-pressed="false">Console</button>
+      </nav>
       <section
         id="help-panel"
         hidden
         class="help-panel"
+        role="region"
         aria-label="Keyboard shortcuts"
       >
         <strong>Keyboard shortcuts</strong
@@ -63,8 +86,12 @@
         ><span><kbd>B</kbd> Bookmark</span
         ><button id="close-help" aria-label="Close shortcuts">×</button>
       </section>
-      <div class="workspace">
-        <aside class="panel trace-panel" aria-label="Execution timeline">
+      <div class="workspace inspector-collapsed">
+        <aside
+          id="timeline-panel"
+          class="panel trace-panel"
+          aria-label="Execution timeline"
+        >
           <div class="panel-heading">
             <h2>Execution trace</h2>
             <span id="trace-count" class="count-badge">0</span>
@@ -103,11 +130,22 @@
             No matching steps. Try a different search or filter.
           </p>
           <div class="trace-footer">
-            <span class="tiny-dot"></span>Ordered by simulated execution
+            <span class="tiny-dot"></span
+            ><span id="trace-order">Prepared event order</span>
           </div>
         </aside>
+        <div
+          id="workspace-divider"
+          role="separator"
+          tabindex="0"
+          aria-label="Resize execution timeline"
+          aria-orientation="vertical"
+          aria-valuemin="170"
+          aria-valuemax="480"
+          aria-valuenow="220"
+        ></div>
         <section class="center-column" aria-label="Animation and source">
-          <section class="panel flow-panel">
+          <section id="flow-panel" class="panel flow-panel">
             <div class="panel-heading">
               <div class="heading-with-dot">
                 <span class="tiny-dot violet"></span>
@@ -115,7 +153,25 @@
                 <span id="event-kind" class="kind-badge">READY</span>
               </div>
               <div class="flow-actions">
-                <select id="view-mode" aria-label="Diagram view">
+                <button
+                  id="inspect-source"
+                  class="quiet-button"
+                  type="button"
+                  hidden
+                  title="Inspect available source evidence"
+                >
+                  Source info
+                </button>
+                <button
+                  id="maximize-flow"
+                  class="quiet-button"
+                  aria-pressed="false"
+                  title="Focus execution flow"
+                >
+                  Focus
+                </button>
+                <select id="view-mode" aria-label="Execution view">
+                  <option value="path">Execution path</option>
                   <option value="focus">Focus view</option>
                   <option value="map">Full map</option></select
                 ><button
@@ -136,8 +192,13 @@
             </div>
             <section
               id="canvas"
-              class="focus"
+              class="path"
               aria-label="Animated flow diagram"
+            ></section>
+            <section
+              id="method-details"
+              aria-label="Expanded method execution"
+              hidden
             ></section>
             <div class="flow-legend">
               <span><i class="legend-node"></i>Active symbol</span
@@ -145,21 +206,105 @@
               ><span><i class="legend-assumed"></i>Assumed / unresolved</span>
             </div>
           </section>
+          <div
+            id="source-flow-divider"
+            role="separator"
+            tabindex="0"
+            aria-label="Resize source and execution flow"
+            aria-orientation="vertical"
+            aria-valuemin="25"
+            aria-valuemax="75"
+            aria-valuenow="55"
+          ></div>
           <section class="panel source-panel">
             <div class="panel-heading">
-              <h2>Source spotlight</h2>
+              <h2>Source execution</h2>
+              <button
+                id="maximize-source"
+                class="quiet-button"
+                aria-pressed="false"
+                title="Focus source workspace"
+              >
+                Focus
+              </button>
+              <button
+                id="toggle-flow"
+                class="quiet-button"
+                type="button"
+                aria-expanded="false"
+                aria-controls="flow-panel"
+              >
+                Show diagram
+              </button>
               <span id="source-line" class="count-badge">—</span>
             </div>
             <p id="source" class="source-path">
               Select a step to inspect its source
             </p>
+            <nav
+              id="source-stack"
+              class="source-stack"
+              aria-label="Active call stack"
+            ></nav>
             <pre id="snippet" class="source-code"></pre>
+            <nav
+              id="source-pages"
+              class="source-pages"
+              aria-label="Source pages"
+              hidden
+            >
+              <button
+                id="source-earlier"
+                class="quiet-button"
+                aria-label="Earlier source lines"
+              >
+                ←
+              </button>
+              <span id="source-range" aria-live="polite"></span>
+              <button
+                id="source-later"
+                class="quiet-button"
+                aria-label="Later source lines"
+              >
+                →
+              </button>
+              <button id="source-resume" class="quiet-button">
+                Follow execution
+              </button>
+            </nav>
             <p id="source-empty" class="empty-message">
-              Source excerpts appear here as you step through the flow.
+              Source is unavailable for this step. Inspect its evidence excerpt.
             </p>
           </section>
+          <section class="panel console-panel" aria-label="Console output">
+            <details id="console-panel">
+              <summary>
+                Console
+                <span id="console-count" class="count-badge">0 lines</span>
+              </summary>
+              <nav
+                id="console-history"
+                class="console-history"
+                aria-label="Console output history"
+                hidden
+              >
+                <button id="console-older" type="button">Older</button>
+                <span
+                  id="console-range"
+                  role="status"
+                  aria-live="polite"
+                ></span>
+                <button id="console-newer" type="button">Newer</button>
+              </nav>
+              <pre id="console-output" role="log" aria-live="off"></pre>
+            </details>
+          </section>
         </section>
-        <aside class="panel inspector" aria-label="Step inspector">
+        <aside
+          id="step-inspector"
+          class="panel inspector"
+          aria-label="Step inspector"
+        >
           <div class="panel-heading">
             <h2>Step inspector</h2>
             <button
@@ -313,6 +458,22 @@
         >
           ▸▕
         </button>
+        <button
+          id="step-over"
+          class="icon-button"
+          title="Step over method"
+          aria-label="Step over method"
+        >
+          ↷
+        </button>
+        <button
+          id="step-out"
+          class="icon-button"
+          title="Step out of method"
+          aria-label="Step out of method"
+        >
+          ⇡
+        </button>
       </div>
       <div class="timeline-block">
         <div class="timeline-caption">
@@ -337,6 +498,13 @@
         </select></label
       >
       <p id="status" role="status" aria-live="polite">Loading session…</p>
+      <p
+        id="navigation-announcement"
+        class="screen-reader-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      ></p>
     </footer>
   </body>
 </html>

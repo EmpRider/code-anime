@@ -7,6 +7,12 @@ description: Animate codebase execution line by line with mock inputs, DTO field
 
 Turn a simple request such as “show ACH generation” into a playable mock execution. Use CodeGraph for all source discovery and retrieval. Use your reasoning on that evidence to simulate the chosen scenario, then send compact operations directly to the MCP animation builder. Do not stop at module boxes or a call graph.
 
+## Explicit runtime execution
+
+When the user requests actual execution of a trusted Python or JavaScript entry file, use `record_execution` with action start, language python (`.py`) or javascript (`.js`, `.mjs`, `.cjs`), projectRoot, entry, and optional args. This executes application code with real local side effects; a request for a mock visualization alone does not authorize it. Both recorders are bundled with the server, so do not generate a helper script. Poll status by jobId; cancel stops capture and preserves available partial evidence. Return the player URL and explain any boundary in diagnostics. CodeGraph is required for the simulation workflow below, but not for these runtime recorders.
+
+Python captures main-thread user code, including generators, asyncio task transitions, actual calls, returns, exceptions and text output. JavaScript captures Node.js debugger-visible calls, source steps, bounded locals and text output (including ES modules and CommonJS). V8-reported user-code throws and catch-scope entry are observed. JavaScript return values, unresolved frame-exit causes, and precise async output attribution remain **unresolved**; worker threads and child processes are not recorded. Line snapshots precede execution in both recorders. Concurrent Python threads, native internals, binary output and opaque object internals are unsupported. Resource budgets and bounded value previews are disclosed in the trace. Never describe another language's simulated or static trace as runtime-observed, and never claim a recording covers every input or branch.
+
 ## Mandatory: tool calls only, no generated programs
 
 Do not create, run, or ask the user to run Python, JavaScript, shell, or other helper scripts to generate traces, calculate/serialize batches, or build the animation. Do not write JSON payload files, HTML players, temporary generators, or per-project simulators. Do not use terminal/file-edit tools to prepare this workflow. Source discovery uses CodeGraph; animation construction uses Code Anime MCP tool arguments directly.

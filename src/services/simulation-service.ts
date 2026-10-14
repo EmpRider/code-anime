@@ -4,6 +4,7 @@ import { readNativeEvidence } from '../analysis/native-codegraph.js';
 import { traceToFlow } from '../analysis/contract.js';
 import { eventSchema, type Trace, type TraceEvent } from '../domain/trace.js';
 import { flowSchema, type SessionStore } from '../domain/flow.js';
+import { collectSourceFiles } from './source-catalog.js';
 
 export const evidenceRequestSchema = z
   .object({
@@ -123,7 +124,7 @@ export class SimulationService {
       );
     return { root, evidence };
   }
-  async submit(raw: unknown) {
+  async submit(raw: unknown, comparisonValidated = false) {
     if (Buffer.byteLength(JSON.stringify(raw)) > 8 * 1024 * 1024)
       throw new Error(
         'Trace chunk exceeds 8 MiB; split it into smaller chunks',
@@ -187,6 +188,10 @@ export class SimulationService {
           throw new Error(
             `Return event ${event.id} must pop its invocation; snapshots describe state after the event`,
           );
+        if (event.kind === 'catch' && event.stack.at(-1) !== event.callId)
+          throw new Error(
+            `Catch event ${event.id} must execute in its active handler invocation`,
+          );
         if (!event.locals)
           throw new Error(
             `Event ${event.id} needs a complete local-state snapshot`,
@@ -223,13 +228,33 @@ export class SimulationService {
       }
     }
     let baseline: Trace | undefined;
-    if (p.baselineSessionId) {
-      baseline = (await this.store.get(p.baselineSessionId))?.flow.trace;
-      if (!baseline?.simulation || baseline.projectRoot !== root)
-        throw new Error(
-          'Plan comparison requires a mock execution baseline for the same project',
-        );
-      if (!events.some((e) => e.certainty === 'proposed'))
+    let baselineSessionId =
+      p.baselineSessionId ?? previous?.simulation?.baselineSessionId;
+    if (baselineSessionId) {
+      const visited = new Set<string>();
+      for (;;) {
+        if (visited.has(baselineSessionId))
+          throw new Error('Baseline contains a session cycle');
+        visited.add(baselineSessionId);
+        baseline = (await this.store.get(baselineSessionId))?.flow.trace;
+        if (
+          !baseline?.simulation ||
+          baseline.projectRoot !== root ||
+          baseline.target !== p.endpoint
+        )
+          throw new Error(
+            'Plan comparison requires a mock execution baseline for the same project and target',
+          );
+        const parent: string | undefined =
+          baseline.simulation.previousSessionId;
+        if (!parent) break;
+        baselineSessionId = parent;
+      }
+      if (
+        !comparisonValidated &&
+        !previous?.simulation?.baselineSessionId &&
+        !events.some((e) => e.certainty === 'proposed')
+      )
         throw new Error('Mark changed plan events as proposed');
     }
     const trace: Trace = {
@@ -260,14 +285,18 @@ export class SimulationService {
         coverage: p.coverage,
         evidenceIds: p.evidenceIds,
         ...(p.continuationOf ? { previousSessionId: p.continuationOf } : {}),
-        ...(p.baselineSessionId
-          ? { baselineSessionId: p.baselineSessionId }
-          : {}),
+        ...(baselineSessionId ? { baselineSessionId } : {}),
       },
     };
+    const sourceCatalog = await collectSourceFiles(root, events);
+    trace.sourceFiles = sourceCatalog.files;
+    trace.diagnostics.push(...sourceCatalog.diagnostics);
     const flow = traceToFlow(trace, p.endpoint);
     if (p.steps) flow.steps = p.steps;
-    if (baseline) flow.baselineTrace = baseline;
+    if (baseline) {
+      flow.baselineTrace = baseline;
+      flow.baselineSessionId = baselineSessionId;
+    }
     const session = await this.store.create(flow);
     return {
       sessionId: session.id,

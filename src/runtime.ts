@@ -2,18 +2,37 @@ import { createServer } from 'node:http';
 import { readConfig, type Config } from './config.js';
 import { FileSessionStore } from './storage/file-session-store.js';
 import { createWebApp } from './web/app.js';
+import { browserBlocksPort } from './web/browser-port.js';
 
 export async function startRuntime(config: Config = readConfig()) {
   const store = await FileSessionStore.open(config.tempRoot, config);
   const server = createServer(createWebApp(store));
   try {
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(config.port, '127.0.0.1', () => {
-        server.off('error', reject);
-        resolve();
+    let bound = false;
+    for (let attempt = 0; attempt < 25; attempt++) {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(config.port, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
       });
-    });
+      const address = server.address();
+      if (
+        address &&
+        typeof address !== 'string' &&
+        !browserBlocksPort(address.port)
+      ) {
+        bound = true;
+        break;
+      }
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+      if (config.port !== 0) break;
+    }
+    if (!bound)
+      throw new Error('Could not acquire a browser-allowed localhost port');
   } catch (error) {
     await store.close();
     throw error;
@@ -25,10 +44,18 @@ export async function startRuntime(config: Config = readConfig()) {
   let shutdown: Promise<void> | undefined;
   const close = () =>
     (shutdown ??= (async () => {
-      await new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
-      );
-      await store.close();
+      try {
+        const serverClosed = new Promise<void>((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve())),
+        );
+        // Shutdown cannot rely on browsers or other clients completing
+        // in-flight requests. Close connections after stopping acceptance to
+        // avoid a race with new connections during shutdown.
+        server.closeAllConnections();
+        await serverClosed;
+      } finally {
+        await store.close();
+      }
     })());
   return { store, baseUrl, close };
 }

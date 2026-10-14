@@ -4,7 +4,19 @@
 
 CodeGraph retrieves the active project's source and relationships. Your AI agent supplies source-grounded mock steps directly through MCP calls. Code Anime assembles the trace, manages frames and snapshots, and animates objects with their fields, before/after changes and source locations in a localhost player.
 
-Version **0.5.0** adds a modern execution studio to the server-owned animation workflow. No agent-generated Python/JS helper, payload JSON file, custom player, or shell command is part of the visualization workflow. CodeGraph is required for every language; missing installation or index stops the process. Repository code, databases and HTTP effects are not executed. Values are labeled as simulated, assumed, unresolved or proposed.
+Version **0.5.0** adds a modern execution studio to the server-owned animation workflow. No agent-generated Python/JS helper, payload JSON file, custom player, or shell command is part of the visualization workflow. The default simulation workflow requires CodeGraph and does not execute repository code, databases or HTTP effects. Values are labeled as simulated, assumed, unresolved or proposed. Opt-in runtime recording is available for Python and Node.js JavaScript programs as described below.
+
+## Record actual Python or JavaScript execution
+
+Use `record_execution` when the user requests running a trusted Python or JavaScript entry file. Unlike simulation, this executes the application with local permissions and real side effects; it is not a sandbox. Python must be installed (`python` on Windows, `python3` elsewhere), or set `CODE_ANIME_PYTHON_COMMAND` to its executable path. JavaScript recording uses the server's Node.js 22+ executable and V8 Inspector. CodeGraph is not required for either recorder. Other languages retain their existing structural and simulated workflows.
+
+Send `action: "start"`, `language: "python"` with a `.py` entry **or** `language: "javascript"` with a `.js`, `.mjs`, or `.cjs` entry, along with `projectRoot` and optional string `args`. The entry must be inside that project root. Poll `action: "status"` with the returned `jobId` for event/byte counts and the final player URL. `action: "cancel"` stops a running job and saves any events already captured. A built-in recorder collects the events; the AI does not generate or infer their values. Playback and inspection only use these stored snapshots.
+
+Python recording captures real invocations across user files, repeated source-line visits, bounded local/argument snapshots, returns, exceptions and text writes to stdout/stderr. Generators retain one invocation identity across yield/resume transitions; coroutine suspensions and resumptions are marked separately from real returns, and asyncio task identities distinguish interleaved task execution. JavaScript recording captures debugger-visible function entries, source steps, bounded locals and process output, including tested CommonJS, ES modules, recursion and timer callbacks. V8-reported exceptions thrown at a user-code pause site and entry into catch scopes are recorded as observed events. **JavaScript returns are recorded only when V8 provides a return value**; other exits remain unresolved. Promise snapshots report settlement state and result only when V8 exposes them at inspection time; later transitions are not tracked, and pending values stay unresolved. Each line event is the state **before** that line executes; the next event reflects its effects. Events are marked `observed`, with a unique recording identity shared across automatic continuation chunks. A completed trace covers the recorded input and supported user-code scope, not all possible branches or the entire application.
+
+Defaults are 15 seconds, 10,000 events and 16 MiB of protocol data. Set `timeoutMs`, `maxEvents` and `maxTraceBytes` explicitly to adjust resource budgets (up to 300 seconds, 100,000 events and 64 MiB). Source snapshots are separately bounded to 2 MiB per original file and 4 MiB total for a recording. These limits protect the 10 MiB per-session storage budget; saved continuations now share exact, content-addressed source snapshots on disk while each API response still includes the original sources. The full hydrated session remains subject to the existing size quota. These are resource budgets, not call-depth limits. Timeouts, cancellation and exhausted budgets preserve valid partial events and display their reason. A source that exceeds its limit may prevent recording from starting if no user execution event has yet been captured; the job reports that error. Once events have been observed, a source-budget boundary retains an explicitly incomplete replay. If a session quota prevents saving continuations, previously written chunks are removed and the job reports failure instead of returning a broken player URL.
+
+Limits: Python detects concurrent threads as an explicit boundary. Generator/coroutine event stacks reflect currently executing Python frames; task IDs do not imply a causal relationship between tasks, and suspension events do not represent awaited result values. JavaScript does not track worker threads or child processes; output-to-source-line timing is approximate, returns not exposed by V8 and async Promise transitions after inspection remain unresolved, and debugger-visible state does not capture all asynchronous effects. JavaScript snapshots distinguish array holes and non-index properties; native objects retain their debugger-reported type, with internal state explicitly uninspected apart from observed Promise state/results. Other processes, native/dependency internals, binary stream writes and opaque object internals are outside capture scope. Strings, collections, locals and nesting are bounded and omissions are marked in snapshots. The Python recorder does not invoke custom `repr` or property getters, and the JavaScript recorder does not evaluate JavaScript property accessors. Ordinary Python recursion limits still apply. Exceptions that escape the program are reported as incomplete runs. These recorders are not suitable for adversarial programs that replace instrumentation, write to protocol streams or deliberately evade process supervision.
 
 ## Connect the MCP
 
@@ -28,7 +40,7 @@ A repository push does not publish npm. To use the source build immediately, run
 
 Copy `skills/code-anime/` into your host's supported skill directory. Installing the npm package alone does not install the skill. Ask `/code-anime show ACH generation`, or ask to visualize any function or endpoint. The agent resolves the open workspace and supplies its path automatically.
 
-Code Anime launches `codegraph serve --mcp --path <active-project>` using the installed CLI. No additional bridge config is required. If CodeGraph is already indexed, continue; do not repeat installation/init. Set `CODE_ANIME_CODEGRAPH_COMMAND` only when the executable is not on PATH. The adapter is exercised against CodeGraph 1.6.2 with Kotlin on Linux; Windows has not been directly exercised in this workspace.
+Code Anime launches `codegraph serve --mcp --path <active-project>` using the installed CLI. No additional bridge config is required. If CodeGraph is already indexed, continue; do not repeat installation/init. On Windows, Code Anime automatically resolves the npm-installed `codegraph.cmd` wrapper to its Node shim, avoiding Node's restriction on spawning `.cmd` files directly. Set `CODE_ANIME_CODEGRAPH_COMMAND` when the executable is not on PATH. For another bundled Node launcher on Windows, set this to its `node.exe` and set `CODE_ANIME_CODEGRAPH_ARGS` to a JSON array containing `--liftoff-only` and the absolute CodeGraph entry-point path. The native adapter was verified on Windows with an indexed Kotlin fixture and CodeGraph 0.9.9, including the default PATH-based launcher. It uses direct mode without detached daemons so provider processes close with each request. Provider versions that merge same-named definitions produce explicitly incomplete coverage rather than attributing another method's callees to the selected method.
 
 ## Default workflow
 
@@ -42,13 +54,26 @@ Transforms such as trim/min, assignments, branch decisions and loop iterations r
 
 For a visual feature plan, begin with baselineSessionId and append a proposed scenario. Use status/cancel for an unfinished build. Retries with the same batchId/body do not duplicate events. Server limits produce explicit errors, never instructions to create a script.
 
+Baseline and proposed executions can each span multiple stored chunks. A baseline ID from a later chunk resolves to the start of that run. The player loads each variant independently and remembers its playback position when switching; fetching prepared chunks does not invoke AI analysis. Mark changed operations as `proposed`, including changes that appear only in later chunks.
+
 See the [tool contract](skills/code-anime/references/tool-contract.md) for payloads. The server checks receipt membership, project identity and event structure; it does not independently prove AI calculations correct. Missing source/uncertain semantics must be marked unresolved rather than invented.
 
 ## Execution studio
 
+The desktop inspector and console start collapsed to leave more room for source and execution. Open the inspector from the header, or expand the console when needed. On desktop and tablet widths, drag the divider beside the execution timeline to resize it; focused divider keys Left/Right adjust by 20 pixels and Home/End select its limits. Focus/Restore temporarily maximizes the source workspace. Timeline width, inspector visibility and console preferences are saved in browser storage when available. Layout changes preserve the selected event and playback state; mobile continues to use its dedicated view tabs.
+
+Exception paths use explicit semantic operations. A `throw` may supply
+`unwindTo` with an active call ID (from builder status) to retain that handler's
+frame and remove its callees, or `null` for an uncaught exception. Omitting it
+keeps the stack unchanged, allowing intervening `finally` statements to be
+represented. Follow with `catch` and `set` to bind the exception in the handler.
+These operations describe the AI-supplied simulation; they do not execute or
+infer language-specific exception rules.
+
 The player keeps a searchable execution timeline, live flow, source spotlight and step inspector together. It takes interaction cues from [VisualJS](https://www.visualjs.in/visualizer) while replaying CodeGraph-grounded mock traces across supported source languages.
 
 - Click a step or scrub the timeline; Previous restores the recorded stack, locals and shared objects.
+- Use the disclosure arrow beside a method entry to expand or collapse prepared details without seeking or pausing playback. Nested expansion preferences survive collapsing their parent. Selecting the step itself navigates the timeline; search and filters can reveal details inside collapsed methods.
 - Use Focus view for the current transition or Full map to browse all symbols in this trace chunk.
 - Inspect nested object fields, before/after changes, inputs, return values and value origins. Filter to changes only.
 - Switch between Values, State (call stack, locals, shared objects), and Context (coverage, evidence, comparison and chunk navigation).
@@ -78,18 +103,22 @@ Structural graph jobs remain available but are not the default execution animati
 
 ## Configuration and bounds
 
-| Variable                       | Default                | Purpose                                             |
-| ------------------------------ | ---------------------- | --------------------------------------------------- |
-| `CODE_ANIME_PORT`              | `0`                    | Free localhost player port                          |
-| `CODE_ANIME_TEMP_DIR`          | OS temporary directory | Parent for isolated per-process sessions            |
-| `CODE_ANIME_PROJECT_ROOT`      | Per-request roots      | Optional project access boundary                    |
-| `CODE_ANIME_CODEGRAPH_COMMAND` | `codegraph`            | Optional native executable override                 |
-| `CODE_ANIME_CODEGRAPH_CONFIG`  | Unset                  | Optional normalized bridge for structural job tools |
-| `CODE_ANIME_TTL_MS`            | `3600000`              | Session lifetime                                    |
+| Variable                       | Default                | Purpose                                                |
+| ------------------------------ | ---------------------- | ------------------------------------------------------ |
+| `CODE_ANIME_PORT`              | `0`                    | Free localhost player port                             |
+| `CODE_ANIME_TEMP_DIR`          | OS temporary directory | Parent for isolated per-process sessions               |
+| `CODE_ANIME_SESSION_DIR`       | Unset                  | Optional restart-durable session directory (see below) |
+| `CODE_ANIME_PROJECT_ROOT`      | Per-request roots      | Optional project access boundary                       |
+| `CODE_ANIME_CODEGRAPH_COMMAND` | `codegraph`            | Optional native executable override                    |
+| `CODE_ANIME_CODEGRAPH_ARGS`    | `[]`                   | JSON array of launcher arguments before CLI arguments  |
+| `CODE_ANIME_CODEGRAPH_CONFIG`  | Unset                  | Optional normalized bridge for structural job tools    |
+| `CODE_ANIME_TTL_MS`            | `3600000`              | Session lifetime                                       |
 
-The builder accepts up to 100 operations/1 MiB per append, 20,000 events/40 MiB of snapshots per build, and ten retained builds with one-hour expiry. It splits storage chunks automatically. One-shot trace chunks accept 2,000 events and 8 MiB of request data; stored sessions are capped at 10 MiB, with 100 sessions per process. CodeGraph receipts last an hour and are capped at 200. Cached evidence responses are paged; oversized upstream results must be narrowed with file ranges. Report incomplete coverage explicitly and continue in chunks rather than silently truncating.
+The builder accepts up to 100 operations/1 MiB per append, server-disk-backed snapshots without a fixed total event or byte cap, and ten retained builds with one-hour expiry. It splits storage chunks automatically. One-shot trace chunks accept 2,000 events and 8 MiB of request data; stored sessions are capped at 10 MiB, with 100 sessions per process. CodeGraph receipts last an hour and are capped at 200. Cached evidence responses are paged; oversized upstream results must be narrowed with file ranges. Report incomplete coverage explicitly and continue in chunks rather than silently truncating.
 
-The player binds to `127.0.0.1`. Sessions use UUIDs, quotas, expiry and isolated directories; graceful shutdown removes this process's files. Force-kill/power loss may leave temporary directories; automatic orphan recovery remains future reliability work. Remote/container hosts need supported port forwarding.
+The player binds to `127.0.0.1`. Sessions use UUIDs, quotas and expiry. By default each process writes to an isolated temporary directory, removed on clean shutdown. Set `CODE_ANIME_SESSION_DIR` to an absolute, writable, private directory to keep finalized animations and continuation/comparison chains across normal server restarts. `CODE_ANIME_TEMP_DIR` still controls the parent of ephemeral storage when persistence is not configured. For example on PowerShell: `$env:CODE_ANIME_SESSION_DIR = "$HOME\\.code-anime\\sessions"`. Start the server with the same setting after a restart; the browser URL uses the new localhost port (`CODE_ANIME_PORT=0` selects a free port), but the saved session UUID remains valid. Old URLs with the previous port won't work.
+
+On startup, persistent mode reconstructs session indexes, removes incomplete `.json.tmp` writes, deletes sessions older than `CODE_ANIME_TTL_MS` (default one hour), and quarantines corrupt or oversized session files in `.code-anime-corrupt` for manual inspection. Quarantined files are not served and are not automatically deleted. The 10 MiB/session and 100-session limits still apply, including to recovered sessions; when full, delete sessions or wait for expiry. The session directory is exclusive to one running process through `.code-anime.lock`. If a process crashes, verify it has stopped **before** manually removing its stale lock; the server will not guess that another process is dead. Keep the directory private because sessions may contain source snippets and simulated values. Remote/container hosts need supported port forwarding.
 
 ## Development and demo
 
@@ -101,6 +130,8 @@ npm run package:check
 ```
 
 The offline demo renders bundled mock data without analyzing a codebase. For the real CodeGraph integration tests and packed CLI smoke test, set `CODE_ANIME_TEST_CODEGRAPH` to the installed executable path. Tests cover dependency failure, mock transform/state contracts, continuation, comparison, safe object rendering and replay restoration.
+
+Run `npm run test:browser` for browser layout and interaction checks at desktop, tablet, and phone sizes. Windows uses installed Microsoft Edge; other platforms use Playwright Chromium (`npx playwright install chromium`). `CODE_ANIME_BROWSER_CHANNEL` overrides the browser channel. Tests cover viewport overflow, accessible playback controls, mobile panel switching without changing the selected event, state inspection, console scrolling, search, and keyboard help. Screenshots are saved under the ignored `test-results` directory.
 
 ## Structure
 
