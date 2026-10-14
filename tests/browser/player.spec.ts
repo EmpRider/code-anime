@@ -3490,6 +3490,33 @@ test('step into follows nested original source, keyboard navigation and prepared
   await page.getByRole('button', { name: 'Step into method' }).click();
   await expect(page.locator('#progress')).toHaveText('3 / 8');
   await expect(page.locator('#source')).toHaveText('B.ts');
+  await page.locator('#timeline').fill('4');
+  await page.locator('#source-values-toggle').click();
+  await expect(page.locator('#source-values-toggle')).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await expect(page.locator('#source-values-panel')).toContainText('sum');
+  await expect(page.locator('#source-values-panel')).toContainText('30');
+  await expect(page.locator('#snippet')).not.toContainText('Frame locals');
+  await page.locator('#source-values-toggle').press('Escape');
+  await expect(page.locator('#source-values-panel')).toBeHidden();
+  await page.locator('#source-values-toggle').click();
+  await expect(page.locator('#snippet .executing-line')).toHaveAttribute(
+    'data-line',
+    '3',
+  );
+  await page.locator('#timeline').fill('5');
+  await expect(page.locator('#source-values-panel')).toBeHidden();
+  await page.locator('#source-values-toggle').click();
+  await expect(page.locator('#source-values-panel')).toContainText('Result');
+  await expect(page.locator('#source-values-panel')).toContainText('30');
+  await page.locator('#timeline').fill('3');
+  await expect(page.locator('#source-values-panel')).toBeHidden();
+  await page.locator('#source-values-toggle').click();
+  await expect(page.locator('#source-values-panel')).toContainText('Inputs');
+  await expect(page.locator('#source-values-panel')).toContainText('mock');
+  await page.locator('#source-values-toggle').click();
   await expect(page.locator('#snippet .executing-line')).toHaveAttribute(
     'data-line',
     '2',

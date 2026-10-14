@@ -10,6 +10,21 @@ Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
 
+## Contextual source-line values (October 14)
+
+When the selected prepared event highlights an original source line and has
+inputs, before/after snapshots, a result, or replayed frame locals, a compact
+Values action appears in the source heading. Its on-demand panel shows the
+selected event's existing data with its explicit certainty label and closes when
+the playback cursor changes. Values remain separate from the immutable
+original source rows, so the editor does not mix annotations into user code.
+Opening and closing the panel uses the local prepared replay and preserves the
+current cursor. A focused Chromium regression checks assignment and return
+values, backward navigation, Escape dismissal, original source integrity, and
+prepared-data-only interaction. This advances requirements 11, 23, 24, and 31;
+large recorded local snapshots, non-Chromium browser and assistive-technology
+acceptance remain incomplete.
+
 ## Method map inspection without replay navigation (October 14)
 
 The compact disclosure beside a recorded invocation in the prepared

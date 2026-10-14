@@ -238,7 +238,24 @@
                 Show diagram
               </button>
               <span id="source-line" class="count-badge">—</span>
+              <button
+                id="source-values-toggle"
+                class="quiet-button source-values-toggle"
+                type="button"
+                aria-expanded="false"
+                aria-controls="source-values-panel"
+                title="Inspect values for the executing source line"
+                hidden
+              >
+                Values
+              </button>
             </div>
+            <section
+              id="source-values-panel"
+              class="source-inline-values"
+              aria-label="Values at the executing source line"
+              hidden
+            ></section>
             <p id="source" class="source-path">
               Select a step to inspect its source
             </p>

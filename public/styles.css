@@ -1735,6 +1735,49 @@ main {
 .source-panel > .panel-heading h2 {
   margin-right: auto;
 }
+.source-values-toggle[hidden],
+.source-inline-values[hidden] {
+  display: none;
+}
+.source-values-toggle {
+  padding: 4px 7px;
+  font-size: 11px;
+}
+.source-values-toggle[aria-expanded='true'] {
+  background: #302b49;
+  color: #e2d8ff;
+}
+.source-inline-values {
+  flex: none;
+  max-height: min(28vh, 160px);
+  overflow: auto;
+  border-bottom: 1px solid var(--border);
+  background: #191d2a;
+  padding: 6px 12px 8px;
+  font:
+    11px/1.5 Consolas,
+    monospace;
+}
+.source-value-evidence {
+  margin-bottom: 5px;
+  color: #a7a0c5;
+}
+.source-value-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 3px 12px;
+  margin: 0;
+}
+.source-value-list dt {
+  color: #a9b5ce;
+}
+.source-value-data {
+  margin: 0;
+  min-width: 0;
+  color: #e4dbff;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 .source-path {
   padding: 6px 12px;
   border-bottom: 1px solid var(--border);
