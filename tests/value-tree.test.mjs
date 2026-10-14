@@ -4,7 +4,9 @@ import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 import {
   buildFlowOverview,
+  buildMethodGroups,
   describeFlowTransition,
+  parentInvocationId,
 } from '../public/flow-overview.js';
 import { replayState } from '../public/replay.js';
 import { prepareSourceHighlighting } from '../public/source-highlighter.js';
@@ -64,6 +66,8 @@ test('large object inspectors load bounded pages and retain disclosure through h
     window.replayState = replayState;
     window.prepareSourceHighlighting = prepareSourceHighlighting;
     window.buildFlowOverview = buildFlowOverview;
+    window.buildMethodGroups = buildMethodGroups;
+    window.parentInvocationId = parentInvocationId;
     window.describeFlowTransition = describeFlowTransition;
     window.preparePlainTerminalOutput = preparePlainTerminalOutput;
     let requests = 0;
@@ -73,7 +77,9 @@ test('large object inspectors load bounded pages and retain disclosure through h
     };
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
-    window.eval(source.replace(/^import .*;\r?\n/gm, ''));
+    window.eval(
+      source.replace(/^import\s+\{[^}]+\}\s+from\s+['"][^'"]+['"];\r?\n/gm, ''),
+    );
     for (let i = 0; i < 40 && get('progress').textContent !== '0 / 2'; i++)
       await new Promise((resolve) => setTimeout(resolve, 5));
 

@@ -7,8 +7,18 @@ import { prepareSourceHighlighting } from '../public/source-highlighter.js';
 import { preparePlainTerminalOutput } from '../public/terminal-text.js';
 import {
   buildFlowOverview,
+  buildMethodGroups,
   describeFlowTransition,
+  parentInvocationId,
 } from '../public/flow-overview.js';
+
+function evaluatePlayer(window, source) {
+  window.buildMethodGroups = buildMethodGroups;
+  window.parentInvocationId = parentInvocationId;
+  window.eval(
+    source.replace(/^import\s+\{[^}]+\}\s+from\s+['"][^'"]+['"];\r?\n/gm, ''),
+  );
+}
 
 test('player renders evidence safely and Previous/seek restore local state', async () => {
   const html = await readFile(
@@ -20,7 +30,7 @@ test('player renders evidence safely and Previous/seek restore local state', asy
   )
     // Exercise Windows line endings even when this test runs on Linux CI.
     .replace(/\r?\n/g, '\r\n')
-    .replace(/^import .*;\r?\n/gm, '');
+    .replace(/^import\s+\{[^}]+\}\s+from\s+['"][^'"]+['"];\r?\n/gm, '');
   const flow = {
     endpoint: '<img src=x onerror=alert(1)>',
     steps: [
@@ -87,7 +97,7 @@ test('player renders evidence safely and Previous/seek restore local state', asy
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
-    window.eval(code);
+    evaluatePlayer(window, code);
     for (
       let i = 0;
       i < 20 &&
@@ -203,7 +213,7 @@ test('studio search, bookmarks, keyboard tabs and breakpoints preserve replay st
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
-    window.eval(source.replace(/^import .*;\r?\n/gm, ''));
+    evaluatePlayer(window, source);
     for (let i = 0; i < 20 && get('progress').textContent !== '0 / 3'; i++)
       await new Promise((r) => setTimeout(r, 5));
     const visibleRows = () => [
@@ -415,7 +425,7 @@ test('source-first playback follows nested calls, restores parent locals, and re
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
-    window.eval(source.replace(/^import .*;\r?\n/gm, ''));
+    evaluatePlayer(window, source);
     for (let i = 0; i < 40 && get('progress').textContent !== '0 / 8'; i++)
       await new Promise((r) => setTimeout(r, 5));
     assert.equal(get('view-mode').value, 'path');
@@ -642,7 +652,7 @@ test('interleaved tasks compare local changes with the previous snapshot of the 
     window.fetch = async () => ({ ok: true, json: async () => flow });
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
-    window.eval(source.replace(/^import .*;\r?\n/gm, ''));
+    evaluatePlayer(window, source);
     for (let i = 0; i < 40 && get('progress').textContent !== '0 / 5'; i++)
       await new Promise((r) => setTimeout(r, 5));
 
@@ -749,7 +759,7 @@ test('unattributed process output preserves historical console and frame steppin
     };
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
-    window.eval(source.replace(/^import .*;\r?\n/gm, ''));
+    evaluatePlayer(window, source);
     for (let i = 0; i < 40 && get('progress').textContent !== '0 / 11'; i++)
       await new Promise((r) => setTimeout(r, 5));
     assert.equal(get('progress').textContent, '0 / 11');
@@ -842,7 +852,7 @@ test('console history exposes every prepared output event with bounded pages and
     };
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
-    window.eval(source.replace(/^import .*;\r?\n/gm, ''));
+    evaluatePlayer(window, source);
     for (let i = 0; i < 50 && get('progress').textContent !== '0 / 655'; i++)
       await new Promise((r) => setTimeout(r, 5));
     assert.equal(get('progress').textContent, '0 / 655');

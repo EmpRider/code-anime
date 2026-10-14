@@ -20,6 +20,34 @@ assets, and flow API. `git diff --check` reported no whitespace errors. These
 results verify the local checkout only; CI for the new changes and the wider
 37-requirement objective remain separate acceptance gates.
 
+## Grouped class/method Execution Path (October 14)
+
+The prepared execution path now offers a compact class/method invocation map
+inside the existing flow overview. Each observed invocation has its own identity,
+parent relationship, active position, and expandable method detail. Repeated
+calls, nested invocations, and caller-only entry stacks retain their recorded
+ancestry; missing parents remain unresolved rather than being inferred. Method
+selection uses the existing playback cursor and prepared data. Disclosure state
+survives selection, and keyboard focus is retained across bounded invocation
+pages. The method-map layout cannot collapse the main execution list to zero
+height when expanded. When interleaved async work resumes an earlier invocation,
+Follow locates the page containing that event's actual call ID instead of the
+most recently entered invocation.
+
+Focused unit tests cover invocation grouping, caller-only entry stacks, and
+paired call/entry events. Chromium regressions cover selection/disclosure,
+bounded pagination across 21 child invocations, keyboard navigation, timeline
+synchronization (including an earlier async invocation resuming across a page
+boundary), and no additional analysis requests during interaction.
+After these changes, the complete local `npm run check` finished with **157
+passed tests, one optional CodeGraph skip, zero failures**, plus typecheck,
+build, and formatting verification. The full Chromium run passed **59 tests**;
+`npm run package:check` passed the installed CLI, MCP handshake, player assets,
+and flow API. These results confirm the tested interactions on this local
+checkout. Deep real-world asynchronous invocation graphs, broader devices,
+screen-reader acceptance, and VisualJS interaction parity still require
+acceptance evidence. The overall 37-requirement objective remains incomplete.
+
 ## Async and exception boundaries in the execution path (October 14)
 
 The prepared high-level execution path previously omitted `await`, `yield`,

@@ -3,13 +3,23 @@ import {
   preparePlainTerminalOutput,
 } from './terminal-text.js';
 
+// Recorders differ on whether a stack includes the entering invocation or
+// only its callers. All prepared views must agree on parent attribution.
+export function parentInvocationId(event) {
+  const stack = event?.stack ?? [];
+  const parent =
+    event?.parentCallId ??
+    (stack.at(-1) === event?.callId ? stack.at(-2) : stack.at(-1));
+  return parent === event?.callId ? undefined : parent;
+}
+
 // Match a call with its adjacent entry only when ancestry and async context
 // agree. Neighboring events can otherwise belong to unrelated tasks.
 function matchedEntry(call, entry) {
   if (
     call?.kind !== 'call' ||
     entry?.kind !== 'enter' ||
-    !(entry.parentCallId === call.callId || entry.stack?.at(-2) === call.callId)
+    parentInvocationId(entry) !== call.callId
   )
     return false;
   const task = (item) =>
@@ -49,9 +59,7 @@ export function buildFlowOverview(
     // stack. In either case the current invocation cannot be its own parent.
     const stack = event.stack ?? [];
     const parentId =
-      event.parentCallId ??
-      (stack.at(-1) === event.callId ? stack.at(-2) : stack.at(-1)) ??
-      invocationParents.get(event.callId);
+      parentInvocationId(event) ?? invocationParents.get(event.callId);
     if (event.kind === 'enter') {
       invocations.set(event.callId, event.symbolId);
       if (parentId && parentId !== event.callId)
@@ -125,6 +133,66 @@ export function buildFlowOverview(
     });
   }
   return transitions;
+}
+
+// Build the compact method map only from actual entry events. A class label is
+// a presentation grouping, not an assertion that an instance was constructed.
+// Keep invocation IDs and ancestry: two calls to the same method are not one
+// execution, and interleaved async tasks do not form a sequential call chain.
+export function buildMethodGroups(events = []) {
+  const entries = new Map();
+  const invocations = [];
+  for (const [offset, event] of events.entries()) {
+    if (event?.kind !== 'enter' || !event.callId || entries.has(event.callId))
+      continue;
+    const symbol = event.symbolId ?? 'Unknown symbol';
+    const separator = Math.max(
+      symbol.lastIndexOf('::'),
+      symbol.lastIndexOf('.'),
+    );
+    const className = separator >= 0 ? symbol.slice(0, separator) : 'Functions';
+    const methodName =
+      separator >= 0
+        ? symbol.slice(
+            separator +
+              (symbol.slice(separator, separator + 2) === '::' ? 2 : 1),
+          )
+        : symbol;
+    // Some recorders include the entering frame in `stack`; others report
+    // only the frames that led to it. In the latter case the final frame is
+    // the caller. Never infer a parent by dropping that final frame.
+    const parentCallId = parentInvocationId(event);
+    const entry = {
+      callId: event.callId,
+      symbol,
+      className: className || 'Functions',
+      methodName: methodName || symbol,
+      parentCallId: parentCallId !== event.callId ? parentCallId : undefined,
+      index: offset + 1,
+      certainty: event.certainty ?? 'unverified',
+    };
+    entries.set(event.callId, entry);
+    invocations.push(entry);
+  }
+  const groups = new Map();
+  for (const invocation of invocations) {
+    const parent = entries.get(invocation.parentCallId);
+    const node = {
+      ...invocation,
+      parentSymbol: parent?.symbol,
+      parentKnown: Boolean(parent),
+    };
+    if (!groups.has(node.className)) groups.set(node.className, []);
+    groups.get(node.className).push(node);
+  }
+  return {
+    invocations: invocations.map((entry) => ({
+      ...entry,
+      parentSymbol: entries.get(entry.parentCallId)?.symbol,
+      parentKnown: entries.has(entry.parentCallId),
+    })),
+    classCount: groups.size,
+  };
 }
 
 // Keep summaries small even for a trace with large nested values. Inspection

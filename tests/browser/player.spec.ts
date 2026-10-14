@@ -1148,6 +1148,164 @@ test('replay retains stack controls and scrolls only the source editor when foll
   await expect(page.locator('#frame-list .frame-item')).toHaveCount(0);
 });
 
+test('class/method map pages many caller-only invocations and preserves keyboard navigation', async ({
+  page,
+}) => {
+  const events: TraceEvent[] = [
+    {
+      id: 'root',
+      kind: 'enter',
+      symbolId: 'App.run',
+      callId: 'root',
+      stack: ['root'],
+      source: { file: 'app.ts', line: 2, endLine: 2 },
+      label: 'enter App.run',
+      certainty: 'mock',
+      values: {},
+      locals: {},
+    },
+  ];
+  for (let index = 0; index < 21; index++) {
+    events.push({
+      id: `child-${index}`,
+      kind: 'enter',
+      symbolId: 'Widget.process',
+      callId: `child-${index}`,
+      // This recorder reports callers only; the parent is still App.run.
+      stack: ['root'],
+      source: { file: 'widget.ts', line: 2, endLine: 2 },
+      label: 'enter Widget.process',
+      certainty: 'mock',
+      values: {},
+      locals: {},
+    });
+    if (index === 0) {
+      events.push({
+        id: 'child-0-await',
+        kind: 'await',
+        symbolId: 'Widget.process',
+        callId: 'child-0',
+        stack: ['root'],
+        source: { file: 'widget.ts', line: 2, endLine: 2 },
+        label: 'await child-0',
+        certainty: 'mock',
+        values: {},
+        locals: {},
+      });
+      continue;
+    }
+    events.push({
+      id: `return-${index}`,
+      kind: 'return',
+      symbolId: 'Widget.process',
+      callId: `child-${index}`,
+      stack: ['root'],
+      source: { file: 'widget.ts', line: 3, endLine: 3 },
+      label: 'return Widget.process',
+      certainty: 'mock',
+      result: index,
+      values: {},
+      locals: {},
+    });
+  }
+  events.push(
+    {
+      id: 'child-0-resume',
+      kind: 'resume',
+      symbolId: 'Widget.process',
+      callId: 'child-0',
+      stack: ['root'],
+      source: { file: 'widget.ts', line: 2, endLine: 2 },
+      label: 'resume child-0',
+      certainty: 'mock',
+      values: {},
+      locals: {},
+    },
+    {
+      id: 'child-0-return',
+      kind: 'return',
+      symbolId: 'Widget.process',
+      callId: 'child-0',
+      stack: ['root'],
+      source: { file: 'widget.ts', line: 3, endLine: 3 },
+      label: 'return child-0',
+      certainty: 'mock',
+      values: {},
+      locals: {},
+    },
+  );
+  events.push({
+    id: 'root-return',
+    kind: 'return',
+    symbolId: 'App.run',
+    callId: 'root',
+    stack: [],
+    source: { file: 'app.ts', line: 3, endLine: 3 },
+    label: 'return App.run',
+    certainty: 'mock',
+    values: {},
+    locals: {},
+  });
+  const session = await runtime.store.create(
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'browser-method-pages',
+        projectRoot: 'fixture',
+        sourceHash: 'method-pages',
+        target: 'App.run',
+        scenario: {},
+        events,
+        diagnostics: [],
+        truncated: false,
+        filesAnalyzed: 2,
+        cacheHits: 0,
+        sourceFiles: {
+          'app.ts': 'class App {\n  run() {\n    return 20;\n  }\n}',
+          'widget.ts': 'class Widget {\n  process() {\n    return 20;\n  }\n}',
+        },
+      },
+      'App.run',
+    ),
+  );
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await expect(page.locator('.overview-method-map')).toContainText(
+    '2 groups · 22 calls',
+  );
+  await expect(page.locator('.method-map-call')).toHaveCount(10);
+  const requests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/api/flow/')) requests.push(request.url());
+  });
+  const next = page.locator('[data-method-map-action="next"]');
+  await next.click();
+  await expect(page.locator('.method-map-pages')).toContainText('2 / 3');
+  await expect(page.locator('.method-map-call')).toHaveCount(10);
+  await next.click();
+  await expect(page.locator('.method-map-pages')).toContainText('3 / 3');
+  await expect(page.locator('.method-map-call')).toHaveCount(2);
+  await expect(
+    page.locator('[data-method-map-action="previous"]'),
+  ).toBeFocused();
+  await page.locator('.method-map-call[data-call-id="child-20"]').click();
+  await expect(page.locator('#progress')).toHaveText('42 / 46');
+  await expect(page.locator('#method-details')).toContainText('Widget.process');
+  await expect(
+    page.locator('.method-map-call[data-call-id="child-20"]'),
+  ).toHaveAttribute('aria-current', 'step');
+  // child-0 resumes after all the later invocations were entered. Follow must
+  // return to its earlier method-map page and highlight its exact identity.
+  await page.locator('#timeline').fill('44');
+  await expect(page.locator('.method-map-pages')).toContainText('1 / 3');
+  await expect(
+    page.locator('.method-map-call[data-call-id="child-0"]'),
+  ).toHaveAttribute('aria-current', 'step');
+  await page.locator('#timeline').fill('1');
+  await page.locator('.method-map-call[data-call-id="root"]').click();
+  await expect(page.locator('#method-details')).toContainText('Widget.process');
+  expect(requests).toHaveLength(0);
+});
+
 test('execution path stays synchronized across paging, seeking and view changes', async ({
   page,
 }) => {
@@ -1239,6 +1397,65 @@ test('execution path stays synchronized across paging, seeking and view changes'
   await expect(page.locator('#view-mode')).toHaveValue('path');
   await expect(page.locator('.flow-overview')).toBeVisible();
   await expect(page.locator('.overview-step')).toHaveCount(6);
+  await expect(page.locator('.overview-method-map')).toContainText(
+    '2 groups · 3 calls',
+  );
+  await expect(page.locator('.method-map-group')).toHaveCount(2);
+  await expect(page.locator('.method-map-call')).toHaveCount(3);
+  await expect(
+    page.locator('.method-map-call[data-call-id="b"]'),
+  ).toContainText('← A.m');
+  const mapRequests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/api/flow/')) mapRequests.push(request.url());
+  });
+  await page.locator('.method-map-call[data-call-id="b2"]').click();
+  await expect(page.locator('#progress')).toHaveText('8 / 11');
+  await expect(page.locator('#method-details')).toContainText('B.m2');
+  await expect(
+    page.locator('.overview-disclosure[data-call-id="b2"]'),
+  ).toHaveAttribute('aria-expanded', 'true');
+  // The map changed the inspected invocation without rebuilding the list.
+  // Its disclosure must still close the selected method on the first click.
+  await page.locator('.overview-disclosure[data-call-id="b2"]').click();
+  await expect(
+    page.locator('.overview-disclosure[data-call-id="b2"]'),
+  ).toHaveAttribute('aria-expanded', 'false');
+  await page.locator('.overview-disclosure[data-call-id="b2"]').click();
+  await expect(
+    page.locator('.overview-disclosure[data-call-id="b2"]'),
+  ).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.overview-method-toggle')).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await page.locator('.overview-method-toggle').click();
+  await expect(page.locator('.overview-method-content')).toBeHidden();
+  await page.locator('.overview-method-toggle').click();
+  await expect(page.locator('.method-map-call')).toHaveCount(3);
+  await expect(
+    page.locator('.method-map-call[data-call-id="b2"]'),
+  ).toHaveAttribute('aria-current', 'step');
+  await page.locator('#timeline').fill('0');
+  await expect(page.locator('.overview-method-toggle')).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await expect(page.locator('.method-map-call')).toHaveCount(3);
+  const geometry = await page.evaluate(() => {
+    const list = document.querySelector<HTMLElement>('.overview-list')!;
+    const map = document.querySelector<HTMLElement>('.overview-method-map')!;
+    return {
+      listHeight: list.getBoundingClientRect().height,
+      separate:
+        map.getBoundingClientRect().bottom <= list.getBoundingClientRect().top,
+    };
+  });
+  expect(geometry.separate).toBe(true);
+  expect(geometry.listHeight).toBeGreaterThan(45);
+  await page.locator('.overview-method-toggle').click();
+  await expect(page.locator('.overview-method-content')).toBeHidden();
+  expect(mapRequests).toHaveLength(0);
   const firstDisclosure = page.locator(
     '.overview-disclosure[data-call-id="a"]',
   );

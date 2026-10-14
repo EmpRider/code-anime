@@ -8,7 +8,9 @@ import { prepareSourceHighlighting } from '../public/source-highlighter.js';
 import { preparePlainTerminalOutput } from '../public/terminal-text.js';
 import {
   buildFlowOverview,
+  buildMethodGroups,
   describeFlowTransition,
+  parentInvocationId,
 } from '../public/flow-overview.js';
 
 const sources = {
@@ -100,6 +102,8 @@ async function createPlayer(loadContinuation, first = initial()) {
   window.replayState = replayState;
   window.prepareSourceHighlighting = prepareSourceHighlighting;
   window.buildFlowOverview = buildFlowOverview;
+  window.buildMethodGroups = buildMethodGroups;
+  window.parentInvocationId = parentInvocationId;
   window.describeFlowTransition = describeFlowTransition;
   window.preparePlainTerminalOutput = preparePlainTerminalOutput;
   window.matchMedia = () => ({ matches: true });
@@ -114,7 +118,9 @@ async function createPlayer(loadContinuation, first = initial()) {
       json: () => (loadContinuation ? loadContinuation(url) : continuation()),
     };
   };
-  window.eval(js.replace(/^import .*;\r?\n/gm, ''));
+  window.eval(
+    js.replace(/^import\s+\{[^}]+\}\s+from\s+['"][^'"]+['"];\r?\n/gm, ''),
+  );
   await waitFor(
     () => get('progress').textContent === '0 / ' + first.steps.length,
     'initial chunk did not load',

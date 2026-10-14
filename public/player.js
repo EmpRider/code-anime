@@ -1,6 +1,11 @@
 import { replayState } from './replay.js';
 import { prepareSourceHighlighting } from './source-highlighter.js';
-import { buildFlowOverview, describeFlowTransition } from './flow-overview.js';
+import {
+  buildFlowOverview,
+  buildMethodGroups,
+  describeFlowTransition,
+  parentInvocationId,
+} from './flow-overview.js';
 import { preparePlainTerminalOutput } from './terminal-text.js';
 const $ = (id) => document.getElementById(id);
 let flow, originalFlow, timer, animation;
@@ -56,6 +61,12 @@ const frameSnapshots = new Map();
 const frameSources = new Map();
 const objectHistory = new Map();
 let overviewItems = [];
+let methodMap = { invocations: [], classCount: 0 };
+let methodMapPositions = new Map();
+let methodMapPage = 0;
+let methodMapExpanded = true;
+const METHOD_MAP_PAGE_SIZE = 10;
+let overviewRenderedMethodMapPage = -1;
 let overviewPage = 0;
 let overviewRenderedPage = -1;
 let overviewLastCursor = -1;
@@ -289,6 +300,8 @@ function buildNodes(preserveInspection = false) {
   if (!preserveInspection) {
     overviewPage = 0;
     overviewLastCursor = -1;
+    methodMapPage = 0;
+    methodMapExpanded = true;
     expandedCalls.clear();
     fieldDisclosures.clear();
     fieldPageCounts.clear();
@@ -323,6 +336,10 @@ function buildNodes(preserveInspection = false) {
     ),
   );
   overviewItems = buildFlowOverview(flow.trace?.events, preparedOutput);
+  methodMap = buildMethodGroups(flow.trace?.events);
+  methodMapPositions = new Map(
+    methodMap.invocations.map((entry, index) => [entry.callId, index]),
+  );
   // Legacy agent-authored flows have ordered handoffs but no recorded runtime
   // events. Present that known structure immediately, with explicit evidence
   // labels, instead of hiding every node in an empty Focus view at step zero.
@@ -355,7 +372,7 @@ function buildNodes(preserveInspection = false) {
   flow.trace?.events.forEach((event, index) => {
     invocationDetails.get(event.callId)?.push({ index });
     if (event.kind === 'enter') {
-      const parent = event.parentCallId ?? event.stack?.at(-2);
+      const parent = parentInvocationId(event);
       if (parent && parent !== event.callId)
         invocationDetails.get(parent)?.push({ index, child: event.callId });
     }
@@ -1499,6 +1516,141 @@ function overviewPageSize() {
     Math.min(24, Math.floor(($('canvas').clientHeight - 82) / 36)),
   );
 }
+function activeMethodMapPosition() {
+  if (!cursor) return -1;
+  const entries = methodMap.invocations;
+  // An interleaved task can resume an invocation entered many pages earlier.
+  // Follow its observed event identity, not the last entry in event order.
+  const activeCallId = flow.trace?.events?.[cursor - 1]?.callId;
+  const activePosition = methodMapPositions.get(activeCallId);
+  if (activePosition !== undefined && entries[activePosition]?.index <= cursor)
+    return activePosition;
+  let low = 0;
+  let high = entries.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (entries[middle].index <= cursor) low = middle + 1;
+    else high = middle;
+  }
+  return low - 1;
+}
+function renderMethodMap(panel) {
+  if (!methodMap.invocations.length) return;
+  const section = text('section', '', 'overview-method-map');
+  section.setAttribute('aria-label', 'Prepared method call map');
+  const toggle = text('button', '', 'overview-method-toggle');
+  toggle.type = 'button';
+  toggle.dataset.methodMapAction = 'toggle';
+  toggle.setAttribute('aria-expanded', String(methodMapExpanded));
+  toggle.setAttribute('aria-controls', 'overview-method-groups');
+  toggle.append(
+    text('span', methodMapExpanded ? '▾' : '▸', 'method-map-chevron'),
+    text('strong', 'Class / method map'),
+    text(
+      'span',
+      `${methodMap.classCount} groups · ${methodMap.invocations.length} calls`,
+      'method-map-count',
+    ),
+  );
+  toggle.onclick = () => {
+    methodMapExpanded = !methodMapExpanded;
+    overviewRenderedPage = -1;
+    renderFlowOverview();
+    $('canvas').querySelector('.overview-method-toggle')?.focus({
+      preventScroll: true,
+    });
+  };
+  section.append(toggle);
+  const container = text('div', '', 'overview-method-content');
+  container.id = 'overview-method-groups';
+  container.hidden = !methodMapExpanded;
+  if (methodMapExpanded) {
+    const start = methodMapPage * METHOD_MAP_PAGE_SIZE;
+    const entries = methodMap.invocations.slice(
+      start,
+      start + METHOD_MAP_PAGE_SIZE,
+    );
+    const groups = new Map();
+    for (const entry of entries) {
+      if (!groups.has(entry.className)) groups.set(entry.className, []);
+      groups.get(entry.className).push(entry);
+    }
+    const cards = text('div', '', 'method-map-groups');
+    for (const [className, methods] of groups) {
+      const group = text('section', '', 'method-map-group');
+      group.setAttribute('aria-label', `${className} methods`);
+      group.append(text('strong', `◇ ${className}`, 'method-map-class'));
+      for (const item of methods) {
+        const method = text('button', '', 'method-map-call');
+        method.type = 'button';
+        method.dataset.callId = item.callId;
+        method.dataset.eventIndex = String(item.index);
+        method.append(
+          text('span', `↳ ${item.methodName}()`, 'method-map-name'),
+        );
+        if (item.parentKnown)
+          method.append(
+            text('small', `← ${item.parentSymbol}`, 'method-map-parent'),
+          );
+        else if (item.parentCallId)
+          method.append(
+            text('small', 'Parent unavailable', 'method-map-parent'),
+          );
+        else method.append(text('small', 'Entry point', 'method-map-parent'));
+        method.title = `${item.symbol} · ${item.callId} · ${item.certainty}`;
+        method.setAttribute(
+          'aria-label',
+          `Inspect ${item.symbol} invocation ${item.callId} (${item.certainty})`,
+        );
+        method.onclick = () => {
+          selectedMethod = item.callId;
+          expandedCalls.add(item.callId);
+          renderedMethod = undefined;
+          seek(item.index);
+          renderMethodDetails();
+        };
+        group.append(method);
+      }
+      cards.append(group);
+    }
+    container.append(cards);
+    const pageCount = Math.ceil(
+      methodMap.invocations.length / METHOD_MAP_PAGE_SIZE,
+    );
+    if (pageCount > 1) {
+      const footer = text('div', '', 'method-map-pages');
+      const previous = text('button', '←', 'quiet-button');
+      previous.dataset.methodMapAction = 'previous';
+      previous.disabled = methodMapPage === 0;
+      const next = text('button', '→', 'quiet-button');
+      next.dataset.methodMapAction = 'next';
+      next.disabled = methodMapPage === pageCount - 1;
+      const changePage = (delta) => {
+        methodMapPage += delta;
+        overviewRenderedPage = -1;
+        renderFlowOverview();
+        const controls = [
+          ...$('canvas').querySelectorAll('.method-map-pages button'),
+        ];
+        const preferred = delta > 0 ? controls.at(-1) : controls[0];
+        (preferred?.disabled
+          ? controls.find((button) => !button.disabled)
+          : preferred
+        )?.focus({ preventScroll: true });
+      };
+      previous.onclick = () => changePage(-1);
+      next.onclick = () => changePage(1);
+      footer.append(
+        previous,
+        text('span', `${methodMapPage + 1} / ${pageCount}`),
+        next,
+      );
+      container.append(footer);
+    }
+  }
+  section.append(container);
+  panel.append(section);
+}
 function renderFlowOverview() {
   if (!overviewItems.length) return false;
   const pageSize = overviewPageSize();
@@ -1510,20 +1662,36 @@ function renderFlowOverview() {
     overviewRenderedPage = -1;
   }
   const activePosition = activeOverviewPosition();
+  const activeMethod = activeMethodMapPosition();
   const maxPage = Math.ceil(overviewItems.length / pageSize) - 1;
-  if (overviewLastCursor !== cursor && $('follow').checked)
+  if (overviewLastCursor !== cursor && $('follow').checked) {
     overviewPage =
       activePosition >= 0 ? Math.floor(activePosition / pageSize) : 0;
+    methodMapPage =
+      activeMethod >= 0 ? Math.floor(activeMethod / METHOD_MAP_PAGE_SIZE) : 0;
+  }
+  methodMapPage = Math.min(
+    methodMapPage,
+    Math.max(
+      0,
+      Math.ceil(methodMap.invocations.length / METHOD_MAP_PAGE_SIZE) - 1,
+    ),
+  );
   overviewLastCursor = cursor;
   overviewPage = Math.min(overviewPage, maxPage);
   let panel = $('canvas').querySelector('.flow-overview');
-  if (!panel || overviewRenderedPage !== overviewPage) {
+  if (
+    !panel ||
+    overviewRenderedPage !== overviewPage ||
+    overviewRenderedMethodMapPage !== methodMapPage
+  ) {
     const focusedControl = panel?.contains(document.activeElement)
       ? document.activeElement
       : null;
     const focusedPosition = focusedControl?.dataset.overviewPosition;
     const focusedCallId = focusedControl?.dataset.callId;
     const focusedPageAction = focusedControl?.dataset.overviewPage;
+    const focusedMethodAction = focusedControl?.dataset.methodMapAction;
     panel?.remove();
     panel = text('section', '', 'flow-overview');
     panel.setAttribute('aria-label', 'Prepared execution overview');
@@ -1542,6 +1710,7 @@ function renderFlowOverview() {
       ),
     );
     panel.append(heading);
+    renderMethodMap(panel);
     const list = text('div', '', 'overview-list');
     const start = overviewPage * pageSize;
     for (const [offset, item] of overviewItems
@@ -1601,7 +1770,8 @@ function renderFlowOverview() {
             ' invocation',
         );
         disclosure.onclick = () => {
-          selectedMethod = expanded ? undefined : item.callId;
+          selectedMethod =
+            selectedMethod === item.callId ? undefined : item.callId;
           if (selectedMethod) expandedCalls.add(selectedMethod);
           filterRevision++;
           filterList();
@@ -1653,6 +1823,18 @@ function renderFlowOverview() {
     // user is inspecting its controls. Restore the same control if available;
     // otherwise move to the active transition on the newly visible page.
     if (focusedControl) {
+      const focusedMethod =
+        focusedCallId &&
+        [...panel.querySelectorAll('.method-map-call')].find(
+          (button) => button.dataset.callId === focusedCallId,
+        );
+      const focusedMethodControl =
+        focusedMethodAction &&
+        [...panel.querySelectorAll('[data-method-map-action]')].find(
+          (button) =>
+            button.dataset.methodMapAction === focusedMethodAction &&
+            !button.disabled,
+        );
       const visibleSteps = [...panel.querySelectorAll('.overview-step')];
       const focusedStep = visibleSteps.find(
         (button) => button.dataset.overviewPosition === focusedPosition,
@@ -1678,6 +1860,8 @@ function renderFlowOverview() {
           : closest;
       }, null);
       (
+        focusedMethod ??
+        focusedMethodControl ??
         focusedStep ??
         focusedDisclosure ??
         focusedPage ??
@@ -1687,6 +1871,7 @@ function renderFlowOverview() {
       )?.focus({ preventScroll: true });
     }
     overviewRenderedPage = overviewPage;
+    overviewRenderedMethodMapPage = methodMapPage;
   }
   // Only the active-row state changes during normal replay. Reuse the DOM and
   // let the source editor, stack, and console follow the same replay cursor.
@@ -1696,6 +1881,26 @@ function renderFlowOverview() {
     button.classList.toggle('current', isCurrent);
     if (isCurrent) button.setAttribute('aria-current', 'step');
     else button.removeAttribute('aria-current');
+  }
+  const activeCallId = flow.trace?.events[cursor - 1]?.callId;
+  for (const button of panel.querySelectorAll('.method-map-call')) {
+    const current = cursor > 0 && button.dataset.callId === activeCallId;
+    button.classList.toggle('current', current);
+    if (current) button.setAttribute('aria-current', 'step');
+    else button.removeAttribute('aria-current');
+  }
+  // Selecting a card changes the inspected invocation even if the overview
+  // stays on the same page. Keep its disclosure state in sync without
+  // rebuilding the step list or changing the shared replay position.
+  for (const button of panel.querySelectorAll('.overview-disclosure')) {
+    const expanded = selectedMethod === button.dataset.callId;
+    button.textContent = expanded ? '▾' : '▸';
+    button.setAttribute('aria-expanded', String(expanded));
+    const item = invocations.get(button.dataset.callId);
+    button.setAttribute(
+      'aria-label',
+      `${expanded ? 'Close details for ' : 'Inspect '}${item?.symbolId ?? 'method'} invocation`,
+    );
   }
   return true;
 }

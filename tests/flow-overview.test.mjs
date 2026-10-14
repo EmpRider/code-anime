@@ -2,8 +2,101 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildFlowOverview,
+  buildMethodGroups,
   describeFlowTransition,
 } from '../public/flow-overview.js';
+
+test('class/method map preserves repeated invocations and verified ancestry across interleaved tasks', () => {
+  const { invocations, classCount } = buildMethodGroups([
+    {
+      kind: 'enter',
+      callId: 'root',
+      symbolId: 'App.run',
+      stack: ['root'],
+      certainty: 'observed',
+    },
+    {
+      kind: 'enter',
+      callId: 'a',
+      symbolId: 'Worker.process',
+      parentCallId: 'root',
+      stack: ['root', 'a'],
+      certainty: 'observed',
+    },
+    { kind: 'await', callId: 'a', symbolId: 'Worker.process' },
+    {
+      kind: 'enter',
+      callId: 'b',
+      symbolId: 'Worker.process',
+      parentCallId: 'root',
+      stack: ['root', 'b'],
+      certainty: 'observed',
+    },
+    {
+      kind: 'enter',
+      callId: 'c',
+      symbolId: 'Unit::handle',
+      parentCallId: 'a',
+      stack: ['root', 'a', 'c'],
+      certainty: 'observed',
+    },
+    {
+      kind: 'enter',
+      callId: 'orphan',
+      symbolId: 'standalone',
+      parentCallId: 'missing',
+      stack: ['orphan'],
+      certainty: 'mock',
+    },
+  ]);
+  assert.equal(classCount, 4);
+  assert.deepEqual(
+    invocations.map(({ callId, index }) => [callId, index]),
+    [
+      ['root', 1],
+      ['a', 2],
+      ['b', 4],
+      ['c', 5],
+      ['orphan', 6],
+    ],
+  );
+  assert.deepEqual(
+    invocations
+      .slice(1, 3)
+      .map(({ className, methodName, parentSymbol }) => [
+        className,
+        methodName,
+        parentSymbol,
+      ]),
+    [
+      ['Worker', 'process', 'App.run'],
+      ['Worker', 'process', 'App.run'],
+    ],
+  );
+  assert.equal(invocations[3].parentSymbol, 'Worker.process');
+  assert.equal(invocations[3].className, 'Unit');
+  assert.equal(invocations[3].methodName, 'handle');
+  assert.equal(invocations[4].parentKnown, false);
+  assert.equal(invocations[4].className, 'Functions');
+});
+
+test('class/method map accepts caller-only stacks without inventing ancestry', () => {
+  const { invocations } = buildMethodGroups([
+    { kind: 'enter', callId: 'root', symbolId: 'Main.run', stack: ['root'] },
+    {
+      kind: 'enter',
+      callId: 'child',
+      symbolId: 'Worker.step',
+      stack: ['root'],
+    },
+    { kind: 'enter', callId: 'isolated', symbolId: 'Utility.run', stack: [] },
+  ]);
+  assert.equal(invocations[0].parentKnown, false);
+  assert.equal(invocations[1].parentCallId, 'root');
+  assert.equal(invocations[1].parentSymbol, 'Main.run');
+  assert.equal(invocations[2].parentCallId, undefined);
+  assert.equal(invocations[2].parentKnown, false);
+});
 
 test('flow output summaries use complete per-stream ANSI decoding and retain raw events', () => {
   const events = [
@@ -349,6 +442,28 @@ test('paired calls use one transition active from the original caller call-site'
   );
   assert.equal(describeFlowTransition(transitions[1]), 'A.m → B.m2(x=10)');
   assert.equal(describeFlowTransition(transitions[2]), 'B.m2 → 10 → A.m');
+});
+
+test('caller-only entry stacks pair the call once and keep caller attribution', () => {
+  const events = [
+    { kind: 'enter', symbolId: 'A.m', callId: 'a', stack: ['a'] },
+    { kind: 'call', symbolId: 'A.m', callId: 'a', stack: ['a'] },
+    { kind: 'enter', symbolId: 'B.m2', callId: 'b', stack: ['a'] },
+    { kind: 'return', symbolId: 'B.m2', callId: 'b', stack: ['a'], result: 30 },
+  ];
+  const transitions = buildFlowOverview(events);
+  assert.equal(transitions.length, 3);
+  assert.deepEqual(
+    transitions.map(({ startIndex, index }) => [startIndex, index]),
+    [
+      [1, 1],
+      [2, 3],
+      [4, 4],
+    ],
+  );
+  assert.equal(transitions[1].parent, 'A.m');
+  assert.equal(transitions[2].parent, 'A.m');
+  assert.equal(buildMethodGroups(events).invocations[1].parentSymbol, 'A.m');
 });
 
 test('interleaved async tasks cannot lend an unrelated callee to a caller event', () => {
