@@ -380,6 +380,16 @@ test('Python exception events preserve native arguments without evaluating excep
       type: 'UserError',
       args: ['wrong amount', { actual: 17 }],
     });
+    const caught = events.filter((event) => event.kind === 'catch');
+    assert.equal(caught.length, 1, JSON.stringify(caught));
+    assert.equal(caught[0]!.source?.line, 14);
+    assert.equal(caught[0]!.symbolId, 'exceptions.py:<module>');
+    assert.deepEqual(caught[0]!.values.exception, {
+      type: 'UserError',
+      args: ['wrong amount', { actual: 17 }],
+    });
+    assert.equal(caught[0]!.certainty, 'observed');
+    assert.ok(events.indexOf(caught[0]!) > events.indexOf(thrown[0]!));
     assert.equal(thrown[0]!.certainty, 'observed');
     assert.ok(
       events.some(
@@ -400,6 +410,130 @@ test('Python exception events preserve native arguments without evaluating excep
         (event) => event.kind === 'return' && event.symbolId.endsWith(':fail'),
       ),
       false,
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('Python catch transitions require an executed except body, excluding finally and uncaught propagation', async () => {
+  const f = await fixture({
+    'helpers.py': ['def fail(message):', '    raise ValueError(message)'].join(
+      '\n',
+    ),
+    'main.py': [
+      'from helpers import fail',
+      'def guarded(value):',
+      '    try:',
+      '        fail(value)',
+      '    except TypeError:',
+      '        print("wrong handler")',
+      '    except ValueError as error:',
+      '        print("caught", error.args[0])',
+      '    finally:',
+      '        print("finished")',
+      'for word in ("first", "second"):',
+      '    guarded(word)',
+      'try:',
+      '    fail("uncaught inside this try")',
+      'finally:',
+      '    print("finally without catch")',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'python',
+      projectRoot: f.root,
+      entry: 'main.py',
+      maxEvents: 1000,
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, false);
+    assert.match(result.diagnostics!.join(' '), /ValueError/);
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const catches = events.filter((event) => event.kind === 'catch');
+    assert.equal(catches.length, 2, JSON.stringify(catches));
+    assert.deepEqual(
+      catches.map((event) => event.source?.line),
+      [8, 8],
+    );
+    assert.equal(new Set(catches.map((event) => event.callId)).size, 2);
+    assert.deepEqual(
+      catches.map((event) => event.values.exception),
+      [
+        { type: 'ValueError', args: ['first'] },
+        { type: 'ValueError', args: ['second'] },
+      ],
+    );
+    assert.ok(
+      events.some(
+        (event) =>
+          event.kind === 'unresolved' && event.source?.file === 'helpers.py',
+      ),
+    );
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'caught first\nfinished\ncaught second\nfinished\nfinally without catch\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('Python catch transitions survive finally cleanup and attribute replacement exceptions', async () => {
+  const f = await fixture({
+    'main.py': [
+      'def preserved():',
+      '    try:',
+      '        try:',
+      '            raise ValueError("original")',
+      '        finally:',
+      '            print("cleanup")',
+      '    except ValueError as error:',
+      '        print("handled", error.args[0])',
+      'def replaced():',
+      '    try:',
+      '        try:',
+      '            raise ValueError("superseded")',
+      '        finally:',
+      '            raise RuntimeError("replacement")',
+      '    except RuntimeError as error:',
+      '        print("handled", error.args[0])',
+      'preserved()',
+      'replaced()',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'python',
+      projectRoot: f.root,
+      entry: 'main.py',
+      maxEvents: 1000,
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true);
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const catches = events.filter((event) => event.kind === 'catch');
+    assert.deepEqual(
+      catches.map((event) => [event.source?.line, event.values.exception]),
+      [
+        [8, { type: 'ValueError', args: ['original'] }],
+        [16, { type: 'RuntimeError', args: ['replacement'] }],
+      ],
+    );
+    assert.ok(catches.every((event) => event.certainty === 'observed'));
+    assert.ok(catches.every((event) => event.values.phase === 'before'));
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'cleanup\nhandled original\nhandled replacement\n',
     );
   } finally {
     await f.close();

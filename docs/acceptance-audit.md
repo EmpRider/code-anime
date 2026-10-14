@@ -1,10 +1,6 @@
 # Execution visualizer acceptance audit
 
-Checkpoint: 2026-10-14, branch `codex/debugger-mobile-accessibility` based on
-merged PRs #6, #7, and #8 (`main` at `b960f33`).
-Multilingual source highlighting, a persisted branching-tree performance
-fixture, recorded Python execution, and experimental Node.js JavaScript
-recording are covered by tests.
+Checkpoint: 2026-10-14, branch `codex/python-catch-main`, based on `main` at `0a6bbbd` after PR #20. Python observed-catch changes are undergoing integration checks. Existing recorded Python and JavaScript execution and cross-language source highlighting are covered by bounded tests.
 
 Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
@@ -70,6 +66,20 @@ Focused lexer and Chromium source/timeline tests cover this behavior.
 This advances requirements 10–11 and 29 within the covered Python cases.
 Complete Python format-specifier grammar, broader language grammars, source-map
 provenance, and cross-language/browser acceptance remain incomplete.
+
+## Python observed catch boundaries — focused validation (October 14)
+
+The Python recorder now prepares `catch` transitions when a frame with a
+reported exception reaches the first recorded statement inside a multi-line
+ordinary `except` handler in the captured original source. The pending exception
+is retained across intervening `finally` statements and then cleared when a
+handler is entered, another exception supersedes it, or the frame exits. The event
+carries the existing invocation identity, original line, observed exception
+type/arguments, and a before-execution snapshot. `finally` alone is not
+classified as a catch, and `except*` or single-line handler boundaries remain
+unresolved. This targets runtime accuracy requirements 3, 5, 10, 14 and 29.
+
+Tests cover repeated catches, nonmatching handlers, propagation across user files, finally cleanup, replacement exceptions, uncaught exits, and preserving native exception arguments without executing application formatters. The full local core suite passed 175 tests with one optional live CodeGraph integration skip; TypeScript typechecking and production build passed. Browser and GitHub CI acceptance are separate gates, and wider cross-language acceptance remains open.
 
 ## Contextual source-line values (October 14)
 
