@@ -1,7 +1,7 @@
 # Execution visualizer acceptance audit
 
-Checkpoint: 2026-10-14, branch `codex/step-into-debugger` based on merged
-PRs #6 and #7 (`main` at `c3990b6`).
+Checkpoint: 2026-10-14, branch `codex/debugger-mobile-accessibility` based on
+merged PRs #6, #7, and #8 (`main` at `b960f33`).
 Multilingual source highlighting, a persisted branching-tree performance
 fixture, recorded Python execution, and experimental Node.js JavaScript
 recording are covered by tests.
@@ -9,6 +9,18 @@ recording are covered by tests.
 Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
+
+## Compact debugger controls on small mobile viewports (October 14)
+
+The compact keyboard help now documents the recorded-trace Step Into (`I`),
+Step Over (`O`), and Step Out (`U`) controls. On phones at or below 400px, the
+playback dock keeps all seven playback buttons in one row and places the
+timeline next to speed on the following row, preserving vertical space.
+Chromium coverage at 320px and 390px confirms both rows fit without horizontal
+overflow, all debugger buttons remain reachable and functional, and the
+shortcut help is discoverable. The focused mobile browser test passed. This
+advances requirements 17, 24–26, and 36; full mobile-device, responsive,
+keyboard, and assistive-technology acceptance remains incomplete.
 
 ## Step Into debugger continuation (October 14)
 

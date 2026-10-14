@@ -2115,6 +2115,31 @@ main {
     display: none;
   }
 }
+/* Keep all debugger controls visible on narrow phones, and share the second
+   transport row between the timeline and speed instead of stacking three rows. */
+@media (max-width: 400px) {
+  .playback-dock {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'transport transport'
+      'timeline speed';
+    gap: 8px;
+  }
+  .transport {
+    grid-area: transport;
+    justify-content: center;
+    min-width: 0;
+  }
+  .timeline-block {
+    grid-area: timeline;
+    min-width: 0;
+  }
+  .speed-label {
+    grid-area: speed;
+    margin: 0;
+  }
+}
 @media (max-width: 650px) {
   body {
     display: grid;
