@@ -987,7 +987,8 @@ test('switching prepared scenarios refreshes original source at the same file pa
   await page.locator('#timeline').fill('1');
   await page.locator('#source-values-toggle').click();
   await expect(page.locator('#source-values-panel')).toContainText('42');
-  await page.locator('#toggle-inspector').click();
+  if (!(await page.locator('#step-inspector').isVisible()))
+    await page.locator('#toggle-inspector').click();
   await page.locator('#tab-context').click();
   await page.locator('#variant').selectOption('baseline');
   await expect(page.locator('#source-values-toggle')).toBeHidden();
