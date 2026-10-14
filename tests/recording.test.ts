@@ -540,6 +540,112 @@ test('Python catch transitions survive finally cleanup and attribute replacement
   }
 });
 
+test('Python observed handler entries ignore suppressed nested exceptions and repeated loop or await lines', async () => {
+  const f = await fixture({
+    'main.py': [
+      'from contextlib import suppress',
+      'import asyncio',
+      'def repeated():',
+      '    try:',
+      '        raise ValueError("outer")',
+      '    except ValueError:',
+      '        for index in range(3):',
+      '            with suppress(KeyError):',
+      '                raise KeyError("ignored")',
+      'async def awaited():',
+      '    try:',
+      '        raise ValueError("async")',
+      '    except ValueError:',
+      '        for index in range(3):',
+      '            await asyncio.sleep(0)',
+      'repeated()',
+      'asyncio.run(awaited())',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'python',
+      projectRoot: f.root,
+      entry: 'main.py',
+      maxEvents: 2000,
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const catches = events.filter((event) => event.kind === 'catch');
+    assert.deepEqual(
+      catches.map((event) => [event.source?.line, event.values.exception]),
+      [
+        [7, { type: 'ValueError', args: ['outer'] }],
+        [14, { type: 'ValueError', args: ['async'] }],
+      ],
+      JSON.stringify(catches),
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('Python retains outer exceptions across nested finally handlers and recognizes declaration-first handlers', async () => {
+  const f = await fixture({
+    'main.py': [
+      'result = None',
+      'def preserved():',
+      '    try:',
+      '        try:',
+      '            raise ValueError("original")',
+      '        finally:',
+      '            try:',
+      '                raise KeyError("temporary")',
+      '            except KeyError:',
+      '                print("nested handled")',
+      '    except ValueError:',
+      '        print("outer handled")',
+      'def declarations():',
+      '    try:',
+      '        raise ValueError("global")',
+      '    except ValueError:',
+      '        global result',
+      '        result = 42',
+      'preserved()',
+      'declarations()',
+      'print(result)',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'python',
+      projectRoot: f.root,
+      entry: 'main.py',
+      maxEvents: 1000,
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const catches = events.filter((event) => event.kind === 'catch');
+    assert.deepEqual(
+      catches.map((event) => [event.source?.line, event.values.exception]),
+      [
+        [10, { type: 'KeyError', args: ['temporary'] }],
+        [12, { type: 'ValueError', args: ['original'] }],
+        [18, { type: 'ValueError', args: ['global'] }],
+      ],
+      JSON.stringify(catches),
+    );
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'nested handled\nouter handled\n42\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
 test('records observed JavaScript calls, source steps, loop values and output across user files', async () => {
   const main = [
     "const { add } = require('./helper.cjs');",

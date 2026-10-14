@@ -14,7 +14,8 @@ import dis
 import itertools
 import asyncio
 import types
-from ast import parse as parse_source, walk as walk_source, Try as OrdinaryTry
+from ast import (parse as parse_source, walk as walk_source, Try as OrdinaryTry,
+                 Global as GlobalDeclaration, Nonlocal as NonlocalDeclaration)
 
 root, entry, max_events, max_bytes, *arguments = sys.argv[1:]
 root = os.path.realpath(root)
@@ -234,8 +235,14 @@ def handler_entries(filename):
                 if not isinstance(node, OrdinaryTry):
                     continue
                 for handler in node.handlers:
-                    if handler.body and handler.body[0].lineno > handler.lineno:
-                        entries.add(handler.body[0].lineno)
+                    # Declarations have no line-trace event. Attribute the
+                    # observed entry to the first executable handler statement.
+                    for statement in handler.body:
+                        if isinstance(statement, (GlobalDeclaration, NonlocalDeclaration)):
+                            continue
+                        if statement.lineno > handler.lineno:
+                            entries.add(statement.lineno)
+                        break
         except (SyntaxError, ValueError, KeyError, RecursionError):
             # Runtime tracing still proceeds when the source cannot be parsed.
             pass
@@ -331,14 +338,26 @@ def trace(frame, event, arg):
         if event == 'line':
             pending = pending_exceptions.get(id(frame))
             if pending:
-                if frame.f_lineno in handler_entries(user_file(frame.f_code.co_filename)):
-                    emit(frame, 'catch', values={'exception': pending},
-                         note='Entered an observed Python except handler')
+                # Python's active handled exception is the runtime evidence
+                # for a handler. Match object identity, never just its type or
+                # a repeated source line: loops and suppressed exceptions can
+                # revisit a handler's first line without entering it again.
+                current = sys.exception()
+                match = next(
+                    (index for index in range(len(pending) - 1, -1, -1)
+                     if pending[index][0] is current),
+                    None,
+                )
+                if match is not None:
+                    # Later exceptions were handled or suppressed; an outer
+                    # exception may still be propagating through finally.
+                    del pending[match + 1:]
+                    if frame.f_lineno in handler_entries(user_file(frame.f_code.co_filename)):
+                        detail = pending.pop(match)[1]
+                        emit(frame, 'catch', values={'exception': detail},
+                             note='Entered an observed Python except handler')
+                if not pending:
                     pending_exceptions.pop(id(frame), None)
-                # A nested finally block can execute several user-code lines
-                # before an enclosing except is entered. Keep the latest
-                # observed propagation until a handler is entered, another
-                # exception supersedes it, or this invocation ends.
             emit(frame, 'statement')
         elif event == 'exception':
             # BaseException's native args descriptor bypasses overridden
@@ -348,7 +367,10 @@ def trace(frame, event, arg):
             arguments = BaseException.args.__get__(exception_value, BaseException)
             name = type.__getattribute__(exception_type, '__name__')
             detail = {'type': name, 'args': value(arguments)}
-            pending_exceptions[id(frame)] = detail
+            pending = pending_exceptions.setdefault(id(frame), [])
+            # An explicit re-raise starts a new propagation for the same object.
+            pending[:] = [record for record in pending if record[0] is not exception_value]
+            pending.append((exception_value, detail))
             emit(frame, 'throw', result=detail,
                  note='Python reported exception propagation: ' + name)
         elif event == 'return':

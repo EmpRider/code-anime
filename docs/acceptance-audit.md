@@ -1,10 +1,23 @@
 # Execution visualizer acceptance audit
 
-Checkpoint: 2026-10-14, branch `codex/python-catch-main`, based on `main` at `0a6bbbd` after PR #20. Python observed-catch changes are undergoing integration checks. Existing recorded Python and JavaScript execution and cross-language source highlighting are covered by bounded tests.
+Checkpoint: 2026-10-14, branch `codex/python-catch-attribution`, based on merged PR #21 (`02585be`). Python exception handler attribution is under additional regression verification. Existing recorded Python and JavaScript execution and cross-language source highlighting are covered by bounded tests.
 
 Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
+
+## Python catch attribution regression follow-up (October 14)
+
+The Python recorder now verifies handler entry against Python's active handled
+exception object. Revisited loop headers and awaited statements no longer
+invent additional catches for suppressed nested exceptions. A frame retains
+outer pending propagation when an inner exception is handled in finally, so
+the next observed handler receives the original exception evidence. Handler
+discovery skips compile-time-only global/nonlocal declarations to reach the
+first traceable statement. Focused real-runtime regressions exercise all three
+cases alongside earlier ordinary catch and replacement behavior. This advances
+requirement 3 and correctness of requirements 5 and 29 within those fixtures;
+except* and same-line handlers remain unresolved.
 
 ## Recorded multi-module application and snapshot budget (October 14)
 
