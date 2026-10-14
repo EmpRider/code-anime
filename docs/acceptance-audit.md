@@ -1,7 +1,8 @@
 # Execution visualizer acceptance audit
 
-Checkpoint: 2026-10-14, branch `codex/debugger-mobile-accessibility` based on
-merged PRs #6, #7, and #8 (`main` at `b960f33`).
+Checkpoint: 2026-10-14, branch `codex/python-observed-catch`, based on
+`main` at `1e6bf18` after merged PRs #6–#11. The new Python handler change
+is not yet validated or merged.
 Multilingual source highlighting, a persisted branching-tree performance
 fixture, recorded Python execution, and experimental Node.js JavaScript
 recording are covered by tests.
@@ -9,6 +10,26 @@ recording are covered by tests.
 Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
+
+## Python observed catch boundaries — verification pending (October 14)
+
+The Python recorder now prepares `catch` transitions when a frame with a
+reported exception reaches the first recorded statement inside a multi-line
+ordinary `except` handler in the captured original source. The pending exception
+is retained across intervening `finally` statements and then cleared when a
+handler is entered, another exception supersedes it, or the frame exits. The event
+carries the existing invocation identity, original line, observed exception
+type/arguments, and a before-execution snapshot. `finally` alone is not
+classified as a catch, and `except*` or single-line handler boundaries remain
+unresolved. This targets runtime accuracy requirements 3, 5, 10, 14 and 29.
+
+Tests have been added for propagation across user files, repeated caught
+exceptions, a nonmatching handler, `finally`, and an uncaught exit, together
+with the existing no-user-formatter evaluation scenario. **The focused test
+execution was blocked by automatic safety review and did not run.** These
+changes must not be considered verified or merge-ready until the blocked
+validation can legitimately complete; wider cross-language acceptance remains
+open.
 
 ## Contextual source-line values (October 14)
 
