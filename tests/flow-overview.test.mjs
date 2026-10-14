@@ -246,6 +246,57 @@ test('overview follows invocation identities, real inputs, returns and output', 
   assert.equal(transitions[3].certainty, 'observed');
 });
 
+test('overview displays observed exception type and arguments at throw and catch boundaries', () => {
+  const events = [
+    {
+      kind: 'enter',
+      callId: 'run-1',
+      symbolId: 'main.py:run',
+      stack: ['run-1'],
+    },
+    {
+      kind: 'throw',
+      callId: 'run-1',
+      symbolId: 'main.py:run',
+      label: 'throw run',
+      result: { type: 'ValueError', args: ['invalid amount'] },
+      stack: ['run-1'],
+      certainty: 'observed',
+    },
+    {
+      kind: 'catch',
+      callId: 'run-1',
+      symbolId: 'main.py:run',
+      values: {
+        exception: { type: 'ValueError', args: ['invalid amount'] },
+        phase: 'before',
+      },
+      stack: ['run-1'],
+      certainty: 'observed',
+    },
+    {
+      kind: 'catch',
+      callId: 'run-1',
+      symbolId: 'main.py:run',
+      values: { phase: 'before' },
+      stack: ['run-1'],
+      certainty: 'unverified',
+    },
+  ];
+  const overview = buildFlowOverview(events);
+  assert.deepEqual(overview.slice(1).map(describeFlowTransition), [
+    'main.py:run → exception: ValueError("invalid amount")',
+    'main.py:run → caught ValueError("invalid amount")',
+    'main.py:run → entered exception handler',
+  ]);
+  assert.equal(overview[2].certainty, 'observed');
+  assert.equal(overview[3].certainty, 'unverified');
+  assert.deepEqual(overview[2].exception, {
+    type: 'ValueError',
+    args: ['invalid amount'],
+  });
+});
+
 test('overview keeps observed async suspensions, yields, handler entries and unresolved exits in timeline order', () => {
   const events = [
     { kind: 'enter', callId: 'main', symbolId: 'run', stack: ['main'] },
