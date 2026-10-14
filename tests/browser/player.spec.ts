@@ -3519,7 +3519,9 @@ test('step into follows nested original source, keyboard navigation and prepared
   await page.locator('#timeline').fill('3');
   await expect(page.locator('#source-values-panel')).toBeVisible();
   await expect(page.locator('#source-values-panel')).toContainText('Inputs');
-  await expect(page.locator('#source-values-panel')).not.toContainText('Result');
+  await expect(page.locator('#source-values-panel')).not.toContainText(
+    'Result',
+  );
   await expect(page.locator('#source-values-panel')).toContainText('mock');
   await page.locator('#source-values-toggle').click();
   await expect(page.locator('#source-values-panel')).toBeHidden();
