@@ -17,6 +17,15 @@ import types
 from ast import (parse as parse_source, walk as walk_source, Try as OrdinaryTry,
                  Global as GlobalDeclaration, Nonlocal as NonlocalDeclaration)
 
+# Capture interpreter hooks before loading the application. sys.exception()
+# arrived in Python 3.11; older supported interpreters expose the same
+# currently handled exception as the second element of sys.exc_info().
+_native_exc_info = sys.exc_info
+_active_exception = getattr(sys, 'exception', None)
+if _active_exception is None:
+    def _active_exception():
+        return _native_exc_info()[1]
+
 root, entry, max_events, max_bytes, *arguments = sys.argv[1:]
 root = os.path.realpath(root)
 entry = os.path.realpath(entry)
@@ -342,7 +351,7 @@ def trace(frame, event, arg):
                 # for a handler. Match object identity, never just its type or
                 # a repeated source line: loops and suppressed exceptions can
                 # revisit a handler's first line without entering it again.
-                current = sys.exception()
+                current = _active_exception()
                 match = next(
                     (index for index in range(len(pending) - 1, -1, -1)
                      if pending[index][0] is current),
