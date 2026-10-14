@@ -3511,6 +3511,11 @@ test('step into follows nested original source, keyboard navigation and prepared
   await page.locator('#source-values-toggle').click();
   await expect(page.locator('#source-values-panel')).toContainText('Result');
   await expect(page.locator('#source-values-panel')).toContainText('30');
+  // The return stack has already unwound to A.m; its line is still in B.m2.
+  // The inline locals must describe B.m2, including on post-unwind events.
+  await expect(
+    page.locator('#source-values-panel .source-value-data').last(),
+  ).toHaveText('{"sum":30}');
   await page.locator('#timeline').fill('3');
   await expect(page.locator('#source-values-panel')).toBeHidden();
   await page.locator('#source-values-toggle').click();
