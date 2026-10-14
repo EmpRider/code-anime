@@ -10,6 +10,24 @@ Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
 
+## Recorded multi-module application and snapshot budget (October 14)
+
+A deterministic order-processing fixture now exercises four real Python modules,
+classes, inventory mutations, accumulated ledger receipts, hundreds of repeated
+invocations and console milestones. The complete 200-order run has 8,482
+observed events and 810 method entries, with exact settlement/inventory results
+and replay navigation across original source files. A local Chromium run measured
+cross-file two-frame seek p95 at 33.7 ms and collected browser heap of 42 MiB.
+These are scenario measurements rather than broad performance guarantees.
+
+The same application at 450 orders exceeds the supported 64 MiB trace budget
+before completion: a local run stopped after 13,435 events with explicit partial
+diagnostics. A companion browser regression protects the preserved partial
+timeline, exact stop reason and absence of invented settlement output. This
+extends requirements 1, 3, 27 and 35 with realistic growing object state and
+identifies snapshot storage overhead as a remaining large-application constraint;
+production-scale performance and complete cross-language acceptance are open.
+
 ## Stable disclosure DOM during recorded replay (October 14)
 
 Prepared Execution Path replay now changes disclosure markers and accessible
