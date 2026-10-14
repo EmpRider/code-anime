@@ -15,8 +15,11 @@ completion around existing tests. **The overall implementation is incomplete.**
 When the selected prepared event highlights an original source line and has
 inputs, before/after snapshots, a result, or replayed frame locals, a compact
 Values action appears in the source heading. Its on-demand panel shows the
-selected event's existing data with its explicit certainty label and closes when
-the playback cursor changes. Values remain separate from the immutable
+selected event's existing data with its explicit certainty label. Once
+expanded, the panel updates in place as the playback cursor moves (including
+reverse navigation), keeps a clearly empty state when no values were recorded,
+and remains under the user's control until collapsed. Values remain separate
+from the immutable
 original source rows, so the editor does not mix annotations into user code.
 Opening and closing the panel uses the local prepared replay and preserves the
 current cursor. A focused Chromium regression checks assignment and return

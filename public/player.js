@@ -43,6 +43,8 @@ let manualSourceWindow;
 const sourceRows = new Map();
 let highlightedSourceRow;
 let sourceValuesCursor = -1;
+let sourceValuesEvent;
+let sourceValuesExpanded = false;
 let sourceStackCalls;
 let inspectorStackCalls;
 let sourceBreakpointVersion = 0;
@@ -1262,53 +1264,67 @@ function renderSource(state, event, initial = false) {
       Object.hasOwn(event, key),
     ) ||
       Object.keys(locals ?? {}).length > 0);
-  if (sourceValuesCursor !== cursor || !hasValues) {
-    valuePanel.hidden = true;
-    valuePanel.replaceChildren();
-    sourceValuesCursor = cursor;
-  }
-  valueButton.hidden = !hasValues;
-  valueButton.setAttribute('aria-expanded', String(!valuePanel.hidden));
-  valueButton.onclick = hasValues
-    ? () => {
-        if (!valuePanel.hidden) {
-          valuePanel.hidden = true;
-          valueButton.setAttribute('aria-expanded', 'false');
-          return;
-        }
-        const list = text('dl', '', 'source-value-list');
-        const items = [
-          ['Inputs', 'inputs'],
-          ['Before', 'before'],
-          ['After', 'after'],
-          ['Result', 'result'],
-        ];
-        for (const [label, key] of items) {
-          if (!Object.hasOwn(event, key)) continue;
-          list.append(
-            text('dt', label),
-            text('dd', valueText(event[key]), 'source-value-data'),
-          );
-        }
-        if (Object.keys(locals ?? {}).length)
-          list.append(
-            text('dt', 'Frame locals'),
-            text('dd', valueText(locals), 'source-value-data'),
-          );
-        valuePanel.replaceChildren(
-          text(
-            'div',
-            `Step ${cursor} · ${event.certainty ?? 'provenance unspecified'}`,
-            'source-value-evidence',
-          ),
-          list,
+  // Keep the opt-in inspector synchronized with prepared events as playback
+  // advances, without rebuilding the source editor or reanalyzing the trace.
+  const renderSourceValues = () => {
+    if (!hasValues) {
+      valuePanel.replaceChildren(
+        text('p', 'No recorded values for this step.', 'source-value-evidence'),
+      );
+    } else {
+      const list = text('dl', '', 'source-value-list');
+      const items = [
+        ['Inputs', 'inputs'],
+        ['Before', 'before'],
+        ['After', 'after'],
+        ['Result', 'result'],
+      ];
+      for (const [label, key] of items) {
+        if (!Object.hasOwn(event, key)) continue;
+        list.append(
+          text('dt', label),
+          text('dd', valueText(event[key]), 'source-value-data'),
         );
-        valuePanel.hidden = false;
-        valueButton.setAttribute('aria-expanded', 'true');
       }
-    : null;
+      if (Object.keys(locals ?? {}).length)
+        list.append(
+          text('dt', 'Frame locals'),
+          text('dd', valueText(locals), 'source-value-data'),
+        );
+      valuePanel.replaceChildren(
+        text(
+          'div',
+          `Step ${cursor} · ${event.certainty ?? 'provenance unspecified'}`,
+          'source-value-evidence',
+        ),
+        list,
+      );
+    }
+    sourceValuesCursor = cursor;
+    sourceValuesEvent = event;
+  };
+  const valuesChanged =
+    sourceValuesCursor !== cursor ||
+    sourceValuesEvent !== event ||
+    !valuePanel.hasChildNodes();
+  if (sourceValuesExpanded && valuesChanged) renderSourceValues();
+  else if (!sourceValuesExpanded && !hasValues) {
+    sourceValuesCursor = -1;
+    sourceValuesEvent = undefined;
+    valuePanel.replaceChildren();
+  }
+  valueButton.hidden = !hasValues && !sourceValuesExpanded;
+  valuePanel.hidden = !sourceValuesExpanded;
+  valueButton.setAttribute('aria-expanded', String(sourceValuesExpanded));
+  valueButton.onclick = () => {
+    sourceValuesExpanded = !sourceValuesExpanded;
+    if (sourceValuesExpanded && valuesChanged) renderSourceValues();
+    valuePanel.hidden = !sourceValuesExpanded;
+    valueButton.setAttribute('aria-expanded', String(sourceValuesExpanded));
+  };
   valueButton.onkeydown = (keyboardEvent) => {
     if (keyboardEvent.key !== 'Escape') return;
+    sourceValuesExpanded = false;
     valuePanel.hidden = true;
     valueButton.setAttribute('aria-expanded', 'false');
   };
