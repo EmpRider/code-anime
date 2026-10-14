@@ -60,6 +60,84 @@ test('Python escaped triple quotes keep lexical state across source windows', ()
   );
 });
 
+test('Python f-string expressions color real code while escaped braces remain literal', () => {
+  const tokens = tokensFor('sample.py', [
+    'label = f"literal {{ return }} and {True if enabled else False}" # outside',
+    'raw = rf"value {amount + 1} and \\" # inside string" # after',
+    'ordinary = "{False if ignored else True}"',
+  ]);
+  assert.equal(
+    tokens[0].find((token) => token.text === 'True')?.kind,
+    'keyword',
+  );
+  assert.equal(tokens[0].find((token) => token.text === 'if')?.kind, 'keyword');
+  assert.ok(
+    tokens[0].some(
+      (token) => token.kind === 'string' && token.text.includes('{{ return }}'),
+    ),
+  );
+  assert.equal(
+    tokens[0].find((token) => token.text === '# outside')?.kind,
+    'comment',
+  );
+  assert.equal(tokens[1].find((token) => token.text === '1')?.kind, 'number');
+  assert.equal(
+    tokens[1].find((token) => token.text === '# after')?.kind,
+    'comment',
+  );
+  assert.equal(tokens[2].filter((token) => token.kind === 'keyword').length, 0);
+});
+
+test('Python backslashes do not escape f-string replacement fields', () => {
+  const [tokens] = tokensFor('sample.py', [
+    'message = rf"before \\{True} after" # real comment',
+  ]);
+  assert.equal(tokens.find((token) => token.text === 'True')?.kind, 'keyword');
+  assert.equal(
+    tokens.find((token) => token.text === '# real comment')?.kind,
+    'comment',
+  );
+});
+
+test('Python nested f-strings and multiline expressions keep state across virtual windows', () => {
+  const lines = [
+    'value = f"""header {',
+    ...Array.from({ length: 400 }, () => '  # expression comment'),
+    '  {"nested": 3}["nested"] + (True if valid else False)',
+    '} and {f\'inner {2}\'} footer""" # outside',
+    'return 42',
+  ];
+  const decorate = prepareSourceHighlighting(lines, 'sample.py');
+  for (const lineNumber of [1, 200, 402, 403, 404]) {
+    assert.equal(
+      decorate(lineNumber)
+        .map((token) => token.text)
+        .join(''),
+      lines[lineNumber - 1],
+    );
+  }
+  assert.equal(
+    decorate(402).find((token) => token.text === 'True')?.kind,
+    'keyword',
+  );
+  assert.equal(
+    decorate(402).find((token) => token.text === '3')?.kind,
+    'number',
+  );
+  assert.equal(
+    decorate(403).find((token) => token.text === '2')?.kind,
+    'number',
+  );
+  assert.equal(
+    decorate(403).find((token) => token.text === '# outside')?.kind,
+    'comment',
+  );
+  assert.equal(
+    decorate(404).find((token) => token.text === 'return')?.kind,
+    'keyword',
+  );
+});
+
 test('Rust raw strings with hashes keep quotes and comment markers literal', () => {
   const tokens = tokensFor('sample.rs', [
     'fn main() {',

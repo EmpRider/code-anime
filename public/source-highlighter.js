@@ -71,10 +71,39 @@ function scanTemplateRemainder(line, from) {
   return { position, interpolating: false, closed: false };
 }
 
+function scanPythonFormattedRemainder(line, from, delimiter) {
+  let position = from;
+  while (position < line.length) {
+    // Python backslashes protect quotes, even for raw prefixes, but cannot
+    // escape a replacement field: f"\\{value}" still evaluates {value}.
+    if (
+      line[position] === '\\' &&
+      (line[position + 1] === delimiter[0] || line[position + 1] === '\\')
+    ) {
+      position = Math.min(line.length, position + 2);
+    } else if (line.startsWith(delimiter, position)) {
+      return { position: position + delimiter.length, closed: true };
+    } else if (
+      line.startsWith('{{', position) ||
+      line.startsWith('}}', position)
+    ) {
+      position += 2;
+    } else if (line[position] === '{') {
+      return { position: position + 1, interpolating: true };
+    } else {
+      position++;
+    }
+  }
+  return { position, closed: false };
+}
+
 function scanLine(line, dialect, previous, decorate) {
   let { mode, delimiter, depth, raw } = previous;
   // Copy the interpolation stack so saved line-start states stay immutable.
   const templates = (previous.templates ?? []).map((frame) => ({ ...frame }));
+  const pythonFormats = (previous.pythonFormats ?? []).map((frame) => ({
+    ...frame,
+  }));
   const tokens = decorate ? [] : undefined;
   let plainStart = 0;
   let position = 0;
@@ -108,6 +137,28 @@ function scanLine(line, dialect, previous, decorate) {
     }
     if (mode === 'string') {
       const start = position;
+      const format = dialect === 'python' ? pythonFormats.at(-1) : undefined;
+      if (format && format.depth === null) {
+        const rest = scanPythonFormattedRemainder(
+          line,
+          position,
+          format.delimiter,
+        );
+        position = rest.position;
+        highlight(start, position, 'string');
+        if (rest.closed) {
+          pythonFormats.pop();
+          mode = 'code';
+        } else if (rest.interpolating) {
+          format.depth = 0;
+          mode = 'code';
+        } else if (format.delimiter.length === 1 && !/\\$/.test(line)) {
+          // A single-quoted f-string cannot continue over a bare newline.
+          pythonFormats.pop();
+          mode = 'code';
+        }
+        continue;
+      }
       if (dialect === 'javascript' && delimiter === '`') {
         const rest = scanTemplateRemainder(line, position);
         position = rest.position;
@@ -143,6 +194,31 @@ function scanLine(line, dialect, previous, decorate) {
     const start = position;
     const interpolation =
       dialect === 'javascript' ? templates[templates.length - 1] : undefined;
+    const pythonExpression =
+      dialect === 'python'
+        ? pythonFormats[pythonFormats.length - 1]
+        : undefined;
+    if (pythonExpression && pythonExpression.depth !== null) {
+      if (line[position] === '{') {
+        pythonExpression.depth++;
+        position++;
+        continue;
+      }
+      if (line[position] === '}') {
+        if (pythonExpression.depth > 0) {
+          pythonExpression.depth--;
+        } else {
+          pythonExpression.depth = null;
+          mode = 'string';
+          delimiter = pythonExpression.delimiter;
+          position++;
+          highlight(start, position, 'string');
+          continue;
+        }
+        position++;
+        continue;
+      }
+    }
     if (interpolation && interpolation.depth !== null) {
       if (line[position] === '{') {
         interpolation.depth++;
@@ -168,6 +244,14 @@ function scanLine(line, dialect, previous, decorate) {
       (line[position] === 'r' ||
         (line[position] === 'b' && line[position + 1] === 'r'))
         ? /^(?:b?r)(#*)"/.exec(line.slice(position))
+        : null;
+    const pythonPrefix =
+      dialect === 'python' &&
+      !isIdentifierCharacter(line[position - 1]) &&
+      /[rRbBuUfF]/.test(line[position])
+        ? /^(?:[fF][rR]?|[rR][fFbB]?|[bB][rR]?|[uU])(?=["'])/.exec(
+            line.slice(position),
+          )
         : null;
     if (rustRaw) {
       delimiter = '"' + rustRaw[1];
@@ -213,16 +297,18 @@ function scanLine(line, dialect, previous, decorate) {
         delimiter = '`';
       }
     } else if (
+      pythonPrefix ||
       line[position] === '"' ||
       line[position] === "'" ||
       (dialect !== 'python' && line[position] === '\x60')
     ) {
-      delimiter = line[position];
+      const quotePosition = position + (pythonPrefix?.[0].length ?? 0);
+      delimiter = line[quotePosition];
       if (
         (dialect === 'python' ||
           ((dialect === 'kotlin' || dialect === 'java') &&
             delimiter === '"')) &&
-        line.startsWith(delimiter.repeat(3), position)
+        line.startsWith(delimiter.repeat(3), quotePosition)
       ) {
         delimiter = delimiter.repeat(3);
       }
@@ -230,7 +316,25 @@ function scanLine(line, dialect, previous, decorate) {
       raw =
         (dialect === 'kotlin' && delimiter === '"""') ||
         (dialect === 'go' && delimiter === '`');
-      position += delimiter.length;
+      position = quotePosition + delimiter.length;
+      if (pythonPrefix && /f/i.test(pythonPrefix[0])) {
+        const format = { delimiter, depth: null };
+        pythonFormats.push(format);
+        const rest = scanPythonFormattedRemainder(line, position, delimiter);
+        position = rest.position;
+        highlight(start, position, 'string');
+        if (rest.closed) {
+          pythonFormats.pop();
+          mode = 'code';
+        } else if (rest.interpolating) {
+          format.depth = 0;
+          mode = 'code';
+        } else if (delimiter.length === 1 && !/\\$/.test(line)) {
+          pythonFormats.pop();
+          mode = 'code';
+        }
+        continue;
+      }
       // A string begins here; scan its remainder in this same line.
       const rest = scanStringRemainder(line, position, delimiter, raw);
       position = rest.position;
@@ -275,7 +379,10 @@ function scanLine(line, dialect, previous, decorate) {
   }
   if (tokens && plainStart < line.length)
     tokens.push({ text: line.slice(plainStart) });
-  return { state: { mode, delimiter, depth, raw, templates }, tokens };
+  return {
+    state: { mode, delimiter, depth, raw, templates, pythonFormats },
+    tokens,
+  };
 }
 
 function scanCommentRemainder(line, start, originalDepth, canNest) {
@@ -303,6 +410,7 @@ export function prepareSourceHighlighting(lines, file) {
     depth: 0,
     raw: false,
     templates: [],
+    pythonFormats: [],
   };
   let state = initial;
   for (const line of lines) {

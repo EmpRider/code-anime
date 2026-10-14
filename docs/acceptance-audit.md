@@ -10,6 +10,20 @@ Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
 
+## Python formatted-string source highlighting (October 14)
+
+The existing original-source lexer now recognizes Python's `f`, `fr`, and `rf`
+string prefixes, colors expressions inside single- and triple-quoted f-strings
+as source code, and keeps doubled braces as literal string text. Nested braces,
+nested f-strings, and multiline expression state carry through virtualized source
+windows. The displayed source remains byte-for-byte equivalent to the prepared
+source lines; there are no new analysis requests or changes to playback events.
+Focused lexer and Chromium source/timeline tests cover this behavior.
+
+This advances requirements 10–11 and 29 within the covered Python cases.
+Complete Python format-specifier grammar, broader language grammars, source-map
+provenance, and cross-language/browser acceptance remain incomplete.
+
 ## Contextual source-line values (October 14)
 
 When the selected prepared event highlights an original source line and has
