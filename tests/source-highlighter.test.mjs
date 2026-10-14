@@ -284,6 +284,127 @@ test('escaped template interpolation stays literal while later interpolation is 
   );
 });
 
+test('JavaScript regular expressions preserve comment-like character classes and division', () => {
+  const tokens = tokensFor('sample.js', [
+    'const match = /[/*]test/gi; // real comment',
+    'const ratio = total / count / 2;',
+    'return /[/*]/.test(input);',
+    'const mixed = total / /[/*]/.test(text);',
+    'const template = `valid: ${/[/*]/.test(text)}`;',
+  ]);
+  assert.equal(
+    tokens[0].find((token) => token.text === '/[/*]test/gi')?.kind,
+    'string',
+  );
+  assert.equal(
+    tokens[0].find((token) => token.text === '// real comment')?.kind,
+    'comment',
+  );
+  assert.equal(tokens[1].filter((token) => token.kind === 'string').length, 0);
+  assert.equal(tokens[1].filter((token) => token.kind === 'comment').length, 0);
+  assert.equal(
+    tokens[2].find((token) => token.text === '/[/*]/')?.kind,
+    'string',
+  );
+  assert.equal(
+    tokens[3].find((token) => token.text === '/[/*]/')?.kind,
+    'string',
+  );
+  assert.equal(
+    tokens[4].find((token) => token.text === '/[/*]/')?.kind,
+    'string',
+  );
+});
+
+test('JavaScript regexp start context survives virtualized comments and continued expressions', () => {
+  const lines = [
+    'const expression =',
+    ...Array.from({ length: 700 }, () => '  // a code-like comment /[/*]/'),
+    '  /[/*]/g.test(value);',
+    'const ratio = a / b;',
+  ];
+  const decorate = prepareSourceHighlighting(lines, 'sample.ts');
+  assert.equal(
+    decorate(702).find((token) => token.text === '/[/*]/g')?.kind,
+    'string',
+  );
+  assert.equal(
+    decorate(703).filter((token) => token.kind === 'string').length,
+    0,
+  );
+  for (const lineNumber of [1, 300, 702, 703]) {
+    assert.equal(
+      decorate(lineNumber)
+        .map((token) => token.text)
+        .join(''),
+      lines[lineNumber - 1],
+    );
+  }
+});
+
+test('JavaScript control-flow parentheses and block braces admit regexps without treating division as a literal', () => {
+  const tokens = tokensFor('source.mjs', [
+    'if (ready) /a\\/b/.test(text);',
+    'while (running) /[a/]/.test(text);',
+    'if (ready) { count++; }',
+    '/[ab]+/.test(text);',
+    'const objectRatio = { value: 1 } / divisor;',
+    'const callRatio = compute() / divisor / 2;',
+    'const incrementRatio = count++ / divisor;',
+    'const prefixRatio = ++count / divisor;',
+    'const callback = () => { return /done/.test(text); };',
+    'const interpolation = `value ${({ key: /x/ }).key}`;',
+  ]);
+  for (const [index, literal] of [
+    [0, '/a\\/b/'],
+    [1, '/[a/]/'],
+    [3, '/[ab]+/'],
+    [8, '/done/'],
+    [9, '/x/'],
+  ]) {
+    assert.equal(
+      tokens[index].find((token) => token.text === literal)?.kind,
+      'string',
+    );
+  }
+  for (const index of [4, 5, 6, 7]) {
+    assert.equal(
+      tokens[index].filter((token) => token.kind === 'string').length,
+      0,
+      `division operators should not be highlighted as regexp literals on line ${index + 1}`,
+    );
+  }
+});
+
+test('JavaScript regexp grouping state survives source windows and nested control conditions', () => {
+  const lines = [
+    'if (check(',
+    ...Array.from(
+      { length: 400 },
+      () => '  // spanning a hidden source window',
+    ),
+    '  input)) /start/.test(value);',
+    'const item = { nested: { value: true } } / denominator;',
+    'if (flag) {',
+    '  count++;',
+    '}',
+    '/finish/.test(value);',
+  ];
+  const decorate = prepareSourceHighlighting(lines, 'source.ts');
+  assert.equal(
+    decorate(402).find((token) => token.text === '/start/')?.kind,
+    'string',
+  );
+  assert.equal(
+    decorate(403).some((token) => token.kind === 'string'),
+    false,
+  );
+  assert.equal(
+    decorate(407).find((token) => token.text === '/finish/')?.kind,
+    'string',
+  );
+});
+
 test('empty source windows do not crash the highlighter', () => {
   assert.deepEqual(prepareSourceHighlighting([], 'sample.ts')(1), []);
 });

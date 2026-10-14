@@ -10,6 +10,21 @@ Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
 
+## JavaScript regexp literal source highlighting (October 14)
+
+The original-source lexer now distinguishes JavaScript/TypeScript regular
+expression literals from division operators using statement-local operand
+context, including control-flow parentheses, object-vs-block braces, and
+prefix/postfix updates. It preserves character classes and escaped delimiters
+(including comment-like `/*` text), literal flags, comments following regexps,
+and regexp starts after multi-line expressions in virtualized source windows. This is
+syntax decoration only: it changes no recorded execution data or source bytes.
+Focused source lexer and Chromium source/timeline regressions check the
+covered cases. Expression-vs-block syntax is inferred heuristically, and
+ambiguous JavaScript grammar beyond lightweight lexing,
+JSX/TSX constructs, and exhaustive language/source-map acceptance remain open.
+This advances requirements 10–11 and 29 within the tested cases.
+
 ## Python formatted-string source highlighting (October 14)
 
 The existing original-source lexer now recognizes Python's `f`, `fr`, and `rf`

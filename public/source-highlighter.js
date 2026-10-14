@@ -97,8 +97,47 @@ function scanPythonFormattedRemainder(line, from, delimiter) {
   return { position, closed: false };
 }
 
+function scanJavaScriptRegExp(line, from) {
+  let position = from;
+  let inClass = false;
+  while (position < line.length) {
+    if (line[position] === '\\') {
+      position = Math.min(line.length, position + 2);
+    } else if (line[position] === '[' && !inClass) {
+      inClass = true;
+      position++;
+    } else if (line[position] === ']' && inClass) {
+      inClass = false;
+      position++;
+    } else if (line[position] === '/' && !inClass) {
+      position++;
+      while (position < line.length && /[a-z]/i.test(line[position]))
+        position++;
+      return position;
+    } else {
+      position++;
+    }
+  }
+  return null;
+}
+
+const javascriptPrefixKeywords = new Set(
+  'await case delete in instanceof new return throw typeof void yield'.split(
+    ' ',
+  ),
+);
+const javascriptControlKeywords = new Set(
+  'if while for with switch catch'.split(' '),
+);
+const javascriptBlockKeywords = new Set('else try finally do'.split(' '));
+const javascriptExpressionEnd = '].';
+
 function scanLine(line, dialect, previous, decorate) {
   let { mode, delimiter, depth, raw } = previous;
+  let regexpAllowed = previous.regexpAllowed ?? true;
+  let javascriptPrevious = previous.javascriptPrevious ?? '';
+  const javascriptParens = [...(previous.javascriptParens ?? [])];
+  const javascriptBraces = [...(previous.javascriptBraces ?? [])];
   // Copy the interpolation stack so saved line-start states stay immutable.
   const templates = (previous.templates ?? []).map((frame) => ({ ...frame }));
   const pythonFormats = (previous.pythonFormats ?? []).map((frame) => ({
@@ -166,15 +205,18 @@ function scanLine(line, dialect, previous, decorate) {
         if (rest.closed) {
           templates.pop();
           mode = 'code';
+          regexpAllowed = false;
         } else if (rest.interpolating) {
           templates[templates.length - 1].depth = 0;
           mode = 'code';
+          regexpAllowed = true;
         }
         continue;
       }
       const rest = scanStringRemainder(line, position, delimiter, raw);
       position = rest.position;
       if (rest.closed) mode = 'code';
+      if (rest.closed && dialect === 'javascript') regexpAllowed = false;
       highlight(start, position, 'string');
       // Normal quoted strings cannot continue after a bare line break.
       // Triple-quoted, raw and template strings can span any number of lines.
@@ -222,17 +264,24 @@ function scanLine(line, dialect, previous, decorate) {
     if (interpolation && interpolation.depth !== null) {
       if (line[position] === '{') {
         interpolation.depth++;
+        javascriptBraces.push('expression');
+        regexpAllowed = true;
+        javascriptPrevious = '{';
         position++;
         continue;
       }
       if (line[position] === '}') {
         if (interpolation.depth > 0) {
           interpolation.depth--;
+          javascriptBraces.pop();
+          regexpAllowed = false;
+          javascriptPrevious = '}';
         } else {
           mode = 'string';
           delimiter = '`';
           position++;
           highlight(start, position, 'string');
+          regexpAllowed = false;
           continue;
         }
         position++;
@@ -252,6 +301,14 @@ function scanLine(line, dialect, previous, decorate) {
         ? /^(?:[fF][rR]?|[rR][fFbB]?|[bB][rR]?|[uU])(?=["'])/.exec(
             line.slice(position),
           )
+        : null;
+    const regexpEnd =
+      dialect === 'javascript' &&
+      line[position] === '/' &&
+      regexpAllowed &&
+      !line.startsWith('//', position) &&
+      !line.startsWith('/*', position)
+        ? scanJavaScriptRegExp(line, position + 1)
         : null;
     if (rustRaw) {
       delimiter = '"' + rustRaw[1];
@@ -285,14 +342,22 @@ function scanLine(line, dialect, previous, decorate) {
       depth = rest.depth;
       if (!depth) mode = 'code';
       highlight(start, position, 'comment');
+    } else if (regexpEnd !== null) {
+      position = regexpEnd;
+      highlight(start, position, 'string');
+      regexpAllowed = false;
     } else if (dialect === 'javascript' && line[position] === '`') {
       templates.push({ depth: null });
       const rest = scanTemplateRemainder(line, position + 1);
       position = rest.position;
       highlight(start, position, 'string');
-      if (rest.closed) templates.pop();
-      else if (rest.interpolating) templates[templates.length - 1].depth = 0;
-      else {
+      if (rest.closed) {
+        templates.pop();
+        regexpAllowed = false;
+      } else if (rest.interpolating) {
+        templates[templates.length - 1].depth = 0;
+        regexpAllowed = true;
+      } else {
         mode = 'string';
         delimiter = '`';
       }
@@ -349,6 +414,7 @@ function scanLine(line, dialect, previous, decorate) {
       )
         mode = 'code';
       if (mode === 'code') raw = false;
+      if (dialect === 'javascript') regexpAllowed = false;
     } else if (/[A-Za-z_$]/.test(line[position])) {
       position++;
       while (position < line.length && isIdentifierCharacter(line[position]))
@@ -367,6 +433,9 @@ function scanLine(line, dialect, previous, decorate) {
         ).has(word)
       )
         highlight(start, position, 'keyword');
+      if (dialect === 'javascript')
+        regexpAllowed = javascriptPrefixKeywords.has(word);
+      if (dialect === 'javascript') javascriptPrevious = word;
     } else if (
       /[0-9]/.test(line[position]) &&
       !isIdentifierCharacter(line[position - 1])
@@ -375,12 +444,77 @@ function scanLine(line, dialect, previous, decorate) {
       while (position < line.length && /[0-9_.]/.test(line[position]))
         position++;
       highlight(start, position, 'number');
-    } else position++;
+      if (dialect === 'javascript') {
+        regexpAllowed = false;
+        javascriptPrevious = 'number';
+      }
+    } else {
+      if (dialect === 'javascript' && !/\s/.test(line[position])) {
+        const symbol = line[position];
+        if (
+          (symbol === '+' || symbol === '-') &&
+          line[position + 1] === symbol
+        ) {
+          // A prefix update expects an operand; a postfix update finishes one.
+          javascriptPrevious = regexpAllowed
+            ? 'prefix-update'
+            : 'postfix-update';
+          position += 2;
+          continue;
+        }
+        if (symbol === '=' && line[position + 1] === '>') {
+          regexpAllowed = true;
+          javascriptPrevious = '=>';
+          position += 2;
+          continue;
+        }
+        if (symbol === '(') {
+          javascriptParens.push(
+            javascriptControlKeywords.has(javascriptPrevious),
+          );
+          regexpAllowed = true;
+        } else if (symbol === ')') {
+          regexpAllowed = javascriptParens.pop() === true;
+        } else if (symbol === '{') {
+          const isBlock =
+            javascriptPrevious === '' ||
+            javascriptPrevious === 'control-close' ||
+            javascriptPrevious === ')' ||
+            javascriptPrevious === '=>' ||
+            javascriptPrevious === ';' ||
+            javascriptPrevious === '}' ||
+            javascriptBlockKeywords.has(javascriptPrevious) ||
+            (!regexpAllowed &&
+              javascriptPrevious !== ']' &&
+              javascriptPrevious !== '.');
+          javascriptBraces.push(isBlock ? 'block' : 'expression');
+          regexpAllowed = true;
+        } else if (symbol === '}') {
+          regexpAllowed = javascriptBraces.pop() === 'block';
+        } else {
+          regexpAllowed = !javascriptExpressionEnd.includes(symbol);
+        }
+        javascriptPrevious =
+          symbol === ')' && regexpAllowed ? 'control-close' : symbol;
+      }
+      position++;
+    }
   }
   if (tokens && plainStart < line.length)
     tokens.push({ text: line.slice(plainStart) });
   return {
-    state: { mode, delimiter, depth, raw, templates, pythonFormats },
+    state: {
+      mode,
+      delimiter,
+      depth,
+      raw,
+      templates,
+      pythonFormats,
+      regexpAllowed,
+      javascriptPrevious,
+      javascriptParens,
+      javascriptBraces,
+    },
     tokens,
   };
 }
@@ -411,6 +545,10 @@ export function prepareSourceHighlighting(lines, file) {
     raw: false,
     templates: [],
     pythonFormats: [],
+    regexpAllowed: true,
+    javascriptPrevious: '',
+    javascriptParens: [],
+    javascriptBraces: [],
   };
   let state = initial;
   for (const line of lines) {
