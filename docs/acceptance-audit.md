@@ -1,6 +1,7 @@
 # Execution visualizer acceptance audit
 
-Checkpoint: 2026-10-14, branch `codex/recorded-stress-performance`.
+Checkpoint: 2026-10-14, branch `codex/async-step-accuracy` based on merged
+PR #6 (`main` at `8e1531f`).
 Multilingual source highlighting, a persisted branching-tree performance
 fixture, recorded Python execution, and experimental Node.js JavaScript
 recording are covered by tests.
@@ -9,12 +10,38 @@ Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
 
+## Same-scheduler async stepping follow-up (October 14)
+
+After PR #6 merged into `main`, Step Over and Step Out were tightened to use
+the recorded invocation identity as proof of progress and termination. A
+sibling async callback can have exactly the same task and thread labels as a
+suspended method; previously its unrelated stack could cause premature Step
+Over/Out navigation. Step Over now resumes at the next event belonging to the
+selected invocation, and Step Out waits for its recorded return, unresolved
+exit, or unwound exception. The selected timeline remains the sole playback
+state, including when a prepared continuation loads.
+
+Recorded return events also differ between recorders: some retain the exiting
+call on the stack while others pop it. Navigation after return now uses explicit
+parentage or caller-aware stack attribution. A caught exception still steps
+within its active invocation until there is evidence of an actual unwind.
+
+A new synthetic regression reproduces equal task/thread labels, interleaved
+sibling calls, a caught exception, and a retained-frame return. The focused
+continuation suite passed all 27 tests, and the existing browser replay with
+observed Python asyncio tasks passed. This remains bounded evidence for
+requirements 9, 14, 24, 30, and 35; broader scheduler and recorded-language
+acceptance is still required.
+
 ## Latest verified local gates (October 14)
 
-The complete `npm run check` passed: TypeScript typecheck, **154 passing core
-tests** (one optional live CodeGraph test skipped), production build, and
-Prettier. The full Playwright Chromium suite passed **58 browser tests**,
-including the new source-availability layouts and observed async overview.
+The `npm run check` sequence passed TypeScript typecheck, **162 core tests**
+(one optional live CodeGraph test skipped), and production build. Its initial
+formatting check failed on the new async regression; after formatting that
+file, `npm run format:check` passed independently. The full Playwright Chromium
+suite passed **59 browser tests**, including observed async replay and
+large-trace tests. The complete chained `npm run check` was not repeated after
+formatting.
 `npm run package:check` passed the installed CLI, MCP handshake, bundled player
 assets, and flow API. `git diff --check` reported no whitespace errors. These
 results verify the local checkout only; CI for the new changes and the wider

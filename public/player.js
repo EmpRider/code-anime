@@ -2325,22 +2325,16 @@ $('restart').onclick = () => seek(0);
 function steppingInvocation(event) {
   if (!event) return undefined;
   if (event.kind === 'console' && !event.stack?.length) return undefined;
-  if (['return', 'throw', 'unresolved'].includes(event.kind))
-    return event.stack?.at(-1);
+  // A completed frame can still be present in a recorder's exit snapshot.
+  // Use recorded parentage, regardless of whether the stack was popped yet.
+  // An exception notification is different: a caught throw can continue in
+  // the same frame, so only unwind when that frame is actually absent.
+  if (
+    ['return', 'unresolved'].includes(event.kind) ||
+    (event.kind === 'throw' && !event.stack?.includes(event.callId))
+  )
+    return parentInvocationId(event);
   return invocations.has(event.callId) ? event.callId : event.stack?.at(-1);
-}
-function executionContext(event) {
-  return {
-    task: event?.values?.task ?? event?.values?.taskId ?? event?.taskId,
-    thread: event?.values?.thread ?? event?.thread,
-  };
-}
-function sameSteppingContext(context, event) {
-  const next = executionContext(event);
-  return (
-    (context.task === undefined || next.task === context.task) &&
-    (context.thread === undefined || next.thread === context.thread)
-  );
 }
 // Stepping is computed from the preprocessed invocation snapshots only.
 $('step-over').onclick = () => {
@@ -2356,21 +2350,16 @@ $('step-over').onclick = () => {
     return seek(cursor + 1);
   const callId = steppingInvocation(current);
   if (!callId) return seek(cursor + 1);
-  const context = executionContext(current);
   void (async () => {
     let i = cursor;
     while (true) {
       for (; i < events.length; i++) {
-        if (
-          events[i].callId !== callId &&
-          !sameSteppingContext(context, events[i])
-        )
-          continue;
-        if (events[i].callId === callId || !events[i].stack?.includes(callId)) {
-          if (version === navigationVersion && flow === requestedFlow)
-            seek(i + 1);
-          return;
-        }
+        // Shared task/thread labels do not establish invocation identity.
+        // Sibling callbacks can run while this invocation is suspended.
+        if (events[i].callId !== callId) continue;
+        if (version === navigationVersion && flow === requestedFlow)
+          seek(i + 1);
+        return;
       }
       if (version !== navigationVersion || flow !== requestedFlow) return;
       if (!flow.nextSessionId || !(await extendThrough(events.length + 1)))
@@ -2388,7 +2377,6 @@ $('step-out').onclick = () => {
   const current = events?.[cursor - 1];
   if (!current) return;
   const callId = steppingInvocation(current);
-  const context = executionContext(current);
   // Pipe output has no observed invocation to step out of. Advance to the next
   // recorded event instead of leaving Step Out unresponsive at this position.
   if (!callId) {
@@ -2400,14 +2388,14 @@ $('step-out').onclick = () => {
     while (true) {
       for (; i < events.length; i++) {
         const next = events[i];
-        if (next.callId !== callId && !sameSteppingContext(context, next))
-          continue;
+        // Only the invocation's own terminal event proves it has exited.
+        // A different call with the same task/thread may be an interleaved
+        // sibling, rather than a return to our caller.
+        if (next.callId !== callId) continue;
         if (
-          !next.stack?.includes(callId) &&
-          !(
-            next.callId === callId &&
-            !['return', 'throw', 'unresolved'].includes(next.kind)
-          )
+          next.kind === 'return' ||
+          next.kind === 'unresolved' ||
+          (next.kind === 'throw' && !next.stack?.includes(callId))
         ) {
           if (version === navigationVersion && flow === requestedFlow)
             seek(i + 1);

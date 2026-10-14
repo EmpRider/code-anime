@@ -490,6 +490,67 @@ test('step out recognizes the same async invocation when its task label changes 
   }
 });
 
+test('stepping ignores same-task sibling work and follows a caught exception to its real exit', async () => {
+  // Some schedulers use one task/thread label for several interleaved calls.
+  // Neither label, nor the mere absence of a frame in a sibling stack, proves
+  // the awaited invocation returned to its caller.
+  const context = { values: { task: 'shared', thread: 'main' } };
+  const events = [
+    event(1, 'enter', 'A.m', 'root', ['root'], 'A.ts', 2, context),
+    event(2, 'enter', 'B.m2', 'child', ['root', 'child'], 'B.ts', 2, {
+      ...context,
+      parentCallId: 'root',
+    }),
+    event(3, 'await', 'B.m2', 'child', ['root'], 'B.ts', 3, context),
+    event(4, 'enter', 'C.work', 'sibling', ['root', 'sibling'], 'B.ts', 3, {
+      ...context,
+      parentCallId: 'root',
+    }),
+    event(
+      5,
+      'assign',
+      'C.work',
+      'sibling',
+      ['root', 'sibling'],
+      'B.ts',
+      3,
+      context,
+    ),
+    event(6, 'return', 'C.work', 'sibling', ['root'], 'B.ts', 3, context),
+    event(7, 'resume', 'B.m2', 'child', ['root', 'child'], 'B.ts', 3, context),
+    event(8, 'throw', 'B.m2', 'child', ['root', 'child'], 'B.ts', 3, context),
+    event(9, 'catch', 'B.m2', 'child', ['root', 'child'], 'B.ts', 3, context),
+    // Some recorders capture the returning frame before popping it.
+    event(10, 'return', 'B.m2', 'child', ['root', 'child'], 'B.ts', 4, context),
+    event(11, 'assign', 'A.m', 'root', ['root'], 'A.ts', 4, context),
+    event(12, 'return', 'A.m', 'root', ['root'], 'A.ts', 6, context),
+  ];
+  const { dom, window, get, requests } = await createPlayer(
+    undefined,
+    chunk(events),
+  );
+  try {
+    moveTo(window, get, 3);
+    get('step-over').click();
+    assert.equal(get('progress').textContent, '7 / 12');
+    moveTo(window, get, 3);
+    get('step-out').click();
+    assert.equal(get('progress').textContent, '10 / 12');
+    moveTo(window, get, 8);
+    get('step-out').click();
+    assert.equal(get('progress').textContent, '10 / 12');
+    moveTo(window, get, 10);
+    get('step-over').click();
+    assert.equal(get('progress').textContent, '11 / 12');
+    moveTo(window, get, 10);
+    get('step-out').click();
+    assert.equal(get('progress').textContent, '12 / 12');
+    assert.equal(requests(), 0);
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('source breakpoints stop repeated lines including iterations in later chunks', async () => {
   const events = [
     event(1, 'enter', 'A.m', 'call-a', ['call-a'], 'A.ts', 2),
