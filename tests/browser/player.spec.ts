@@ -925,6 +925,7 @@ test('switching prepared scenarios refreshes original source at the same file pa
             label: `console.log(${value})`,
             source: { file: 'shared.ts', line: 2, endLine: 2 },
             values: {},
+            after: { selected: value },
             stack: ['run'],
             certainty: 'mock',
           },
@@ -965,6 +966,29 @@ test('switching prepared scenarios refreshes original source at the same file pa
   await page.locator('#variant').selectOption('proposed');
   await expect(editor).toContainText('console.log(42)');
   await expect(editor).not.toContainText('console.log(10)');
+
+  // Switching from a highlighted source event to a source-less prepared
+  // variant must never leave the prior run's values visible.
+  const withoutSource = {
+    ...baseline.trace!,
+    sourceHash: 'without-source',
+    sourceFiles: {},
+    events: baseline.trace!.events.map(({ source, ...entry }) => entry),
+  };
+  const noSourceSession = await runtime.store.create({
+    ...modified,
+    baselineTrace: withoutSource,
+  });
+  await page.goto(`${runtime.baseUrl}/flow/${noSourceSession.id}`);
+  await page.locator('#timeline').fill('1');
+  await page.locator('#source-values-toggle').click();
+  await expect(page.locator('#source-values-panel')).toContainText('42');
+  await page.locator('#toggle-inspector').click();
+  await page.locator('#tab-context').click();
+  await page.locator('#variant').selectOption('baseline');
+  await expect(page.locator('#source-values-toggle')).toBeHidden();
+  await expect(page.locator('#source-values-panel')).toBeHidden();
+  await expect(page.locator('#source-values-panel')).toBeEmpty();
 });
 
 test('manual inspection resets the viewport when changing virtual windows in one file', async ({
