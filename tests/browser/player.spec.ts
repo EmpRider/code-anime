@@ -3507,8 +3507,8 @@ test('step into follows nested original source, keyboard navigation and prepared
     '3',
   );
   await page.locator('#timeline').fill('5');
-  await expect(page.locator('#source-values-panel')).toBeHidden();
-  await page.locator('#source-values-toggle').click();
+  // A user-opened Values view follows the prepared replay as it advances.
+  await expect(page.locator('#source-values-panel')).toBeVisible();
   await expect(page.locator('#source-values-panel')).toContainText('Result');
   await expect(page.locator('#source-values-panel')).toContainText('30');
   // The return stack has already unwound to A.m; its line is still in B.m2.
@@ -3517,10 +3517,12 @@ test('step into follows nested original source, keyboard navigation and prepared
     page.locator('#source-values-panel .source-value-data').last(),
   ).toHaveText('{"sum":30}');
   await page.locator('#timeline').fill('3');
-  await expect(page.locator('#source-values-panel')).toBeHidden();
-  await page.locator('#source-values-toggle').click();
+  await expect(page.locator('#source-values-panel')).toBeVisible();
   await expect(page.locator('#source-values-panel')).toContainText('Inputs');
+  await expect(page.locator('#source-values-panel')).not.toContainText('Result');
   await expect(page.locator('#source-values-panel')).toContainText('mock');
+  await page.locator('#source-values-toggle').click();
+  await expect(page.locator('#source-values-panel')).toBeHidden();
   await page.locator('#source-values-toggle').click();
   await expect(page.locator('#snippet .executing-line')).toHaveAttribute(
     'data-line',
@@ -3530,6 +3532,7 @@ test('step into follows nested original source, keyboard navigation and prepared
   await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
   await page.keyboard.press('i');
   await expect(page.locator('#progress')).toHaveText('4 / 8');
+  await expect(page.locator('#source-values-panel')).toContainText('After');
   await expect(page.locator('#snippet .executing-line')).toHaveAttribute(
     'data-line',
     '3',
