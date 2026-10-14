@@ -2415,6 +2415,51 @@ test('Python f-string expression highlighting survives virtual source windows an
   );
 });
 
+test('JavaScript regexp coloring protects comment-like text without coloring division', async ({
+  page,
+}) => {
+  const lines = Array.from({ length: 1000 }, (_, index) => {
+    if (index === 0) return 'const result =';
+    if (index === 699) return '  /[/*]/g.test(value); // actual comment';
+    if (index === 700) return 'const ratio = total / count;';
+    return '  // a source comment';
+  });
+  await page.route('**/api/flow/*', async (route) => {
+    const response = await route.fetch();
+    const flow = await response.json();
+    flow.trace.sourceFiles = { 'large.ts': lines.join('\n') };
+    flow.trace.events.forEach((event: TraceEvent, index: number) => {
+      event.source = {
+        file: 'large.ts',
+        line: index === 0 ? 700 : 701,
+        endLine: index === 0 ? 700 : 701,
+      };
+    });
+    await route.fulfill({ json: flow });
+  });
+  await page.goto(url);
+  await page.locator('#next').click();
+  const row = page.locator('.code-row[data-line="700"]');
+  await expect(row.locator('.code-text')).toHaveText(lines[699]!);
+  await expect(row.locator('.token-string')).toHaveText('/[/*]/g');
+  await expect(row.locator('.token-comment')).toHaveText('// actual comment');
+  await expect(page.locator('.code-row')).toHaveCount(301);
+  await expect(
+    page.locator('.code-row[data-line="701"] .token-string'),
+  ).toHaveCount(0);
+  await expect(page.locator('.executing-line')).toHaveAttribute(
+    'data-line',
+    '700',
+  );
+  const original = await row.elementHandle();
+  await page.locator('#next').click();
+  expect(await original!.evaluate((node) => node.isConnected)).toBe(true);
+  await expect(page.locator('.executing-line')).toHaveAttribute(
+    'data-line',
+    '701',
+  );
+});
+
 test('multiline Python strings and nested Kotlin comments retain lexical context without altering source', async ({
   page,
 }) => {
