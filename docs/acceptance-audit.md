@@ -1,86 +1,17 @@
 # Execution visualizer acceptance audit
 
-Checkpoint: 2026-10-14, branch `codex/python-catch-attribution`, based on merged PR #21 (`02585be`). Python exception handler attribution is under additional regression verification. Existing recorded Python and JavaScript execution and cross-language source highlighting are covered by bounded tests.
+Checkpoint: 2026-10-14, branch `codex/python-observed-catch`, based on
+`main` at `1e6bf18` after merged PRs #6–#11. The new Python handler change
+is not yet validated or merged.
+Multilingual source highlighting, a persisted branching-tree performance
+fixture, recorded Python execution, and experimental Node.js JavaScript
+recording are covered by tests.
 
 Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
 
-## Python catch attribution regression follow-up (October 14)
-
-The Python recorder now verifies handler entry against Python's active handled
-exception object. Revisited loop headers and awaited statements no longer
-invent additional catches for suppressed nested exceptions. A frame retains
-outer pending propagation when an inner exception is handled in finally, so
-the next observed handler receives the original exception evidence. Handler
-discovery skips compile-time-only global/nonlocal declarations to reach the
-first traceable statement. Focused real-runtime regressions exercise all three
-cases alongside earlier ordinary catch and replacement behavior. This advances
-requirement 3 and correctness of requirements 5 and 29 within those fixtures;
-except* and same-line handlers remain unresolved.
-
-## Recorded multi-module application and snapshot budget (October 14)
-
-A deterministic order-processing fixture now exercises four real Python modules,
-classes, inventory mutations, accumulated ledger receipts, hundreds of repeated
-invocations and console milestones. The complete 200-order run has 8,482
-observed events and 810 method entries, with exact settlement/inventory results
-and replay navigation across original source files. A local Chromium run measured
-cross-file two-frame seek p95 at 33.7 ms and collected browser heap of 42 MiB.
-These are scenario measurements rather than broad performance guarantees.
-
-The same application at 450 orders exceeds the supported 64 MiB trace budget
-before completion: a local run stopped after 13,435 events with explicit partial
-diagnostics. A companion browser regression protects the preserved partial
-timeline, exact stop reason and absence of invented settlement output. This
-extends requirements 1, 3, 27 and 35 with realistic growing object state and
-identifies snapshot storage overhead as a remaining large-application constraint;
-production-scale performance and complete cross-language acceptance are open.
-
-## Stable disclosure DOM during recorded replay (October 14)
-
-Prepared Execution Path replay now changes disclosure markers and accessible
-attributes only when their actual state changes. It also avoids repeatedly
-rewriting the same `aria-current` value while stepping inside one invocation.
-This reduces unnecessary DOM mutation and accessibility announcements during
-large traces without changing the shared cursor, method-map pagination, or
-independent inspection. A recorded 47-frame Python browser regression measures
-unchanged disclosure mutations across successive prepared seeks with Follow
-disabled, while verifying the same nodes remain mounted and progress advances.
-This addresses a bounded requirement 21/25/27 performance and stability issue;
-real-application heap/paint profiling and broad assistive-technology acceptance
-remain outstanding.
-
-## JavaScript regexp literal source highlighting (October 14)
-
-The original-source lexer now distinguishes JavaScript/TypeScript regular
-expression literals from division operators using statement-local operand
-context, including control-flow parentheses, object-vs-block braces, and
-prefix/postfix updates. It preserves character classes and escaped delimiters
-(including comment-like `/*` text), literal flags, comments following regexps,
-and regexp starts after multi-line expressions in virtualized source windows. This is
-syntax decoration only: it changes no recorded execution data or source bytes.
-Focused source lexer and Chromium source/timeline regressions check the
-covered cases. Expression-vs-block syntax is inferred heuristically, and
-ambiguous JavaScript grammar beyond lightweight lexing,
-JSX/TSX constructs, and exhaustive language/source-map acceptance remain open.
-This advances requirements 10–11 and 29 within the tested cases.
-
-## Python formatted-string source highlighting (October 14)
-
-The existing original-source lexer now recognizes Python's `f`, `fr`, and `rf`
-string prefixes, colors expressions inside single- and triple-quoted f-strings
-as source code, and keeps doubled braces as literal string text. Nested braces,
-nested f-strings, and multiline expression state carry through virtualized source
-windows. The displayed source remains byte-for-byte equivalent to the prepared
-source lines; there are no new analysis requests or changes to playback events.
-Focused lexer and Chromium source/timeline tests cover this behavior.
-
-This advances requirements 10–11 and 29 within the covered Python cases.
-Complete Python format-specifier grammar, broader language grammars, source-map
-provenance, and cross-language/browser acceptance remain incomplete.
-
-## Python observed catch boundaries — focused validation (October 14)
+## Python observed catch boundaries — verification pending (October 14)
 
 The Python recorder now prepares `catch` transitions when a frame with a
 reported exception reaches the first recorded statement inside a multi-line
@@ -92,7 +23,13 @@ type/arguments, and a before-execution snapshot. `finally` alone is not
 classified as a catch, and `except*` or single-line handler boundaries remain
 unresolved. This targets runtime accuracy requirements 3, 5, 10, 14 and 29.
 
-Tests cover repeated catches, nonmatching handlers, propagation across user files, finally cleanup, replacement exceptions, uncaught exits, and preserving native exception arguments without executing application formatters. The full local core suite passed 175 tests with one optional live CodeGraph integration skip; TypeScript typechecking and production build passed. Browser and GitHub CI acceptance are separate gates, and wider cross-language acceptance remains open.
+Tests have been added for propagation across user files, repeated caught
+exceptions, a nonmatching handler, `finally`, and an uncaught exit, together
+with the existing no-user-formatter evaluation scenario. **The focused test
+execution was blocked by automatic safety review and did not run.** These
+changes must not be considered verified or merge-ready until the blocked
+validation can legitimately complete; wider cross-language acceptance remains
+open.
 
 ## Contextual source-line values (October 14)
 
@@ -111,16 +48,6 @@ values, backward navigation, Escape dismissal, original source integrity, and
 prepared-data-only interaction. This advances requirements 11, 23, 24, and 31;
 large recorded local snapshots, non-Chromium browser and assistive-technology
 acceptance remain incomplete.
-
-## Source-less scenario isolation (October 14)
-
-A prepared comparison or scenario without captured original source now clears
-the optional inline Values panel and its expanded state when returning to the
-initial cursor. This prevents prior-run locals and annotations from lingering in
-a different run's source workspace. A Chromium comparison regression checks
-source-file changes and the transition to a source-less baseline. This advances
-requirements 11, 28, 30, and 31 within the tested scenario; full cross-language
-and comparison acceptance remain open.
 
 ## Method map inspection without replay navigation (October 14)
 
@@ -1300,11 +1227,6 @@ realistic paint/heap performance acceptance requirements.
     enabled paging control after replacing the visible page. A browser regression
     for keyboard paging has been added; broad screen-reader behavior remains open. Browser tests cover disclosure focus, invocation-selector
     focus preservation, pagination focus, mobile controls, and keyboard resizing.
-    The compact class/method map uses a named navigation landmark, descriptive
-    page-button names, and a screen-reader-friendly current-page count. Its
-    keyboard Enter paging path retains the focused control and shared playback
-    state. This verifies the browser accessibility tree and keyboard semantics,
-    not native screen-reader acceptance.
     A focused browser regression checks source-line `aria-current` and
     stateful breakpoint names/pressed state after keyboard activation and seeks.
     Keyboard-shortcut help now exposes `aria-controls` and tracks its expanded
