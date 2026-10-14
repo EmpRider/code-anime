@@ -2020,34 +2020,43 @@ function renderFlowOverview() {
     const isCurrent =
       Number(button.dataset.overviewPosition) === activePosition;
     button.classList.toggle('current', isCurrent);
-    if (isCurrent) button.setAttribute('aria-current', 'step');
-    else button.removeAttribute('aria-current');
+    // Rewriting an unchanged aria-current on every recorded statement causes
+    // redundant DOM mutations (and repeated accessibility notifications).
+    if (isCurrent && button.getAttribute('aria-current') !== 'step')
+      button.setAttribute('aria-current', 'step');
+    else if (!isCurrent && button.hasAttribute('aria-current'))
+      button.removeAttribute('aria-current');
   }
   const activeCallId = flow.trace?.events[cursor - 1]?.callId;
   for (const button of panel.querySelectorAll('.method-map-call')) {
     const current = cursor > 0 && button.dataset.callId === activeCallId;
     button.classList.toggle('current', current);
-    if (current) button.setAttribute('aria-current', 'step');
-    else button.removeAttribute('aria-current');
+    if (current && button.getAttribute('aria-current') !== 'step')
+      button.setAttribute('aria-current', 'step');
+    else if (!current && button.hasAttribute('aria-current'))
+      button.removeAttribute('aria-current');
   }
   for (const button of panel.querySelectorAll('.method-map-disclosure')) {
     const expanded = button.dataset.callId === selectedMethod;
     button.classList.toggle('selected', expanded);
-    button.setAttribute('aria-expanded', String(expanded));
-    button.textContent = expanded ? '▾' : '▸';
+    if (button.getAttribute('aria-expanded') !== String(expanded))
+      button.setAttribute('aria-expanded', String(expanded));
+    const marker = expanded ? '▾' : '▸';
+    if (button.textContent !== marker) button.textContent = marker;
   }
   // Selecting a card changes the inspected invocation even if the overview
   // stays on the same page. Keep its disclosure state in sync without
   // rebuilding the step list or changing the shared replay position.
   for (const button of panel.querySelectorAll('.overview-disclosure')) {
     const expanded = selectedMethod === button.dataset.callId;
-    button.textContent = expanded ? '▾' : '▸';
-    button.setAttribute('aria-expanded', String(expanded));
+    const marker = expanded ? '▾' : '▸';
+    if (button.textContent !== marker) button.textContent = marker;
+    if (button.getAttribute('aria-expanded') !== String(expanded))
+      button.setAttribute('aria-expanded', String(expanded));
     const item = invocations.get(button.dataset.callId);
-    button.setAttribute(
-      'aria-label',
-      `${expanded ? 'Close details for ' : 'Inspect '}${item?.symbolId ?? 'method'} invocation`,
-    );
+    const label = `${expanded ? 'Close details for ' : 'Inspect '}${item?.symbolId ?? 'method'} invocation`;
+    if (button.getAttribute('aria-label') !== label)
+      button.setAttribute('aria-label', label);
   }
   return true;
 }
