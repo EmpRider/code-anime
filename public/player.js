@@ -903,6 +903,27 @@ function frameLocals(state, event) {
     ? (state.locals[activeFrame(state, event)] ?? {})
     : state.locals;
 }
+// A recorded exit can already have a caller-only stack. Source annotations
+// must use the invocation whose line is highlighted, never its caller's locals.
+function sourceFrameLocals(state, event) {
+  const locals = state.locals ?? {};
+  const callId = event?.callId;
+  if (callId && Object.hasOwn(locals, callId)) {
+    const own = locals[callId];
+    return own !== null && typeof own === 'object' ? own : {};
+  }
+  const scopedToStack = state.stack.some(
+    (id) =>
+      Object.hasOwn(locals, id) &&
+      locals[id] !== null &&
+      typeof locals[id] === 'object',
+  );
+  // If only the caller survived an unwind, its snapshot belongs to the
+  // caller, not to the returning/throwing invocation. Flat legacy locals
+  // still work with the normal frame fallback.
+  if (scopedToStack && callId && !state.stack.includes(callId)) return {};
+  return frameLocals(state, event);
+}
 // Compare recorded snapshots of the same invocation. A newly entered frame
 // has no preceding state; switching frames must not look like a mutation.
 function precedingFrameLocals(state, event, previousEvent) {
@@ -1234,7 +1255,7 @@ function renderSource(state, event, initial = false) {
   // come only from the selected, prepared event and its replayed frame state.
   const valueButton = $('source-values-toggle');
   const valuePanel = $('source-values-panel');
-  const locals = active ? frameLocals(state, event) : undefined;
+  const locals = active ? sourceFrameLocals(state, event) : undefined;
   const hasValues =
     Boolean(active && event) &&
     (['inputs', 'before', 'after', 'result'].some((key) =>
