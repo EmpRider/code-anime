@@ -3501,6 +3501,65 @@ test('step into follows nested original source, keyboard navigation and prepared
   expect(requests).toEqual([]);
 });
 
+test('small mobile dock keeps Step Into/Over/Out, timeline and speed reachable without overflow', async ({
+  page,
+}) => {
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 640 });
+    await page.goto(url);
+    const geometry = await page.evaluate(() => {
+      const rect = (selector: string) =>
+        document.querySelector(selector)!.getBoundingClientRect();
+      const dock = rect('.playback-dock');
+      const timeline = rect('.timeline-block');
+      const speed = rect('.speed-label');
+      const buttons = [
+        '#restart',
+        '#previous',
+        '#play',
+        '#next',
+        '#step-into',
+        '#step-over',
+        '#step-out',
+      ].map(rect);
+      return {
+        scrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: innerWidth,
+        dock: { left: dock.left, right: dock.right },
+        timeline: {
+          left: timeline.left,
+          right: timeline.right,
+          top: timeline.top,
+        },
+        speed: { left: speed.left, right: speed.right, top: speed.top },
+        buttons: buttons.map(({ left, right }) => ({ left, right })),
+      };
+    });
+    expect(geometry.scrollWidth).toBeLessThanOrEqual(width);
+    expect(geometry.dock.left).toBeGreaterThanOrEqual(0);
+    expect(geometry.dock.right).toBeLessThanOrEqual(width);
+    for (const button of geometry.buttons) {
+      expect(button.left).toBeGreaterThanOrEqual(0);
+      expect(button.right).toBeLessThanOrEqual(width);
+    }
+    expect(Math.abs(geometry.timeline.top - geometry.speed.top)).toBeLessThan(
+      16,
+    );
+    expect(geometry.timeline.right).toBeLessThan(geometry.speed.left);
+    await page.locator('#help').click();
+    await expect(page.locator('#help-panel')).toContainText('Step into');
+    await expect(page.locator('#help-panel')).toContainText('Step over');
+    await expect(page.locator('#help-panel')).toContainText('Step out');
+    await page.locator('#close-help').click();
+    await page.locator('#step-into').click();
+    await expect(page.locator('#progress')).toHaveText('1 / 100');
+    await page.locator('#step-over').click();
+    await expect(page.locator('#progress')).toHaveText('2 / 100');
+    await page.locator('#step-out').click();
+    await expect(page.locator('#progress')).toHaveText('100 / 100');
+  }
+});
+
 test('keyboard disclosure preserves playback and uses only prepared data', async ({
   page,
 }) => {
