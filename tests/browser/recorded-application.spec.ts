@@ -226,7 +226,9 @@ test('growing application object graphs report budget-limited evidence without i
     expect(result.complete).toBe(false);
     // The Python producer can hit its own byte limit before the Node bridge
     // observes an overrun. Both paths preserve an explicit budget diagnosis.
-    expect([result.stopReason, ...result.diagnostics].join('\n')).toMatch(
+    expect(
+      [result.stopReason, ...(result.diagnostics ?? [])].join('\n'),
+    ).toMatch(
       /Trace byte budget exceeded|Configured trace byte budget reached/,
     );
     expect(result.eventCount).toBeGreaterThan(10_000);
