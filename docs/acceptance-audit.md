@@ -39,6 +39,31 @@ incomplete-trace semantics are unchanged. This is an unverified performance
 hypothesis until a new cross-platform CI run exercises it; prior reruns alone
 do not establish the root cause.
 
+The subsequent PR-triggered CI run [38520403354](https://github.com/EmpRider/code-anime/actions/runs/38520403354)
+for `49ea899` **passed**, including Ubuntu Node 22 and 24, Windows Node 22
+and 24, and Chromium browser checks. This confirms the previously failing
+Ubuntu Node 22 scenario passed in that run. A single green run does not yet
+establish long-term Linux Inspector reliability or explain the earlier stalls.
+
+## Invocation-aware debugger stepping (October 14)
+
+Step Over and Step Out previously used the last stack entry as the active
+invocation for most events. When a recorder provided a caller-only stack at
+method entry, the player could step out of the caller, skip the callee's own
+statement, or stop on an unrelated asynchronous task. Stepping now uses the
+recorded invocation ID while the method is active and uses the surviving caller
+after a recorded return, throw, or unresolved exit. It recognizes task identity
+in either `task`, `taskId`, or top-level `taskId`, together with thread context,
+and follows a unique invocation across changed scheduling labels on async
+return. Step navigation still uses the prepared events and the shared seek
+cursor; it does not request new analysis.
+
+Focused jsdom regressions cover caller-only entry stacks with nested method
+calls, interleaved task/thread contexts, and an async method changing its task
+label before exit. All 26 continuation/stepping tests passed locally after the
+change. This improves bounded requirements 9, 14, 24, 30, and 35; further
+cross-language runtime semantics and browser/device acceptance are open.
+
 ## Grouped class/method Execution Path (October 14)
 
 The prepared execution path now offers a compact class/method invocation map

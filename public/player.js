@@ -2318,6 +2318,30 @@ $('play').onclick = () => {
 $('next').onclick = () => seek(cursor + 1);
 $('previous').onclick = () => seek(cursor - 1);
 $('restart').onclick = () => seek(0);
+// An entering/resuming recorder frame can carry only its callers in `stack`.
+// The event's own invocation is still active until its exit/unwind. Returns
+// and throws can already have popped that frame, so step from the surviving
+// caller instead. This matches the same invocation IDs used by the method map.
+function steppingInvocation(event) {
+  if (!event) return undefined;
+  if (event.kind === 'console' && !event.stack?.length) return undefined;
+  if (['return', 'throw', 'unresolved'].includes(event.kind))
+    return event.stack?.at(-1);
+  return invocations.has(event.callId) ? event.callId : event.stack?.at(-1);
+}
+function executionContext(event) {
+  return {
+    task: event?.values?.task ?? event?.values?.taskId ?? event?.taskId,
+    thread: event?.values?.thread ?? event?.thread,
+  };
+}
+function sameSteppingContext(context, event) {
+  const next = executionContext(event);
+  return (
+    (context.task === undefined || next.task === context.task) &&
+    (context.thread === undefined || next.thread === context.thread)
+  );
+}
 // Stepping is computed from the preprocessed invocation snapshots only.
 $('step-over').onclick = () => {
   pause();
@@ -2330,16 +2354,18 @@ $('step-over').onclick = () => {
   // the global event timeline instead of skipping intervening user execution.
   if (current.kind === 'console' && !current.stack?.length)
     return seek(cursor + 1);
-  const suspended = ['await', 'yield'].includes(current?.kind);
-  const callId = suspended
-    ? current.callId
-    : (current?.stack?.at(-1) ?? current.callId);
-  const task = current?.values?.task;
+  const callId = steppingInvocation(current);
+  if (!callId) return seek(cursor + 1);
+  const context = executionContext(current);
   void (async () => {
     let i = cursor;
     while (true) {
       for (; i < events.length; i++) {
-        if (task !== undefined && events[i].values?.task !== task) continue;
+        if (
+          events[i].callId !== callId &&
+          !sameSteppingContext(context, events[i])
+        )
+          continue;
         if (events[i].callId === callId || !events[i].stack?.includes(callId)) {
           if (version === navigationVersion && flow === requestedFlow)
             seek(i + 1);
@@ -2361,9 +2387,8 @@ $('step-out').onclick = () => {
   const events = flow?.trace?.events;
   const current = events?.[cursor - 1];
   if (!current) return;
-  const suspended = ['await', 'yield'].includes(current.kind);
-  const callId = suspended ? current.callId : current.stack?.at(-1);
-  const task = current.values?.task;
+  const callId = steppingInvocation(current);
+  const context = executionContext(current);
   // Pipe output has no observed invocation to step out of. Advance to the next
   // recorded event instead of leaving Step Out unresponsive at this position.
   if (!callId) {
@@ -2375,10 +2400,14 @@ $('step-out').onclick = () => {
     while (true) {
       for (; i < events.length; i++) {
         const next = events[i];
-        if (task !== undefined && next.values?.task !== task) continue;
+        if (next.callId !== callId && !sameSteppingContext(context, next))
+          continue;
         if (
           !next.stack?.includes(callId) &&
-          !(['await', 'yield'].includes(next.kind) && next.callId === callId)
+          !(
+            next.callId === callId &&
+            !['return', 'throw', 'unresolved'].includes(next.kind)
+          )
         ) {
           if (version === navigationVersion && flow === requestedFlow)
             seek(i + 1);

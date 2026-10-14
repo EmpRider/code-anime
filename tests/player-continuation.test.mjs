@@ -389,6 +389,107 @@ test('stepping after a normal return follows the surviving caller frame', async 
   }
 });
 
+test('step over and out use the entering invocation when stacks contain only callers', async () => {
+  const events = [
+    event(1, 'enter', 'A.m', 'root', ['root'], 'A.ts', 2),
+    event(2, 'enter', 'B.m2', 'child', ['root'], 'B.ts', 2),
+    event(3, 'assign', 'B.m2', 'child', ['root'], 'B.ts', 3),
+    event(4, 'enter', 'C.work', 'grandchild', ['root', 'child'], 'B.ts', 3),
+    event(5, 'return', 'C.work', 'grandchild', ['root', 'child'], 'B.ts', 3),
+    event(6, 'assign', 'B.m2', 'child', ['root'], 'B.ts', 3),
+    event(7, 'return', 'B.m2', 'child', ['root'], 'B.ts', 4),
+    event(8, 'assign', 'A.m', 'root', ['root'], 'A.ts', 4),
+    event(9, 'return', 'A.m', 'root', [], 'A.ts', 6),
+  ];
+  const { dom, window, get, requests } = await createPlayer(
+    undefined,
+    chunk(events),
+  );
+  try {
+    moveTo(window, get, 2);
+    get('step-over').click();
+    assert.equal(get('progress').textContent, '3 / 9');
+    moveTo(window, get, 2);
+    get('step-out').click();
+    assert.equal(get('progress').textContent, '7 / 9');
+    assert.equal(get('source').textContent, 'B.ts');
+    assert.equal(requests(), 0);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('stepping keeps taskId and thread context across interleaved invocations', async () => {
+  const inContext = (id, kind, symbol, callId, stack, file, line, taskId) =>
+    event(id, kind, symbol, callId, stack, file, line, {
+      values: { taskId, thread: taskId === 'a' ? 'main' : 'worker' },
+    });
+  const events = [
+    inContext(1, 'enter', 'A.m', 'root-a', ['root-a'], 'A.ts', 2, 'a'),
+    inContext(2, 'call', 'A.m', 'root-a', ['root-a'], 'A.ts', 3, 'a'),
+    inContext(3, 'enter', 'A.m', 'root-b', ['root-b'], 'A.ts', 2, 'b'),
+    inContext(4, 'enter', 'B.m2', 'child-a', ['root-a'], 'B.ts', 2, 'a'),
+    inContext(5, 'assign', 'A.m', 'root-b', ['root-b'], 'A.ts', 4, 'b'),
+    inContext(6, 'assign', 'B.m2', 'child-a', ['root-a'], 'B.ts', 3, 'a'),
+    inContext(7, 'return', 'B.m2', 'child-a', ['root-a'], 'B.ts', 4, 'a'),
+    inContext(8, 'assign', 'A.m', 'root-a', ['root-a'], 'A.ts', 4, 'a'),
+    inContext(9, 'return', 'A.m', 'root-a', [], 'A.ts', 6, 'a'),
+  ];
+  const { dom, window, get, requests } = await createPlayer(
+    undefined,
+    chunk(events),
+  );
+  try {
+    moveTo(window, get, 2);
+    get('step-over').click();
+    assert.equal(get('progress').textContent, '8 / 9');
+    moveTo(window, get, 4);
+    get('step-out').click();
+    assert.equal(get('progress').textContent, '7 / 9');
+    assert.equal(get('source').textContent, 'B.ts');
+    assert.equal(requests(), 0);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('step out recognizes the same async invocation when its task label changes at exit', async () => {
+  const events = [
+    event(1, 'enter', 'A.m', 'root', ['root'], 'A.ts', 2, {
+      values: { task: 'main' },
+    }),
+    event(2, 'enter', 'B.m2', 'child', ['root', 'child'], 'B.ts', 2, {
+      values: { task: 'main' },
+    }),
+    event(3, 'await', 'B.m2', 'child', ['root', 'child'], 'B.ts', 3, {
+      values: { task: 'child' },
+    }),
+    event(4, 'assign', 'A.m', 'unrelated', [], 'A.ts', 3, {
+      values: { task: 'other' },
+    }),
+    event(5, 'resume', 'B.m2', 'child', ['root'], 'B.ts', 3, {
+      values: { task: 'child' },
+    }),
+    event(6, 'return', 'B.m2', 'child', ['root'], 'B.ts', 4, {
+      values: { task: 'main' },
+    }),
+    event(7, 'assign', 'A.m', 'root', ['root'], 'A.ts', 4, {
+      values: { task: 'main' },
+    }),
+  ];
+  const { dom, window, get } = await createPlayer(undefined, chunk(events));
+  try {
+    moveTo(window, get, 3);
+    get('step-out').click();
+    assert.equal(get('progress').textContent, '6 / 7');
+    moveTo(window, get, 3);
+    get('step-over').click();
+    assert.equal(get('progress').textContent, '5 / 7');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('source breakpoints stop repeated lines including iterations in later chunks', async () => {
   const events = [
     event(1, 'enter', 'A.m', 'call-a', ['call-a'], 'A.ts', 2),
