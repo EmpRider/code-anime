@@ -973,7 +973,11 @@ test('switching prepared scenarios refreshes original source at the same file pa
     ...baseline.trace!,
     sourceHash: 'without-source',
     sourceFiles: {},
-    events: baseline.trace!.events.map(({ source, ...entry }) => entry),
+    events: baseline.trace!.events.map((event) => {
+      const unlocated = { ...event };
+      delete unlocated.source;
+      return unlocated;
+    }),
   };
   const noSourceSession = await runtime.store.create({
     ...modified,
