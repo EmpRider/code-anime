@@ -7,7 +7,17 @@ const pythonKeywords = new Set(
   ),
 );
 const codeKeywords = new Set(
-  'abstract as async await boolean break case catch class const continue default do else enum export extends false final finally for from fun function if implements import in inline int interface internal is let long new null object override package private protected public return sealed short static super suspend switch synchronized this throw throws true try type typeof val var void when while yield'.split(
+  'abstract as assert async await boolean break case catch class const continue default do else enum export extends false final finally for from fun function if implements import in inline instanceof int interface internal is let long native new null object override package permits private protected public record return sealed short static strictfp super suspend switch synchronized this throw throws transient true try type typeof val var void volatile when while yield'.split(
+    ' ',
+  ),
+);
+const goKeywords = new Set(
+  'break case chan const continue default defer else fallthrough false for func go goto if import interface iota map nil package range return select struct switch true type var'.split(
+    ' ',
+  ),
+);
+const javaKeywords = new Set(
+  'abstract assert boolean break byte case catch char class const continue default do double else enum extends false final finally float for goto if implements import instanceof int interface long native new null package permits private protected public record return sealed short static strictfp super switch synchronized this throw throws transient true try var void volatile while yield'.split(
     ' ',
   ),
 );
@@ -20,6 +30,8 @@ const rustKeywords = new Set(
 function language(file) {
   if (/\.(?:py|pyi|pyw)$/i.test(file)) return 'python';
   if (/\.(?:kt|kts)$/i.test(file)) return 'kotlin';
+  if (/\.java$/i.test(file)) return 'java';
+  if (/\.go$/i.test(file)) return 'go';
   if (/\.rs$/i.test(file)) return 'rust';
   if (/\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts)$/i.test(file)) return 'javascript';
   return 'other';
@@ -32,7 +44,7 @@ function isIdentifierCharacter(character) {
 function scanStringRemainder(line, from, delimiter, raw) {
   let position = from;
   while (position < line.length) {
-    // Kotlin triple-quoted and Rust raw strings are literal. Regular strings
+    // Kotlin triple-quoted, Go backtick and Rust raw strings are literal. Regular strings
     // (including Python triple-quoted ones) can escape quote delimiters.
     if (!raw && line[position] === '\\')
       position = Math.min(line.length, position + 2);
@@ -207,13 +219,17 @@ function scanLine(line, dialect, previous, decorate) {
     ) {
       delimiter = line[position];
       if (
-        (dialect === 'python' || (dialect === 'kotlin' && delimiter === '"')) &&
+        (dialect === 'python' ||
+          ((dialect === 'kotlin' || dialect === 'java') &&
+            delimiter === '"')) &&
         line.startsWith(delimiter.repeat(3), position)
       ) {
         delimiter = delimiter.repeat(3);
       }
       mode = 'string';
-      raw = dialect === 'kotlin' && delimiter === '"""';
+      raw =
+        (dialect === 'kotlin' && delimiter === '"""') ||
+        (dialect === 'go' && delimiter === '`');
       position += delimiter.length;
       // A string begins here; scan its remainder in this same line.
       const rest = scanStringRemainder(line, position, delimiter, raw);
@@ -239,7 +255,11 @@ function scanLine(line, dialect, previous, decorate) {
           ? pythonKeywords
           : dialect === 'rust'
             ? rustKeywords
-            : codeKeywords
+            : dialect === 'java'
+              ? javaKeywords
+              : dialect === 'go'
+                ? goKeywords
+                : codeKeywords
         ).has(word)
       )
         highlight(start, position, 'keyword');

@@ -9,6 +9,29 @@ Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
 
+## Java and Go original-source syntax decoration (October 14)
+
+The existing source editor now recognizes Java `.java` and Go `.go` files and
+decorates their respective keywords without changing the captured text or the
+shared replay timeline. Java text blocks and Go backtick raw strings retain
+their multiline lexical state, even when the opening delimiter falls outside
+the editor's virtualized 301-row window. The syntax highlighter resumes normal
+keyword and comment decoration after the closing delimiter. Focused lexer tests
+verify escaped delimiters, language-specific keywords, and exact source text.
+The Chromium regression loads each 1,000-line source fixture, verifies the
+original visible text, current executing-line marker, bounded source rows,
+non-executable HTML-like content, multiline syntax across an unseen opener,
+and retained source DOM when advancing the shared timeline. These tests use
+prepared mock trace events, so they verify source rendering rather than observed
+Java or Go runtime tracing. Requirements 11, 29, 31 and 35 remain partial.
+
+GitHub CI run `38507986668` for the previous `9d5f28e` checkpoint succeeded on
+its second attempt across Ubuntu and Windows Node 22/24 and Chromium. The first
+attempt's Ubuntu Node 24 large-source recording exceeded 60 seconds. The rerun
+establishes a passing run but does not establish a root cause or reliability
+across future Ubuntu Node 24 executions. The Java/Go changes require their own
+CI verification after push.
+
 ## Final local verification (October 14)
 
 After source-visit forward/backward navigation and expanded Python recording,

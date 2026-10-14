@@ -1928,6 +1928,81 @@ test('JavaScript template interpolation and Rust raw strings preserve visible so
   }
 });
 
+test('Java and Go multiline source preserves text, lexical state and execution controls in virtual windows', async ({
+  page,
+}) => {
+  const cases = [
+    {
+      file: 'Example.java',
+      open: 'String description = """',
+      close: '"""; // after Java text block',
+      after: 'record Result(int value) {}',
+      keyword: 'record',
+      comment: '// after Java text block',
+    },
+    {
+      file: 'main.go',
+      open: 'var description = `',
+      close: '` // after Go raw string',
+      after: 'func result() int { return 1 }',
+      keyword: 'func',
+      comment: '// after Go raw string',
+    },
+  ];
+  for (const { file, open, close, after, keyword, comment } of cases) {
+    const lines = Array.from({ length: 1000 }, (_, index) => {
+      if (index === 0) return open;
+      if (index === 799) return close;
+      if (index === 800) return after;
+      return '  // <img src=x onerror="alert(1)"> is literal text';
+    });
+    await page.route('**/api/flow/*', async (route) => {
+      const response = await route.fetch();
+      const flow = await response.json();
+      flow.trace.sourceFiles = { [file]: lines.join('\n') };
+      flow.trace.events.forEach((event: TraceEvent, index: number) => {
+        event.source = {
+          file,
+          line: index === 0 ? 700 : 701,
+          endLine: index === 0 ? 700 : 701,
+        };
+      });
+      await route.fulfill({ json: flow });
+    });
+    await page.goto(url);
+    await page.locator('#next').click();
+    const row = page.locator('.code-row[data-line="700"]');
+    await expect(row.locator('.code-text')).toHaveText(lines[699]!);
+    await expect(row.locator('.token-string')).toHaveText(lines[699]!);
+    await expect(row.locator('.token-comment')).toHaveCount(0);
+    await expect(page.locator('.code-row')).toHaveCount(301);
+    await expect(page.locator('.executing-line')).toHaveAttribute(
+      'data-line',
+      '700',
+    );
+    await expect(
+      page.locator('.code-row[data-line="800"] .token-comment'),
+    ).toHaveText(comment);
+    await expect(
+      page.locator('.code-row[data-line="801"] .token-keyword').filter({
+        hasText: keyword,
+      }),
+    ).toHaveCount(1);
+    await expect(page.locator('#snippet img')).toHaveCount(0);
+    const original = await row.elementHandle();
+    await page.locator('#next').click();
+    await expect(page.locator('.executing-line')).toHaveAttribute(
+      'data-line',
+      '701',
+    );
+    expect(await original!.evaluate((node) => node.isConnected)).toBe(true);
+    await expect(
+      page.locator('.code-row[data-line="701"] .code-text'),
+    ).toHaveText(lines[700]!);
+    await page.unrouteAll();
+  }
+});
+
 test('virtual source windows inherit earlier multiline syntax and retain source nodes while stepping', async ({
   page,
 }) => {

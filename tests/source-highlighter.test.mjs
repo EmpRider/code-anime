@@ -98,6 +98,74 @@ test('Rust raw strings that end on the opening line restore normal code coloring
   assert.equal(tokens[1].filter((token) => token.kind === 'comment').length, 0);
 });
 
+test('Java text blocks preserve comments as literal text and restore following statements', () => {
+  const tokens = tokensFor('Demo.java', [
+    'record Result(double value) {}',
+    'String source = """',
+    '  // inside text block, not a comment',
+    '  escaped \\""" remains in the string',
+    '  """; // actual comment',
+    'double result = 2.5;',
+    'let = 4; // invalid Java, but still original source',
+  ]);
+  assert.equal(
+    tokens[0].find((token) => token.text === 'record')?.kind,
+    'keyword',
+  );
+  assert.equal(
+    tokens[0].find((token) => token.text === 'double')?.kind,
+    'keyword',
+  );
+  assert.equal(tokens[2].filter((token) => token.kind === 'comment').length, 0);
+  assert.equal(tokens[3].filter((token) => token.kind === 'comment').length, 0);
+  assert.equal(
+    tokens[4].find((token) => token.text === '// actual comment')?.kind,
+    'comment',
+  );
+  assert.equal(
+    tokens[5].find((token) => token.text === 'double')?.kind,
+    'keyword',
+  );
+  assert.equal(tokens[5].find((token) => token.text === '2.5')?.kind, 'number');
+  assert.equal(
+    tokens[6].find((token) => token.text === 'let')?.kind,
+    undefined,
+  );
+});
+
+test('Go raw strings keep code-like text literal across source windows', () => {
+  const tokens = tokensFor('main.go', [
+    'package main',
+    'func run() {',
+    '  text := `before // literal',
+    '  /* still literal */ and \\ slash',
+    '  after`; defer println(text) // real comment',
+    '  var value = nil',
+    '}',
+  ]);
+  assert.equal(
+    tokens[0].find((token) => token.text === 'package')?.kind,
+    'keyword',
+  );
+  assert.equal(
+    tokens[1].find((token) => token.text === 'func')?.kind,
+    'keyword',
+  );
+  assert.equal(tokens[3].filter((token) => token.kind === 'comment').length, 0);
+  assert.equal(
+    tokens[4].find((token) => token.text === 'defer')?.kind,
+    'keyword',
+  );
+  assert.equal(
+    tokens[4].find((token) => token.text === '// real comment')?.kind,
+    'comment',
+  );
+  assert.equal(
+    tokens[5].find((token) => token.text === 'nil')?.kind,
+    'keyword',
+  );
+});
+
 test('JS/TS template interpolations highlight real code and preserve multiline state', () => {
   const tokens = tokensFor('sample.ts', [
     'const msg = `hello ${',
