@@ -170,6 +170,51 @@ test('wide and deeply recursive recorded Python calls remain navigable across pr
     );
     await page.locator('#view-mode').selectOption('path');
 
+    // Seeking within a fixed overview page must update replay state without
+    // rewriting unchanged disclosure labels/attributes on every statement.
+    // This also catches needless remounting of the prepared method map.
+    await page.locator('#follow').uncheck();
+    await page.locator('#timeline').fill(String(recursiveRootIndex + 1));
+    const disclosureMutations = await page.evaluate(async (firstPosition) => {
+      const timeline = document.querySelector<HTMLInputElement>('#timeline')!;
+      const disclosures = [
+        ...document.querySelectorAll(
+          '.method-map-disclosure, .overview-disclosure',
+        ),
+      ];
+      if (!disclosures.length) throw new Error('Missing method disclosures');
+      let mutations = 0;
+      const observer = new MutationObserver((records) => {
+        mutations += records.length;
+      });
+      for (const disclosure of disclosures)
+        observer.observe(disclosure, {
+          attributes: true,
+          childList: true,
+          characterData: true,
+          subtree: true,
+        });
+      try {
+        for (let offset = 1; offset <= 8; offset++) {
+          timeline.value = String(firstPosition + offset);
+          timeline.dispatchEvent(new Event('input', { bubbles: true }));
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          );
+          if (disclosures.some((element) => !element.isConnected))
+            throw new Error('Method disclosure remounted during replay');
+        }
+        return mutations;
+      } finally {
+        observer.disconnect();
+      }
+    }, recursiveRootIndex + 1);
+    expect(disclosureMutations).toBe(0);
+    await expect(page.locator('#progress')).toHaveText(
+      `${recursiveRootIndex + 9} / ${result.eventCount}`,
+    );
+    await page.locator('#follow').check();
+
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Performance.enable');
     const metrics = async () => {

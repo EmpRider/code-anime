@@ -10,6 +10,20 @@ Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
 
+## Stable disclosure DOM during recorded replay (October 14)
+
+Prepared Execution Path replay now changes disclosure markers and accessible
+attributes only when their actual state changes. It also avoids repeatedly
+rewriting the same `aria-current` value while stepping inside one invocation.
+This reduces unnecessary DOM mutation and accessibility announcements during
+large traces without changing the shared cursor, method-map pagination, or
+independent inspection. A recorded 47-frame Python browser regression measures
+unchanged disclosure mutations across successive prepared seeks with Follow
+disabled, while verifying the same nodes remain mounted and progress advances.
+This addresses a bounded requirement 21/25/27 performance and stability issue;
+real-application heap/paint profiling and broad assistive-technology acceptance
+remain outstanding.
+
 ## JavaScript regexp literal source highlighting (October 14)
 
 The original-source lexer now distinguishes JavaScript/TypeScript regular
