@@ -332,6 +332,9 @@ function buildNodes(preserveInspection = false) {
       index: index + 1,
       kind: 'structural',
       label: `${step.from} → ${step.to}: ${step.dtoName}`,
+      from: step.from,
+      to: step.to,
+      operation: step.dtoName,
       certainty: 'unverified',
       depth: 0,
     }));
@@ -1394,6 +1397,7 @@ async function loadNextChunk() {
       ...currentFlow.trace.sourceFiles,
       ...next.trace.sourceFiles,
     };
+    sourceAvailabilityCache.delete(currentFlow.trace);
     currentFlow.trace.diagnostics = [
       ...new Set([
         ...currentFlow.trace.diagnostics,
@@ -1525,6 +1529,8 @@ function renderFlowOverview() {
     panel.setAttribute('aria-label', 'Prepared execution overview');
     const heading = text('div', '', 'overview-heading');
     const structural = overviewItems[0]?.kind === 'structural';
+    const sparseStructural = structural && overviewItems.length <= 6;
+    panel.classList.toggle('overview-sparse', sparseStructural);
     heading.append(
       text(
         'strong',
@@ -1550,11 +1556,31 @@ function renderFlowOverview() {
         '--overview-depth',
         String(Math.min(5, item.depth ?? 0)),
       );
-      button.append(
-        text('span', String(item.index), 'overview-index'),
-        text('span', describeFlowTransition(item), 'overview-description'),
-        text('span', item.certainty ?? 'unverified', 'overview-evidence'),
-      );
+      if (sparseStructural && item.from && item.to) {
+        const route = text('span', '', 'overview-route');
+        route.append(
+          text('span', item.from, 'overview-route-symbol'),
+          text('span', '→', 'overview-route-arrow'),
+          text('span', item.to, 'overview-route-symbol'),
+        );
+        const description = text('span', '', 'overview-route-content');
+        description.append(route);
+        if (item.operation)
+          description.append(
+            text('span', item.operation, 'overview-operation'),
+          );
+        button.append(
+          text('span', String(item.index), 'overview-index'),
+          description,
+          text('span', item.certainty ?? 'unverified', 'overview-evidence'),
+        );
+      } else {
+        button.append(
+          text('span', String(item.index), 'overview-index'),
+          text('span', describeFlowTransition(item), 'overview-description'),
+          text('span', item.certainty ?? 'unverified', 'overview-evidence'),
+        );
+      }
       button.title = describeFlowTransition(item);
       button.onclick = () => seek(item.index);
       entry.append(button);
@@ -1690,6 +1716,7 @@ function followSelectedEventRow() {
 }
 function render() {
   if (!flow) return;
+  refreshSourcePresentation();
   const positionChanged = renderedFlow !== flow || renderedCursor !== cursor;
   const inspectorChanged =
     positionChanged || renderedInspectorRevision !== traceRevision;
@@ -2160,6 +2187,51 @@ $('step-out').onclick = () => {
 $('timeline').oninput = () => seek(Number($('timeline').value));
 const workspace = document.querySelector('.workspace');
 const divider = $('workspace-divider');
+const sourceAvailabilityCache = new WeakMap();
+let mobileViewChosen = false;
+function traceHasSourceEvidence(trace) {
+  if (!trace) return false;
+  if (!sourceAvailabilityCache.has(trace)) {
+    const available =
+      Object.values(trace.sourceFiles ?? {}).some(
+        (content) => typeof content === 'string',
+      ) ||
+      (trace.events ?? []).some(
+        (event) =>
+          typeof event.snippet === 'string' && event.snippet.length > 0,
+      );
+    sourceAvailabilityCache.set(trace, available);
+  }
+  return sourceAvailabilityCache.get(trace);
+}
+function selectMobileView(view, userSelected = true) {
+  if (userSelected) mobileViewChosen = true;
+  document.querySelector('main').dataset.mobileView = view;
+  for (const button of document.querySelectorAll('.mobile-views button'))
+    button.setAttribute(
+      'aria-pressed',
+      String(button.dataset.mobileView === view),
+    );
+  if (view === 'console') $('console-panel').open = true;
+  if (view === 'state')
+    activateTab(document.querySelector('[data-tab="state"]'));
+  if (view === 'flow' && userSelected) render();
+}
+function refreshSourcePresentation() {
+  const available = traceHasSourceEvidence(flow?.trace);
+  document
+    .querySelector('.center-column')
+    .classList.toggle('source-unavailable', !available);
+  $('inspect-source').hidden = available;
+  // The first mobile view should display useful evidence. Explicit navigation
+  // wins, even if a continuation or scenario changes source availability.
+  if (
+    !available &&
+    !mobileViewChosen &&
+    document.querySelector('main').dataset.mobileView === 'code'
+  )
+    selectMobileView('flow', false);
+}
 let layout = {
   inspector: false,
   timeline: true,
@@ -2253,6 +2325,7 @@ $('toggle-inspector').onclick = () => {
 $('maximize-source').onclick = () => {
   focusPanel('source');
 };
+$('inspect-source').onclick = () => focusPanel('source');
 $('maximize-flow').onclick = () => focusPanel('flow');
 const sourceDivider = $('source-flow-divider');
 sourceDivider.onpointerdown = (event) => {
@@ -2352,17 +2425,7 @@ window.addEventListener('resize', () => {
 });
 applyLayout();
 for (const button of document.querySelectorAll('.mobile-views button')) {
-  button.onclick = () => {
-    document.querySelector('main').dataset.mobileView =
-      button.dataset.mobileView;
-    for (const item of document.querySelectorAll('.mobile-views button'))
-      item.setAttribute('aria-pressed', String(item === button));
-    if (button.dataset.mobileView === 'console') $('console-panel').open = true;
-    if (button.dataset.mobileView === 'state')
-      activateTab(document.querySelector('[data-tab="state"]'));
-    // Reposition the existing packet after its previously hidden panel is laid out.
-    if (button.dataset.mobileView === 'flow') render();
-  };
+  button.onclick = () => selectMobileView(button.dataset.mobileView);
 }
 $('search').oninput = filterList;
 $('kind-filter').onchange = filterList;

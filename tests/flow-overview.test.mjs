@@ -104,6 +104,100 @@ test('overview follows invocation identities, real inputs, returns and output', 
   assert.equal(transitions[3].certainty, 'observed');
 });
 
+test('overview keeps observed async suspensions, yields, handler entries and unresolved exits in timeline order', () => {
+  const events = [
+    { kind: 'enter', callId: 'main', symbolId: 'run', stack: ['main'] },
+    {
+      kind: 'enter',
+      callId: 'worker-a',
+      symbolId: 'worker',
+      parentCallId: 'main',
+      stack: ['main', 'worker-a'],
+      values: { task: 'task-a' },
+    },
+    {
+      kind: 'await',
+      callId: 'worker-a',
+      symbolId: 'worker',
+      parentCallId: 'main',
+      stack: ['main'],
+      values: { task: 'task-a' },
+    },
+    {
+      kind: 'enter',
+      callId: 'worker-b',
+      symbolId: 'worker',
+      parentCallId: 'main',
+      stack: ['main', 'worker-b'],
+      values: { task: 'task-b' },
+    },
+    {
+      kind: 'yield',
+      callId: 'worker-b',
+      symbolId: 'worker',
+      parentCallId: 'main',
+      stack: ['main'],
+      result: null,
+      values: { task: 'task-b' },
+    },
+    {
+      kind: 'resume',
+      callId: 'worker-a',
+      symbolId: 'worker',
+      parentCallId: 'main',
+      stack: ['main', 'worker-a'],
+      values: { task: 'task-a' },
+    },
+    {
+      kind: 'throw',
+      callId: 'worker-a',
+      symbolId: 'worker',
+      parentCallId: 'main',
+      stack: ['main', 'worker-a'],
+      label: 'ValueError',
+      values: { task: 'task-a' },
+    },
+    {
+      kind: 'catch',
+      callId: 'worker-a',
+      symbolId: 'worker',
+      parentCallId: 'main',
+      stack: ['main', 'worker-a'],
+      values: { task: 'task-a' },
+    },
+    {
+      kind: 'unresolved',
+      callId: 'worker-a',
+      symbolId: 'worker',
+      parentCallId: 'main',
+      stack: ['main'],
+      values: { task: 'task-a' },
+    },
+  ];
+  const overview = buildFlowOverview(events);
+  assert.deepEqual(
+    overview.map((item) => item.index),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9],
+  );
+  assert.deepEqual(overview.slice(2).map(describeFlowTransition), [
+    'worker → suspended at await (result pending)',
+    'run → worker()',
+    'worker → yielded null',
+    'worker → resumed',
+    'worker → exception: ValueError',
+    'worker → entered exception handler',
+    'worker → exit unresolved (return/exception unverified)',
+  ]);
+  assert.ok(
+    overview
+      .slice(2)
+      .every((item) => item.parent === 'run' && item.depth === 1),
+  );
+  assert.equal(overview[2].taskId, 'task-a');
+  assert.equal(overview[4].taskId, 'task-b');
+  assert.equal(overview[5].taskId, 'task-a');
+});
+
 test('overview keeps repeated calls and evidence separate, and abbreviates large inputs', () => {
   const events = [
     { kind: 'enter', callId: 'outer', symbolId: 'A.m', stack: ['outer'] },

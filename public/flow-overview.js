@@ -30,7 +30,20 @@ export function buildFlowOverview(
   const transitions = [];
   for (const [offset, event] of events.entries()) {
     if (!event) continue;
-    if (!['enter', 'call', 'return', 'console', 'throw'].includes(event.kind))
+    if (
+      ![
+        'enter',
+        'call',
+        'return',
+        'console',
+        'throw',
+        'await',
+        'yield',
+        'resume',
+        'catch',
+        'unresolved',
+      ].includes(event.kind)
+    )
       continue;
     // Recorded returns may be emitted before or after the callee leaves its
     // stack. In either case the current invocation cannot be its own parent.
@@ -157,6 +170,16 @@ export function describeFlowTransition(item) {
       return `${symbol} → ${item.stream === 'stderr' ? 'stderr' : 'output'} ${briefValue(item.display ?? plainTerminalText(item.output))}`;
     case 'throw':
       return `${symbol} → exception: ${item.label ?? 'unresolved'}`;
+    case 'await':
+      return `${symbol} → suspended at await (result pending)`;
+    case 'yield':
+      return `${symbol} → yielded${item.hasResult ? ' ' + briefValue(item.result) : ' (value unavailable)'}`;
+    case 'resume':
+      return `${symbol} → resumed`;
+    case 'catch':
+      return `${symbol} → entered exception handler`;
+    case 'unresolved':
+      return `${symbol} → exit unresolved (return/exception unverified)`;
     default:
       return item.label ?? symbol;
   }

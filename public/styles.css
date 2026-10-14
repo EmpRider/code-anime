@@ -670,6 +670,112 @@ main {
   overflow-y: auto;
   scrollbar-width: thin;
 }
+/* Short, unverified structural handoffs are easier to scan as a connected
+   route than as two tiny rows at the top of an otherwise empty canvas. */
+.overview-sparse .overview-list {
+  display: grid;
+  align-content: safe center;
+  gap: 27px;
+  padding: 24px clamp(12px, 4%, 40px);
+}
+.overview-sparse .overview-entry {
+  position: relative;
+  width: min(100%, 760px);
+  min-width: 0;
+  margin-inline: auto;
+  border: 1px solid #424a62;
+  border-radius: 10px;
+  background: #202637;
+}
+.overview-sparse .overview-entry:not(:last-child)::after {
+  content: '↓';
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 5px);
+  height: 22px;
+  transform: translateX(-50%);
+  color: #a38af0;
+  font:
+    17px/22px Consolas,
+    monospace;
+  pointer-events: none;
+}
+.overview-sparse .overview-step {
+  min-width: 0;
+  min-height: 88px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 9px;
+}
+.overview-route-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 7px;
+}
+.overview-route {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font:
+    600 14px/1.35 Consolas,
+    monospace;
+}
+.overview-route-symbol {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.overview-route-arrow {
+  color: #b09af4;
+}
+.overview-operation {
+  color: #9faec9;
+  font:
+    11px/1.4 Consolas,
+    monospace;
+  overflow-wrap: anywhere;
+}
+.overview-sparse .overview-evidence {
+  align-self: start;
+  max-width: none;
+  padding: 4px 6px;
+  border: 1px solid #725632;
+  border-radius: 4px;
+  color: #efbd74;
+}
+.overview-sparse .overview-index {
+  color: #b5a8e9;
+  font-size: 12px;
+}
+.overview-sparse .overview-step.current {
+  box-shadow:
+    inset 3px 0 #a38af0,
+    0 0 0 1px #a38af0;
+}
+@media (max-width: 650px) {
+  .overview-sparse .overview-list {
+    gap: 23px;
+    padding: 12px;
+  }
+  .overview-sparse .overview-step {
+    grid-template-columns: 22px minmax(0, 1fr);
+    min-height: 86px;
+    gap: 7px;
+    padding: 10px;
+  }
+  .overview-sparse .overview-evidence {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .overview-route {
+    gap: 6px;
+    font-size: 12px;
+  }
+}
 .overview-entry {
   display: flex;
   align-items: stretch;
@@ -2083,6 +2189,40 @@ main {
   .center-column.show-flow:has(#console-panel:not([open])) {
     grid-template-rows: minmax(240px, 1.05fr) minmax(240px, 1fr) 34px;
   }
+}
+
+/* A structural trace without captured source gives its full workspace to the
+   flow. Source info remains accessible through the flow toolbar and Focus. */
+@media (min-width: 651px) {
+  .center-column.show-flow.source-unavailable {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(72px, 100px);
+  }
+  .center-column.show-flow.source-unavailable:has(#console-panel:not([open])) {
+    grid-template-rows: minmax(0, 1fr) 34px;
+  }
+  .center-column.show-flow.source-unavailable > .source-panel,
+  .center-column.show-flow.source-unavailable > #source-flow-divider {
+    display: none;
+  }
+  .center-column.show-flow.source-unavailable > .flow-panel {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .center-column.show-flow.source-unavailable > .console-panel {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .workspace.source-focused
+    .center-column.show-flow.source-unavailable
+    > .source-panel {
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+  }
+}
+#inspect-source[hidden] {
+  display: none;
 }
 
 #method-details {

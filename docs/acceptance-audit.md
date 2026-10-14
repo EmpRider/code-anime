@@ -1,6 +1,6 @@
 # Execution visualizer acceptance audit
 
-Checkpoint: 2026-10-13, branch `codex/recorded-stress-performance`.
+Checkpoint: 2026-10-14, branch `codex/recorded-stress-performance`.
 Multilingual source highlighting, a persisted branching-tree performance
 fixture, recorded Python execution, and experimental Node.js JavaScript
 recording are covered by tests.
@@ -8,6 +8,60 @@ recording are covered by tests.
 Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
+
+## Latest verified local gates (October 14)
+
+The complete `npm run check` passed: TypeScript typecheck, **154 passing core
+tests** (one optional live CodeGraph test skipped), production build, and
+Prettier. The full Playwright Chromium suite passed **58 browser tests**,
+including the new source-availability layouts and observed async overview.
+`npm run package:check` passed the installed CLI, MCP handshake, bundled player
+assets, and flow API. `git diff --check` reported no whitespace errors. These
+results verify the local checkout only; CI for the new changes and the wider
+37-requirement objective remain separate acceptance gates.
+
+## Async and exception boundaries in the execution path (October 14)
+
+The prepared high-level execution path previously omitted `await`, `yield`,
+`resume`, `catch`, and `unresolved` events. A real recorded asynchronous function
+could therefore appear to enter and return without showing when it suspended,
+which task resumed, or whether an apparent exit had an unverified outcome. The
+existing overview builder now retains these control transitions in the original
+event order with their invocation identities, task provenance, evidence labels,
+and shared timeline indexes. Labels distinguish pending await results, observed
+yield values (including null), handler entry, and exits whose cause/value is
+unverified. Clicking a transition continues to use the single prepared replay
+cursor; it does not request analysis.
+
+A focused unit regression covers interleaved task identities and every new
+transition type. The real Python asyncio browser regression verifies that the
+overview follows observed suspension/resumption, maintains historical locals,
+and navigates without additional HTTP requests. This narrows requirements 3,
+5, 9–10, 14, 24, 28, 30 and 35, but broader cross-language, threading,
+exception, and visual acceptance remains outstanding.
+
+## Source-availability-aware player workspace (October 14)
+
+When a prepared trace contains neither original captured source files nor
+source excerpts, the player now uses the execution flow for the main desktop and
+tablet workspace instead of reserving most of the viewport for an empty editor.
+An accessible Source info control can temporarily focus the source/evidence
+panel, with Restore returning to the diagram. On mobile, a source-less session
+initially selects Flow while retaining all navigation tabs; explicit user view
+choices remain in control. Source-bearing traces and excerpt-only events retain
+their source/flow split and original source inspection behavior.
+
+Source availability is cached per trace, and the cache is invalidated when a
+stored continuation appends prepared source files or events. Scenario switches
+check the selected trace, preserving the user's resizable source share and replay
+position. Workspace controls continue to operate on prepared data without
+initiating additional analysis. The new Chromium regressions exercise desktop,
+tablet, mobile, excerpts, source arriving in a continuation, and scenario
+switching. Four targeted tests passed in separate runs and TypeScript typecheck
+passed; full browser/core/package suites and the scenario-switch test still
+require final verification after this change. This is a narrow improvement to
+requirements 15–17, 26, 28, and 36. The 37-requirement acceptance target,
+including varied real-world recording and screen-reader acceptance, remains open.
 
 ## Java and Go original-source syntax decoration (October 14)
 

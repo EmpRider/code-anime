@@ -58,6 +58,323 @@ test.afterAll(async () => {
   await runtime?.close();
 });
 
+test('structural flows give desktop and tablet space to the diagram while retaining source inspection', async ({
+  page,
+}, testInfo) => {
+  const session = await runtime.store.create({
+    endpoint: 'structural run',
+    steps: [
+      { from: 'A.m', to: 'B.m2', dtoName: 'Invoke B.m2', dtoFields: {} },
+      { from: 'B.m2', to: 'A.m', dtoName: 'Return result', dtoFields: {} },
+    ],
+  });
+  const requests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/api/flow/')) requests.push(request.url());
+  });
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 820, height: 1180 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+    await expect(page.locator('.center-column')).toHaveClass(
+      /source-unavailable/,
+    );
+    await expect(page.locator('#flow-panel')).toBeVisible();
+    await expect(page.locator('.source-panel')).toBeHidden();
+    await expect(page.locator('#source-flow-divider')).toBeHidden();
+    await expect(page.locator('#inspect-source')).toBeVisible();
+    await expect(page.locator('.overview-sparse .overview-entry')).toHaveCount(
+      2,
+    );
+    await expect(page.locator('.overview-route').first()).toHaveText(
+      'A.m→B.m2',
+    );
+    await expect(page.locator('.overview-operation').first()).toHaveText(
+      'Invoke B.m2',
+    );
+    await expect(page.locator('.overview-evidence').first()).toHaveText(
+      'unverified',
+    );
+    const flow = (await page.locator('#flow-panel').boundingBox())!;
+    const center = (await page.locator('.center-column').boundingBox())!;
+    expect(flow.width).toBeGreaterThan(center.width * 0.95);
+    expect(flow.height).toBeGreaterThan(center.height * 0.75);
+    const route = (await page
+      .locator('.overview-entry')
+      .first()
+      .boundingBox())!;
+    expect(route.width).toBeGreaterThan(Math.min(400, flow.width * 0.6));
+    expect(
+      Math.abs(route.x + route.width / 2 - (flow.x + flow.width / 2)),
+    ).toBeLessThan(20);
+    expect(route.y).toBeGreaterThan(flow.y + flow.height * 0.18);
+    await page.screenshot({
+      path: testInfo.outputPath(`structural-${viewport.width}.png`),
+    });
+    await page.locator('#next').click();
+    await expect(page.locator('#progress')).toHaveText('1 / 2');
+    await expect(page.locator('.overview-step.current')).toHaveCount(1);
+    await expect(page.locator('.overview-step.current')).toContainText('B.m2');
+    await page.locator('#inspect-source').click();
+    await expect(page.locator('.source-panel')).toBeVisible();
+    await expect(page.locator('#flow-panel')).toBeHidden();
+    await page.locator('#maximize-source').click();
+    await expect(page.locator('#flow-panel')).toBeVisible();
+    await expect(page.locator('#progress')).toHaveText('1 / 2');
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    );
+    expect(overflow).toBe(false);
+    const dock = (await page.locator('#play').boundingBox())!;
+    expect(dock.y + dock.height).toBeLessThanOrEqual(viewport.height);
+  }
+  // Two page loads above; the layout and focus controls should request no analysis.
+  expect(requests).toHaveLength(2);
+});
+
+test('a source-less mobile flow opens on Flow but keeps Code and playback accessible', async ({
+  page,
+}, testInfo) => {
+  const session = await runtime.store.create({
+    endpoint: 'structural mobile',
+    steps: [{ from: 'A.m', to: 'B.m', dtoName: 'Call B', dtoFields: {} }],
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await expect(page.locator('main')).toHaveAttribute(
+    'data-mobile-view',
+    'flow',
+  );
+  await expect(page.locator('button[data-mobile-view="flow"]')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.locator('#flow-panel')).toBeVisible();
+  await expect(page.locator('.overview-sparse .overview-route')).toHaveCount(1);
+  await expect(page.locator('.overview-route')).toHaveText('A.m→B.m');
+  await page.screenshot({ path: testInfo.outputPath('structural-mobile.png') });
+  await page.locator('#next').click();
+  await page.locator('button[data-mobile-view="code"]').click();
+  await expect(page.locator('.source-panel')).toBeVisible();
+  await expect(page.locator('#progress')).toHaveText('1 / 1');
+  await page.locator('button[data-mobile-view="flow"]').click();
+  await expect(page.locator('#flow-panel')).toBeVisible();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+});
+
+test('long structural paths retain compact rows without a misleading runtime diagram', async ({
+  page,
+}) => {
+  const session = await runtime.store.create({
+    endpoint: 'structural chain',
+    steps: Array.from({ length: 8 }, (_, i) => ({
+      from: `Service${i}.run`,
+      to: `Service${i + 1}.run`,
+      dtoName: `Transition ${i + 1}`,
+      dtoFields: {},
+    })),
+  });
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await expect(page.locator('.flow-overview')).toBeVisible();
+  await expect(page.locator('.overview-sparse')).toHaveCount(0);
+  const nextPage = page.locator(
+    '.overview-pages button[data-overview-page="next"]',
+  );
+  if (await nextPage.isVisible()) await nextPage.click();
+  await expect(page.locator('.overview-step').last()).toContainText(
+    'Transition 8',
+  );
+  await page.locator('.overview-step').last().click();
+  await expect(page.locator('#progress')).toHaveText('8 / 8');
+  await expect(page.locator('.overview-step.current')).toContainText(
+    'Transition 8',
+  );
+});
+
+test('source excerpts retain the editor and the mobile Code default', async ({
+  page,
+}) => {
+  const session = await runtime.store.create(
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'excerpt-fixture',
+        projectRoot: 'fixture',
+        sourceHash: 'excerpt',
+        target: 'run',
+        scenario: {},
+        events: [
+          {
+            id: 'event-1',
+            kind: 'enter',
+            callId: 'call-1',
+            symbolId: 'run',
+            label: 'Inspect excerpt',
+            source: { file: 'run.js', line: 1, endLine: 1 },
+            snippet: 'function run() { return 1; }',
+            values: {},
+            stack: ['call-1'],
+            certainty: 'mock',
+          },
+        ],
+        diagnostics: [],
+        truncated: false,
+        filesAnalyzed: 1,
+        cacheHits: 0,
+        sourceFiles: {},
+      },
+      'run',
+    ),
+  );
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await expect(page.locator('.center-column')).not.toHaveClass(
+    /source-unavailable/,
+  );
+  await expect(page.locator('.source-panel')).toBeVisible();
+  await expect(page.locator('#source-flow-divider')).toBeVisible();
+  await page.locator('#next').click();
+  await expect(page.locator('#snippet')).toContainText('return 1');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(page.locator('main')).toHaveAttribute(
+    'data-mobile-view',
+    'code',
+  );
+  await expect(page.locator('.source-panel')).toBeVisible();
+});
+
+test('prepared continuation can reveal original source and restore the split without resetting replay', async ({
+  page,
+}) => {
+  const event = (id: number): TraceEvent => ({
+    id: `event-${id}`,
+    kind: id === 1 ? 'enter' : 'return',
+    callId: 'call-1',
+    symbolId: 'run',
+    label: `Step ${id}`,
+    source: { file: 'run.js', line: id, endLine: id },
+    values: {},
+    stack: ['call-1'],
+    certainty: 'mock',
+  });
+  const createChunk = (id: number, previousSessionId?: string) =>
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'continuation-source-fixture',
+        projectRoot: 'fixture',
+        sourceHash: 'continuation-source',
+        target: 'run',
+        scenario: {},
+        events: [event(id)],
+        diagnostics: [],
+        truncated: id === 1,
+        filesAnalyzed: 1,
+        cacheHits: 0,
+        sourceFiles:
+          id === 1 ? {} : { 'run.js': 'function run() {\n  return 1;\n}' },
+        simulation: {
+          mode: 'ai-mock',
+          complete: id === 2,
+          coverage: 'Prepared source arrival fixture',
+          evidenceIds: [],
+          ...(previousSessionId ? { previousSessionId } : {}),
+        },
+      },
+      'run',
+    );
+  const first = await runtime.store.create(createChunk(1));
+  await runtime.store.create(createChunk(2, first.id));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${runtime.baseUrl}/flow/${first.id}`);
+  await expect(page.locator('.source-panel')).toBeHidden();
+  await page.locator('#next').click();
+  await expect(page.locator('#progress')).toHaveText('1 / 1');
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  await page.locator('#next').click();
+  await expect(page.locator('#progress')).toHaveText('2 / 2');
+  await expect(page.locator('.center-column')).not.toHaveClass(
+    /source-unavailable/,
+  );
+  await expect(page.locator('.source-panel')).toBeVisible();
+  await expect(page.locator('#source-flow-divider')).toBeVisible();
+  await expect(page.locator('#snippet')).toContainText('return 1');
+  expect(requests).toHaveLength(1);
+  await page.locator('#previous').click();
+  await expect(page.locator('#progress')).toHaveText('1 / 2');
+  await expect(page.locator('.source-panel')).toBeVisible();
+  expect(requests).toHaveLength(1);
+});
+
+test('scenario switching adapts source space without losing split preferences or selected steps', async ({
+  page,
+}) => {
+  const makeTrace = (withSource: boolean) => ({
+    version: 2 as const,
+    provider: 'scenario-layout-fixture',
+    projectRoot: 'fixture',
+    sourceHash: 'scenario-layout',
+    target: 'run',
+    scenario: {},
+    events: [
+      {
+        id: 'event-1',
+        kind: 'enter' as const,
+        callId: 'call-1',
+        symbolId: 'run',
+        label: 'Entered run',
+        source: { file: 'run.js', line: 1, endLine: 1 },
+        values: {},
+        stack: ['call-1'],
+        certainty: 'mock' as const,
+      },
+    ],
+    diagnostics: [],
+    truncated: false,
+    filesAnalyzed: 1,
+    cacheHits: 0,
+    sourceFiles: withSource ? { 'run.js': 'function run() {}' } : {},
+  });
+  const original = traceToFlow(makeTrace(false), 'run');
+  original.baselineTrace = makeTrace(true);
+  const session = await runtime.store.create(original);
+  const requests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/api/flow/')) requests.push(request.url());
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await expect(page.locator('.source-panel')).toBeHidden();
+  await page.locator('#toggle-inspector').click();
+  await page.locator('#tab-context').click();
+  await page.locator('#next').click();
+  await page.locator('#variant').selectOption('baseline');
+  await expect(page.locator('.source-panel')).toBeVisible();
+  await expect(page.locator('#source-flow-divider')).toBeVisible();
+  await page.locator('#source-flow-divider').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#source-flow-divider')).toHaveAttribute(
+    'aria-valuenow',
+    '60',
+  );
+  await page.locator('#variant').selectOption('proposed');
+  await expect(page.locator('.source-panel')).toBeHidden();
+  await expect(page.locator('#progress')).toHaveText('1 / 1');
+  await page.locator('#variant').selectOption('baseline');
+  await expect(page.locator('.source-panel')).toBeVisible();
+  await expect(page.locator('#source-flow-divider')).toHaveAttribute(
+    'aria-valuenow',
+    '60',
+  );
+  expect(requests).toHaveLength(1);
+});
+
 test('source-line navigation refreshes loaded visits without replacing original source', async ({
   page,
 }) => {
@@ -179,9 +496,12 @@ test('legacy handoffs show an unverified overview before playback on desktop and
     'no runtime observations',
   );
   await expect(page.locator('.overview-step')).toHaveCount(3);
-  await expect(page.locator('.overview-step').first()).toContainText(
-    'Controller → Service: Request',
-  );
+  await expect(
+    page.locator('.overview-step').first().locator('.overview-route'),
+  ).toHaveText('Controller→Service');
+  await expect(
+    page.locator('.overview-step').first().locator('.overview-operation'),
+  ).toHaveText('Request');
   await expect(page.locator('.overview-step').first()).toContainText(
     'unverified',
   );
@@ -2819,6 +3139,23 @@ test('recorded interleaved asyncio tasks preserve per-invocation mutations in br
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(status.url!);
+    // The high-level path must show the same asynchronous task boundaries
+    // that are present in the observed detailed trace.
+    await page.locator('#timeline').fill(String(awaiting + 1));
+    await expect(page.locator('.overview-step.current')).toContainText(
+      'suspended at await',
+    );
+    await page.locator('#timeline').fill(String(resume + 1));
+    await expect(page.locator('.overview-step.current')).toContainText(
+      'resumed',
+    );
+    const requests: string[] = [];
+    page.on('request', (request) => requests.push(request.url()));
+    await page.locator('.overview-step.current').click();
+    await expect(page.locator('#progress')).toHaveText(
+      `${resume + 1} / ${events.length}`,
+    );
+    expect(requests).toEqual([]);
     await page.locator('#timeline').fill(String(resume + 1));
     await expect(page.locator('#source')).toHaveText('async.py');
     await expect(page.locator('#local-tree .field.changed')).toContainText(
