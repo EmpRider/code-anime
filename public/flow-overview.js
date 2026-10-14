@@ -121,6 +121,7 @@ export function buildFlowOverview(
       target: event.values?.to,
       result: event.result,
       hasResult: Object.hasOwn(event, 'result'),
+      exception: event.values?.exception,
       output: event.output,
       display: preparedOutput[offset],
       stream: event.values?.stream,
@@ -225,6 +226,18 @@ function briefValue(value) {
       : valueString;
 }
 
+// Runtime recorders can provide an observed exception type and native args.
+// Keep the high-level view useful without expanding arbitrary saved objects.
+function briefException(detail) {
+  if (!detail || typeof detail !== 'object' || typeof detail.type !== 'string')
+    return undefined;
+  const kind = detail.type.trim();
+  if (!kind) return undefined;
+  const args = Array.isArray(detail.args) ? detail.args : [];
+  if (!args.length) return kind;
+  return `${kind}(${args.slice(0, 2).map(briefValue).join(', ')}${args.length > 2 ? ', …' : ''})`;
+}
+
 export function describeFlowTransition(item) {
   const args =
     item.inputs && Object.keys(item.inputs).length
@@ -253,15 +266,17 @@ export function describeFlowTransition(item) {
         return `Process ${item.stream ?? 'output'} (source unresolved): ${briefValue(item.display ?? plainTerminalText(item.output))}`;
       return `${symbol} → ${item.stream === 'stderr' ? 'stderr' : 'output'} ${briefValue(item.display ?? plainTerminalText(item.output))}`;
     case 'throw':
-      return `${symbol} → exception: ${item.label ?? 'unresolved'}`;
+      return `${symbol} → exception: ${briefException(item.result) ?? item.label ?? 'unresolved'}`;
     case 'await':
       return `${symbol} → suspended at await (result pending)`;
     case 'yield':
       return `${symbol} → yielded${item.hasResult ? ' ' + briefValue(item.result) : ' (value unavailable)'}`;
     case 'resume':
       return `${symbol} → resumed`;
-    case 'catch':
-      return `${symbol} → entered exception handler`;
+    case 'catch': {
+      const exception = briefException(item.exception);
+      return `${symbol} → ${exception ? `caught ${exception}` : 'entered exception handler'}`;
+    }
     case 'unresolved':
       return `${symbol} → exit unresolved (return/exception unverified)`;
     default:
