@@ -2361,6 +2361,60 @@ test('Python source colors comments and floor division without changing literal 
   );
 });
 
+test('Python f-string expression highlighting survives virtual source windows and timeline steps', async ({
+  page,
+}) => {
+  const lines = Array.from({ length: 1000 }, (_, index) => {
+    if (index === 0) return 'value = f"""start {{literal}}';
+    if (index === 699) return '  {True if ready else False} and {5 + 2}';
+    if (index === 700) return '  end""" # after f-string';
+    if (index === 701) return 'return 3';
+    return '  literal {{if}} text';
+  });
+  await page.route('**/api/flow/*', async (route) => {
+    const response = await route.fetch();
+    const flow = await response.json();
+    flow.trace.sourceFiles = { 'large.py': lines.join('\n') };
+    flow.trace.events.forEach((event: TraceEvent, index: number) => {
+      event.source = {
+        file: 'large.py',
+        line: index === 0 ? 700 : 701,
+        endLine: index === 0 ? 700 : 701,
+      };
+    });
+    await route.fulfill({ json: flow });
+  });
+  await page.goto(url);
+  await page.locator('#next').click();
+  const row = page.locator('.code-row[data-line="700"]');
+  await expect(row.locator('.code-text')).toHaveText(lines[699]!);
+  await expect(row.locator('.token-keyword')).toHaveText([
+    'True',
+    'if',
+    'else',
+    'False',
+  ]);
+  await expect(row.locator('.token-number')).toHaveText(['5', '2']);
+  await expect(page.locator('.code-row')).toHaveCount(301);
+  await expect(
+    page.locator('.code-row[data-line="701"] .token-comment'),
+  ).toHaveText('# after f-string');
+  await expect(
+    page.locator('.code-row[data-line="702"] .token-keyword'),
+  ).toHaveText('return');
+  await expect(page.locator('.executing-line')).toHaveAttribute(
+    'data-line',
+    '700',
+  );
+  const original = await row.elementHandle();
+  await page.locator('#next').click();
+  expect(await original!.evaluate((node) => node.isConnected)).toBe(true);
+  await expect(page.locator('.executing-line')).toHaveAttribute(
+    'data-line',
+    '701',
+  );
+});
+
 test('multiline Python strings and nested Kotlin comments retain lexical context without altering source', async ({
   page,
 }) => {
