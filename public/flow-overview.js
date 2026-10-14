@@ -146,18 +146,34 @@ export function buildMethodGroups(events = []) {
     if (event?.kind !== 'enter' || !event.callId || entries.has(event.callId))
       continue;
     const symbol = event.symbolId ?? 'Unknown symbol';
+    // Runtime recorders qualify symbols with the exact relative source file:
+    // `module.py:Worker.run` or `main.cjs:add`. Split that provenance before
+    // looking for class/method delimiters; the dot in `.py` is not a class.
+    const sourceFile = event.source?.file;
+    const inferredFile =
+      sourceFile && symbol.startsWith(`${sourceFile}:`)
+        ? sourceFile
+        : /^(.+\.[a-z0-9]{1,12}):(?=[^:])(.+)$/i.exec(symbol)?.[1];
+    const qualified = inferredFile
+      ? symbol.slice(inferredFile.length + 1)
+      : symbol;
     const separator = Math.max(
-      symbol.lastIndexOf('::'),
-      symbol.lastIndexOf('.'),
+      qualified.lastIndexOf('::'),
+      qualified.lastIndexOf('.'),
     );
-    const className = separator >= 0 ? symbol.slice(0, separator) : 'Functions';
+    const owner = separator >= 0 ? qualified.slice(0, separator) : '';
+    const className = inferredFile
+      ? owner
+        ? `${owner} · ${inferredFile}`
+        : inferredFile
+      : owner || 'Functions';
     const methodName =
       separator >= 0
-        ? symbol.slice(
+        ? qualified.slice(
             separator +
-              (symbol.slice(separator, separator + 2) === '::' ? 2 : 1),
+              (qualified.slice(separator, separator + 2) === '::' ? 2 : 1),
           )
-        : symbol;
+        : qualified;
     // Some recorders include the entering frame in `stack`; others report
     // only the frames that led to it. In the latter case the final frame is
     // the caller. Never infer a parent by dropping that final frame.

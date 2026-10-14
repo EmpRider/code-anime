@@ -1586,7 +1586,11 @@ function renderMethodMap(panel) {
         method.dataset.callId = item.callId;
         method.dataset.eventIndex = String(item.index);
         method.append(
-          text('span', `↳ ${item.methodName}()`, 'method-map-name'),
+          text(
+            'span',
+            `↳ ${item.methodName}${item.methodName === '<module>' ? '' : '()'}`,
+            'method-map-name',
+          ),
         );
         if (item.parentKnown)
           method.append(

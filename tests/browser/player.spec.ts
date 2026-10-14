@@ -3004,6 +3004,14 @@ test('observed JavaScript recording replays actual source lines, locals and outp
       'Recorded execution',
     );
     await page.locator('#timeline').fill(String(entryIndex + 1));
+    await expect(page.locator('.method-map-call.current')).toContainText(
+      'add()',
+    );
+    await expect(
+      page.locator(
+        '.method-map-group:has(.method-map-call.current) .method-map-class',
+      ),
+    ).toContainText('node-main.cjs');
     await expect(page.locator('#source')).toHaveText('node-main.cjs');
     await expect(page.locator('.executing-line')).toHaveAttribute(
       'data-line',

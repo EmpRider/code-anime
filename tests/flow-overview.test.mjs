@@ -98,6 +98,55 @@ test('class/method map accepts caller-only stacks without inventing ancestry', (
   assert.equal(invocations[2].parentKnown, false);
 });
 
+test('class/method map preserves file provenance and real recorder method names', () => {
+  const { invocations, classCount } = buildMethodGroups([
+    {
+      kind: 'enter',
+      callId: 'python',
+      symbolId: 'src/worker.py:Widget.process',
+      source: { file: 'src/worker.py', line: 3 },
+      stack: ['python'],
+    },
+    {
+      kind: 'enter',
+      callId: 'other',
+      symbolId: 'elsewhere/worker.py:Widget.process',
+      source: { file: 'elsewhere/worker.py', line: 5 },
+      stack: ['other'],
+    },
+    {
+      kind: 'enter',
+      callId: 'node',
+      symbolId: 'helper.cjs:add',
+      source: { file: 'helper.cjs', line: 2 },
+      stack: ['node'],
+    },
+    {
+      kind: 'enter',
+      callId: 'module',
+      symbolId: 'pkg/main.go:<module>',
+      stack: ['module'],
+    },
+    {
+      kind: 'enter',
+      callId: 'namespace',
+      symbolId: 'Unit::handle',
+      stack: ['namespace'],
+    },
+  ]);
+  assert.equal(classCount, 5);
+  assert.deepEqual(
+    invocations.map(({ className, methodName }) => [className, methodName]),
+    [
+      ['Widget · src/worker.py', 'process'],
+      ['Widget · elsewhere/worker.py', 'process'],
+      ['helper.cjs', 'add'],
+      ['pkg/main.go', '<module>'],
+      ['Unit', 'handle'],
+    ],
+  );
+});
+
 test('flow output summaries use complete per-stream ANSI decoding and retain raw events', () => {
   const events = [
     {
