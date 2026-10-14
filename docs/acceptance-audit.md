@@ -1245,6 +1245,11 @@ realistic paint/heap performance acceptance requirements.
     enabled paging control after replacing the visible page. A browser regression
     for keyboard paging has been added; broad screen-reader behavior remains open. Browser tests cover disclosure focus, invocation-selector
     focus preservation, pagination focus, mobile controls, and keyboard resizing.
+    The compact class/method map uses a named navigation landmark, descriptive
+    page-button names, and a screen-reader-friendly current-page count. Its
+    keyboard Enter paging path retains the focused control and shared playback
+    state. This verifies the browser accessibility tree and keyboard semantics,
+    not native screen-reader acceptance.
     A focused browser regression checks source-line `aria-current` and
     stateful breakpoint names/pressed state after keyboard activation and seeks.
     Keyboard-shortcut help now exposes `aria-controls` and tracks its expanded

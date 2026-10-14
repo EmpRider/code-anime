@@ -1749,12 +1749,15 @@ function renderMethodMap(panel) {
       methodMap.invocations.length / METHOD_MAP_PAGE_SIZE,
     );
     if (pageCount > 1) {
-      const footer = text('div', '', 'method-map-pages');
+      const footer = text('nav', '', 'method-map-pages');
+      footer.setAttribute('aria-label', 'Method invocation pages');
       const previous = text('button', '←', 'quiet-button');
       previous.dataset.methodMapAction = 'previous';
+      previous.setAttribute('aria-label', 'Previous method invocation page');
       previous.disabled = methodMapPage === 0;
       const next = text('button', '→', 'quiet-button');
       next.dataset.methodMapAction = 'next';
+      next.setAttribute('aria-label', 'Next method invocation page');
       next.disabled = methodMapPage === pageCount - 1;
       const changePage = (delta) => {
         methodMapPage += delta;
@@ -1771,9 +1774,16 @@ function renderMethodMap(panel) {
       };
       previous.onclick = () => changePage(-1);
       next.onclick = () => changePage(1);
+      const pageNumber = text('span', `${methodMapPage + 1} / ${pageCount}`);
+      pageNumber.setAttribute('aria-hidden', 'true');
       footer.append(
         previous,
-        text('span', `${methodMapPage + 1} / ${pageCount}`),
+        pageNumber,
+        text(
+          'span',
+          `Page ${methodMapPage + 1} of ${pageCount}`,
+          'screen-reader-only',
+        ),
         next,
       );
       container.append(footer);
