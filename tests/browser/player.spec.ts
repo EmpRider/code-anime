@@ -1306,13 +1306,26 @@ test('class/method map pages many caller-only invocations and preserves keyboard
   page.on('request', (request) => {
     if (request.url().includes('/api/flow/')) requests.push(request.url());
   });
+  const methodPages = page.getByRole('navigation', {
+    name: 'Method invocation pages',
+  });
+  await expect(methodPages).toContainText('Page 1 of 3');
+  await expect(
+    methodPages.getByRole('button', {
+      name: 'Previous method invocation page',
+    }),
+  ).toBeDisabled();
   const next = page.locator('[data-method-map-action="next"]');
-  await next.click();
+  await expect(next).toHaveAccessibleName('Next method invocation page');
+  await next.focus();
+  await page.keyboard.press('Enter');
   await expect(page.locator('.method-map-pages')).toContainText('2 / 3');
+  await expect(methodPages).toContainText('Page 2 of 3');
   await expect(page.locator('.method-map-call')).toHaveCount(10);
   await next.click();
   await expect(page.locator('.method-map-pages')).toContainText('3 / 3');
   await expect(page.locator('.method-map-call')).toHaveCount(2);
+  await expect(methodPages).toContainText('Page 3 of 3');
   await expect(
     page.locator('[data-method-map-action="previous"]'),
   ).toBeFocused();
