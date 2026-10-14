@@ -10,6 +10,19 @@ Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
 
+## Method map inspection without replay navigation (October 14)
+
+The compact disclosure beside a recorded invocation in the prepared
+class/method map opens or closes its execution tree without seeking to the
+invocation entry. Selecting the method name still navigates to the recorded
+entry as before. The selected call has visible and accessible disclosure state, while the
+current playback event, original source, historical variables, and console
+remain tied to the existing replay cursor. Individual method-event rows still
+offer deliberate navigation. A Chromium regression checks repeated map
+disclosure alongside debugger stepping and verifies that no new data requests
+occur. This advances requirements 7–9, 22, 24 and 28 within the tested trace;
+broader runtime and accessibility acceptance remain pending.
+
 ## Compact debugger controls on small mobile viewports (October 14)
 
 The compact keyboard help now documents the recorded-trace Step Into (`I`),

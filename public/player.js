@@ -1604,7 +1604,7 @@ function renderMethodMap(panel) {
         method.title = `${item.symbol} · ${item.callId} · ${item.certainty}`;
         method.setAttribute(
           'aria-label',
-          `Inspect ${item.symbol} invocation ${item.callId} (${item.certainty})`,
+          `Go to ${item.symbol} invocation ${item.callId} (${item.certainty})`,
         );
         method.onclick = () => {
           selectedMethod = item.callId;
@@ -1613,7 +1613,35 @@ function renderMethodMap(panel) {
           seek(item.index);
           renderMethodDetails();
         };
-        group.append(method);
+        const inspect = text(
+          'button',
+          selectedMethod === item.callId ? '▾' : '▸',
+          'method-map-disclosure',
+        );
+        inspect.type = 'button';
+        inspect.dataset.callId = item.callId;
+        inspect.dataset.methodMapAction = `inspect:${item.callId}`;
+        inspect.setAttribute('aria-controls', 'method-details');
+        inspect.setAttribute(
+          'aria-expanded',
+          String(selectedMethod === item.callId),
+        );
+        inspect.setAttribute(
+          'aria-label',
+          `Toggle details for ${item.symbol} invocation`,
+        );
+        inspect.onclick = () => {
+          // Disclosure leaves the shared replay cursor and playback state alone.
+          selectedMethod =
+            selectedMethod === item.callId ? undefined : item.callId;
+          if (selectedMethod) expandedCalls.add(item.callId);
+          renderedMethod = undefined;
+          renderMethodDetails();
+          renderFlowOverview();
+        };
+        const row = text('div', '', 'method-map-entry');
+        row.append(method, inspect);
+        group.append(row);
       }
       cards.append(group);
     }
@@ -1864,8 +1892,8 @@ function renderFlowOverview() {
           : closest;
       }, null);
       (
-        focusedMethod ??
         focusedMethodControl ??
+        focusedMethod ??
         focusedStep ??
         focusedDisclosure ??
         focusedPage ??
@@ -1892,6 +1920,12 @@ function renderFlowOverview() {
     button.classList.toggle('current', current);
     if (current) button.setAttribute('aria-current', 'step');
     else button.removeAttribute('aria-current');
+  }
+  for (const button of panel.querySelectorAll('.method-map-disclosure')) {
+    const expanded = button.dataset.callId === selectedMethod;
+    button.classList.toggle('selected', expanded);
+    button.setAttribute('aria-expanded', String(expanded));
+    button.textContent = expanded ? '▾' : '▸';
   }
   // Selecting a card changes the inspected invocation even if the overview
   // stays on the same page. Keep its disclosure state in sync without

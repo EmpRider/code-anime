@@ -3467,9 +3467,26 @@ test('step into follows nested original source, keyboard navigation and prepared
     ),
   );
   await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
-  await page.locator('#timeline').fill('2');
   const requests: string[] = [];
   page.on('request', (request) => requests.push(request.url()));
+  // Inspecting a method from the prepared map is a disclosure action. It
+  // must not seek or discard the caller's source and historical state.
+  await page.locator('#timeline').fill('6');
+  if (!(await page.locator('.flow-panel').isVisible()))
+    await page.locator('#toggle-flow').click();
+  const childDisclosure = page.locator(
+    '.method-map-disclosure[data-call-id="child"]',
+  );
+  await childDisclosure.click();
+  await expect(childDisclosure).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#method-details')).toContainText('B.m2');
+  await expect(page.locator('#progress')).toHaveText('6 / 8');
+  await expect(page.locator('#source')).toHaveText('A.ts');
+  await childDisclosure.click();
+  await expect(childDisclosure).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#method-details')).toBeHidden();
+  await expect(page.locator('#progress')).toHaveText('6 / 8');
+  await page.locator('#timeline').fill('2');
   await page.getByRole('button', { name: 'Step into method' }).click();
   await expect(page.locator('#progress')).toHaveText('3 / 8');
   await expect(page.locator('#source')).toHaveText('B.ts');
