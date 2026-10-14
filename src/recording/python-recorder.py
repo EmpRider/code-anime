@@ -14,6 +14,7 @@ import dis
 import itertools
 import asyncio
 import types
+from ast import parse as parse_source, walk as walk_source, Try as OrdinaryTry
 
 root, entry, max_events, max_bytes, *arguments = sys.argv[1:]
 root = os.path.realpath(root)
@@ -26,6 +27,8 @@ tasks = {}
 sources = {}
 paths = {}
 project_classes = {}
+pending_exceptions = {}
+exception_handlers = {}
 count = 0
 calls = 0
 size = 0
@@ -35,7 +38,7 @@ source_bytes = 0
 MAX_SOURCE_FILE_BYTES = 2 * 1024 * 1024
 MAX_SOURCE_TOTAL_BYTES = 4 * 1024 * 1024
 active = True
-scope = "Main-thread Python user code for this input, including generator/coroutine suspension and single-thread asyncio tasks. Line events show state BEFORE the highlighted line; return events show state after returning. User-defined instance fields and native slots are snapshotted without invoking application accessors; methods and dependency object internals remain opaque. Exception arguments are observed without invoking user-defined formatting. Coroutine await/suspend events are scheduler transitions, not awaited results. Async task stacks are observed Python frames, not inferred causal chains. Native/dependency internals, additional threads or processes, and binary console writes are not captured. Values are bounded; unavailable fields are explicitly marked."
+scope = "Main-thread Python user code for this input, including generator/coroutine suspension and single-thread asyncio tasks. Line events show state BEFORE the highlighted line; return events show state after returning. User-defined instance fields and native slots are snapshotted without invoking application accessors; methods and dependency object internals remain opaque. Exception arguments are observed without invoking user-defined formatting. Catch transitions require an observed first line of a multi-line ordinary except body; other handler boundaries remain unresolved. Coroutine await/suspend events are scheduler transitions, not awaited results. Async task stacks are observed Python frames, not inferred causal chains. Native/dependency internals, additional threads or processes, and binary console writes are not captured. Values are bounded; unavailable fields are explicitly marked."
 
 
 class Boundary(BaseException):
@@ -215,6 +218,31 @@ def user_file(filename):
     return relative
 
 
+def handler_entries(filename):
+    """Locate source-backed except bodies, without evaluating user code.
+
+    Only the first statement of a multi-line ordinary except handler is an
+    unambiguous line-trace indication that Python selected that handler.
+    Exception groups (`except*`) and single-line handlers need stronger runtime
+    evidence, so their catch boundary is left unreported.
+    """
+    if filename not in exception_handlers:
+        entries = set()
+        try:
+            tree = parse_source(sources[filename], filename=filename)
+            for node in walk_source(tree):
+                if not isinstance(node, OrdinaryTry):
+                    continue
+                for handler in node.handlers:
+                    if handler.body and handler.body[0].lineno > handler.lineno:
+                        entries.add(handler.body[0].lineno)
+        except (SyntaxError, ValueError, KeyError, RecursionError):
+            # Runtime tracing still proceeds when the source cannot be parsed.
+            pass
+        exception_handlers[filename] = entries
+    return exception_handlers[filename]
+
+
 def chain(frame):
     result = []
     while frame:
@@ -256,7 +284,7 @@ def emit(frame, kind, **extra):
         'values': {
             'thread': 'main',
             'task': task_identity(),
-            'phase': 'before' if kind == 'statement' else 'after',
+            'phase': 'before' if kind in ('statement', 'catch') else 'after',
         },
         'stack': [frames[id(parent)] for parent in stack_frames],
         'locals': {frames[id(parent)]: local_values(parent) for parent in stack_frames},
@@ -270,7 +298,7 @@ def emit(frame, kind, **extra):
         event['values'] = {
             'thread': 'main',
             'task': task_identity(),
-            'phase': 'before' if kind == 'statement' else 'after',
+            'phase': 'before' if kind in ('statement', 'catch') else 'after',
             **extra['values'],
         }
     if kind == 'statement':
@@ -295,11 +323,22 @@ def trace(frame, event, arg):
             suspended.remove(id(frame))
             emit(frame, 'resume', note='Resuming the same generator or coroutine invocation')
         else:
+            pending_exceptions.pop(id(frame), None)
             calls += 1
             frames[id(frame)] = 'call-' + str(calls)
             emit(frame, 'enter', inputs=local_values(frame))
     elif id(frame) in frames:
         if event == 'line':
+            pending = pending_exceptions.get(id(frame))
+            if pending:
+                if frame.f_lineno in handler_entries(user_file(frame.f_code.co_filename)):
+                    emit(frame, 'catch', values={'exception': pending},
+                         note='Entered an observed Python except handler')
+                    pending_exceptions.pop(id(frame), None)
+                # A nested finally block can execute several user-code lines
+                # before an enclosing except is entered. Keep the latest
+                # observed propagation until a handler is entered, another
+                # exception supersedes it, or this invocation ends.
             emit(frame, 'statement')
         elif event == 'exception':
             # BaseException's native args descriptor bypasses overridden
@@ -308,7 +347,9 @@ def trace(frame, event, arg):
             exception_type, exception_value, _ = arg
             arguments = BaseException.args.__get__(exception_value, BaseException)
             name = type.__getattribute__(exception_type, '__name__')
-            emit(frame, 'throw', result={'type': name, 'args': value(arguments)},
+            detail = {'type': name, 'args': value(arguments)}
+            pending_exceptions[id(frame)] = detail
+            emit(frame, 'throw', result=detail,
                  note='Python reported exception propagation: ' + name)
         elif event == 'return':
             opcode = dis.opname[frame.f_code.co_code[frame.f_lasti]]
@@ -325,6 +366,7 @@ def trace(frame, event, arg):
             else:
                 emit(frame, 'return', result=value(arg))
             if id(frame) not in suspended:
+                pending_exceptions.pop(id(frame), None)
                 del frames[id(frame)]
     return trace
 
