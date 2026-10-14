@@ -42,6 +42,7 @@ let shownSourceVisitRevision = -1;
 let manualSourceWindow;
 const sourceRows = new Map();
 let highlightedSourceRow;
+let sourceValuesCursor = -1;
 let sourceStackCalls;
 let inspectorStackCalls;
 let sourceBreakpointVersion = 0;
@@ -1229,6 +1230,67 @@ function renderSource(state, event, initial = false) {
     active.setAttribute('aria-current', 'location');
     highlightedSourceRow = active;
   }
+  // Keep execution annotations outside the original source editor. Values
+  // come only from the selected, prepared event and its replayed frame state.
+  const valueButton = $('source-values-toggle');
+  const valuePanel = $('source-values-panel');
+  const locals = active ? frameLocals(state, event) : undefined;
+  const hasValues =
+    Boolean(active && event) &&
+    (['inputs', 'before', 'after', 'result'].some((key) =>
+      Object.hasOwn(event, key),
+    ) ||
+      Object.keys(locals ?? {}).length > 0);
+  if (sourceValuesCursor !== cursor || !hasValues) {
+    valuePanel.hidden = true;
+    valuePanel.replaceChildren();
+    sourceValuesCursor = cursor;
+  }
+  valueButton.hidden = !hasValues;
+  valueButton.setAttribute('aria-expanded', String(!valuePanel.hidden));
+  valueButton.onclick = hasValues
+    ? () => {
+        if (!valuePanel.hidden) {
+          valuePanel.hidden = true;
+          valueButton.setAttribute('aria-expanded', 'false');
+          return;
+        }
+        const list = text('dl', '', 'source-value-list');
+        const items = [
+          ['Inputs', 'inputs'],
+          ['Before', 'before'],
+          ['After', 'after'],
+          ['Result', 'result'],
+        ];
+        for (const [label, key] of items) {
+          if (!Object.hasOwn(event, key)) continue;
+          list.append(
+            text('dt', label),
+            text('dd', valueText(event[key]), 'source-value-data'),
+          );
+        }
+        if (Object.keys(locals ?? {}).length)
+          list.append(
+            text('dt', 'Frame locals'),
+            text('dd', valueText(locals), 'source-value-data'),
+          );
+        valuePanel.replaceChildren(
+          text(
+            'div',
+            `Step ${cursor} · ${event.certainty ?? 'provenance unspecified'}`,
+            'source-value-evidence',
+          ),
+          list,
+        );
+        valuePanel.hidden = false;
+        valueButton.setAttribute('aria-expanded', 'true');
+      }
+    : null;
+  valueButton.onkeydown = (keyboardEvent) => {
+    if (keyboardEvent.key !== 'Escape') return;
+    valuePanel.hidden = true;
+    valueButton.setAttribute('aria-expanded', 'false');
+  };
   // Explicit stack navigation reveals the selected method's source even when
   // automatic following is off. Subsequent playback leaves that viewport alone.
   const revealRow = revealInspectedSource
