@@ -3406,6 +3406,101 @@ test('recorded interleaved asyncio tasks preserve per-invocation mutations in br
   }
 });
 
+test('step into follows nested original source, keyboard navigation and prepared state', async ({
+  page,
+}) => {
+  const events: TraceEvent[] = [
+    ['enter', 'root', 'A.m', ['root'], 'A.ts', 2],
+    ['call', 'root', 'A.m', ['root'], 'A.ts', 3],
+    ['enter', 'child', 'B.m2', ['root', 'child'], 'B.ts', 2],
+    ['assign', 'child', 'B.m2', ['root', 'child'], 'B.ts', 3],
+    ['return', 'child', 'B.m2', ['root'], 'B.ts', 4],
+    ['assign', 'root', 'A.m', ['root'], 'A.ts', 4],
+    ['console', 'root', 'A.m', ['root'], 'A.ts', 5],
+    ['return', 'root', 'A.m', [], 'A.ts', 6],
+  ].map(([kind, callId, symbolId, stack, file, line], index) => ({
+    id: `event-${index + 1}`,
+    kind: kind as TraceEvent['kind'],
+    callId: callId as string,
+    symbolId: symbolId as string,
+    label: `${kind} ${symbolId}`,
+    source: {
+      file: file as string,
+      line: line as number,
+      endLine: line as number,
+    },
+    stack: stack as string[],
+    values: {},
+    locals: {
+      root: { result: index >= 5 ? 30 : undefined },
+      child: { sum: 30 },
+    },
+    certainty: 'mock',
+    ...(index === 2 ? { parentCallId: 'root', inputs: { a: 10, b: 20 } } : {}),
+    ...(index === 3 ? { after: { sum: 30 } } : {}),
+    ...(index === 4 ? { result: 30 } : {}),
+    ...(index === 5 ? { after: { result: 30 } } : {}),
+    ...(index === 6 ? { output: '30' } : {}),
+  }));
+  const session = await runtime.store.create(
+    traceToFlow(
+      {
+        version: 2,
+        provider: 'step-into-browser-fixture',
+        projectRoot: 'fixture',
+        sourceHash: 'step-into-fixture',
+        target: 'A.m',
+        scenario: {},
+        events,
+        diagnostics: ['Simulated browser fixture'],
+        truncated: false,
+        filesAnalyzed: 2,
+        cacheHits: 0,
+        sourceFiles: {
+          'A.ts':
+            'class A {\n  m() {\n    B.m2(10, 20);\n    const result = 30;\n    console.log(result);\n  }\n}',
+          'B.ts':
+            'class B {\n  m2(a, b) {\n    const sum = a + b;\n    return sum;\n  }\n}',
+        },
+      },
+      'A.m',
+    ),
+  );
+  await page.goto(`${runtime.baseUrl}/flow/${session.id}`);
+  await page.locator('#timeline').fill('2');
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
+  await page.getByRole('button', { name: 'Step into method' }).click();
+  await expect(page.locator('#progress')).toHaveText('3 / 8');
+  await expect(page.locator('#source')).toHaveText('B.ts');
+  await expect(page.locator('#snippet .executing-line')).toHaveAttribute(
+    'data-line',
+    '2',
+  );
+  await expect(page.locator('#frame-list')).toContainText('B.m2');
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await page.keyboard.press('i');
+  await expect(page.locator('#progress')).toHaveText('4 / 8');
+  await expect(page.locator('#snippet .executing-line')).toHaveAttribute(
+    'data-line',
+    '3',
+  );
+  await page.locator('#step-into').click();
+  await page.locator('#step-into').click();
+  await expect(page.locator('#progress')).toHaveText('6 / 8');
+  await expect(page.locator('#source')).toHaveText('A.ts');
+  await expect(page.locator('#snippet .executing-line')).toHaveAttribute(
+    'data-line',
+    '4',
+  );
+  await expect(page.locator('#console-output')).toHaveText('');
+  await page.locator('#step-into').click();
+  await expect(page.locator('#console-output')).toHaveText('30');
+  await page.locator('#previous').click();
+  await expect(page.locator('#console-output')).toHaveText('');
+  expect(requests).toEqual([]);
+});
+
 test('keyboard disclosure preserves playback and uses only prepared data', async ({
   page,
 }) => {

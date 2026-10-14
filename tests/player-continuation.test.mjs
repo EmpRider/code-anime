@@ -214,6 +214,137 @@ test('source, stepping and console remain synchronized across prepared session b
   }
 });
 
+test('step into follows the recorded child across prepared chunks and restores the caller', async () => {
+  const first = chunk(allEvents.slice(0, 2), undefined, 'chunk-two');
+  const { dom, window, get, requests } = await createPlayer(
+    () => chunk(allEvents.slice(2), 'chunk-one'),
+    first,
+  );
+  try {
+    moveTo(window, get, 2);
+    get('step-into').click();
+    await waitFor(() => get('progress').textContent === '3 / 8');
+    assert.equal(get('source').textContent, 'B.ts');
+    assert.equal(
+      get('snippet').querySelector('.executing-line')?.dataset.line,
+      '2',
+    );
+    assert.equal(get('frame-list').children.length, 2);
+    get('step-into').click();
+    assert.equal(get('progress').textContent, '4 / 8');
+    assert.equal(
+      get('snippet').querySelector('.executing-line')?.dataset.line,
+      '3',
+    );
+    assert.match(get('local-tree').textContent, /value: 3 → 4/);
+    get('step-into').click();
+    assert.equal(get('progress').textContent, '5 / 8');
+    assert.equal(get('source').textContent, 'B.ts');
+    get('step-into').click();
+    assert.equal(get('progress').textContent, '6 / 8');
+    assert.equal(get('source').textContent, 'A.ts');
+    assert.equal(get('console-output').textContent, '');
+    get('step-into').click();
+    assert.equal(get('progress').textContent, '7 / 8');
+    assert.equal(get('console-output').textContent, '30');
+    assert.equal(requests(), 1, 'stepping must reuse prepared trace data');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('step into respects invocation identity, caller-only stacks, and recursion', async () => {
+  const context = { values: { task: 'shared', thread: 'main' } };
+  const events = [
+    event(1, 'enter', 'A.m', 'root', ['root'], 'A.ts', 2, context),
+    event(2, 'call', 'A.m', 'root', ['root'], 'A.ts', 3, context),
+    event(3, 'enter', 'C.other', 'sibling', ['root'], 'A.ts', 3, {
+      ...context,
+      parentCallId: 'other-root',
+    }),
+    event(4, 'return', 'C.other', 'sibling', [], 'A.ts', 3, context),
+    event(5, 'enter', 'B.m2', 'child', ['root'], 'B.ts', 2, {
+      ...context,
+      parentCallId: 'root',
+    }),
+    event(6, 'assign', 'B.m2', 'child', ['root'], 'B.ts', 3, context),
+    event(7, 'enter', 'B.m2', 'recursive', ['root', 'child'], 'B.ts', 2, {
+      ...context,
+      parentCallId: 'child',
+    }),
+    event(
+      8,
+      'assign',
+      'B.m2',
+      'recursive',
+      ['root', 'child'],
+      'B.ts',
+      3,
+      context,
+    ),
+    event(
+      9,
+      'return',
+      'B.m2',
+      'recursive',
+      ['root', 'child'],
+      'B.ts',
+      4,
+      context,
+    ),
+    event(10, 'assign', 'B.m2', 'child', ['root'], 'B.ts', 3, context),
+    event(11, 'return', 'B.m2', 'child', ['root'], 'B.ts', 4, context),
+    event(12, 'return', 'A.m', 'root', [], 'A.ts', 6, context),
+  ];
+  const { dom, window, get, requests } = await createPlayer(
+    undefined,
+    chunk(events),
+  );
+  try {
+    moveTo(window, get, 2);
+    get('step-into').click();
+    assert.equal(get('progress').textContent, '5 / 12');
+    assert.equal(get('source').textContent, 'B.ts');
+    get('step-into').click();
+    assert.equal(get('progress').textContent, '6 / 12');
+    get('step-into').click();
+    assert.equal(get('progress').textContent, '7 / 12');
+    get('step-into').click();
+    assert.equal(get('progress').textContent, '8 / 12');
+    moveTo(window, get, 9);
+    get('step-into').click();
+    assert.equal(get('progress').textContent, '10 / 12');
+    assert.equal(requests(), 0);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('manual seek cancels pending step into without restarting analysis', async () => {
+  let resolveChunk;
+  const deferred = new Promise((resolve) => {
+    resolveChunk = resolve;
+  });
+  const { dom, window, get, requests } = await createPlayer(
+    () => deferred,
+    chunk(allEvents.slice(0, 2), undefined, 'chunk-two'),
+  );
+  try {
+    moveTo(window, get, 2);
+    get('step-into').click();
+    await waitFor(() => requests() === 1);
+    moveTo(window, get, 1);
+    resolveChunk(chunk(allEvents.slice(2), 'chunk-one'));
+    await waitFor(() => get('progress').textContent === '1 / 8');
+    // Let the awaiting navigation finish; it must not overwrite the seek.
+    await delay(10);
+    assert.equal(get('progress').textContent, '1 / 8');
+    assert.equal(requests(), 1);
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('step-over traverses multiple prepared chunks and backward navigation restores state', async () => {
   const first = chunk(allEvents.slice(0, 2), undefined, 'chunk-two');
   const { dom, window, get, requests } = await createPlayer(

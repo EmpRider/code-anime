@@ -1,7 +1,7 @@
 # Execution visualizer acceptance audit
 
-Checkpoint: 2026-10-14, branch `codex/async-step-accuracy` based on merged
-PR #6 (`main` at `8e1531f`).
+Checkpoint: 2026-10-14, branch `codex/step-into-debugger` based on merged
+PRs #6 and #7 (`main` at `c3990b6`).
 Multilingual source highlighting, a persisted branching-tree performance
 fixture, recorded Python execution, and experimental Node.js JavaScript
 recording are covered by tests.
@@ -9,6 +9,28 @@ recording are covered by tests.
 Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
+
+## Step Into debugger continuation (October 14)
+
+Added a dedicated Step Into control and keyboard `I` shortcut alongside Step
+Over (`O`) and Step Out (`U`). Stepping uses the current prepared invocation
+identity: it moves to that invocation's next recorded event or to the entry of
+its directly invoked child, skipping unrelated interleaved tasks. Caller-only
+entry stacks, recursive invocations, and returns that retain the exiting frame
+are handled by the same attribution logic as existing Step Over/Out. The
+single existing `seek()` cursor controls source, call stack, values, and output;
+stepping only loads already-prepared continuation sessions. A manual seek
+invalidates pending asynchronous navigation.
+
+Regression tests verify cross-file source line changes, caller restoration,
+return values and output history, nested recursion, same-scheduler siblings,
+caller-only stacks, continuation boundaries, keyboard navigation, and
+cancelled navigation. The focused continuation suite passed **30/30**;
+`npm run check` passed with **165 core tests, one optional CodeGraph skip**,
+typecheck, build, and formatting. The focused new Chromium browser test passed.
+The full browser suite and GitHub Actions remain separate gates, as do broader
+cross-language debugger and assistive-technology acceptance under requirements
+10, 14, 25, 35, and 37.
 
 ## Same-scheduler async stepping follow-up (October 14)
 

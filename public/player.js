@@ -2337,6 +2337,44 @@ function steppingInvocation(event) {
   return invocations.has(event.callId) ? event.callId : event.stack?.at(-1);
 }
 // Stepping is computed from the preprocessed invocation snapshots only.
+// Step Into follows the next observed event in the selected invocation or the
+// entry of its direct child. Unrelated asynchronous calls can be interleaved
+// between those events, even on the same thread or scheduler task.
+$('step-into').onclick = () => {
+  pause();
+  const version = navigationVersion;
+  const requestedFlow = flow;
+  const events = flow?.trace?.events;
+  if (!events || !cursor) return seek(cursor + 1);
+  // A completed return belongs to its surviving caller; a caller-only entry
+  // stack still belongs to the entering invocation itself.
+  const callId = steppingInvocation(events[cursor - 1]);
+  if (!callId) return seek(cursor + 1);
+  void (async () => {
+    let i = cursor;
+    while (true) {
+      for (; i < events.length; i++) {
+        const next = events[i];
+        // Step Into follows one recorded event in this frame, or the entry
+        // of a directly invoked child. Sibling tasks (even if they have the
+        // same scheduler labels) do not represent progress in this frame.
+        if (
+          next.callId !== callId &&
+          !(next.kind === 'enter' && parentInvocationId(next) === callId)
+        )
+          continue;
+        if (version === navigationVersion && flow === requestedFlow)
+          seek(i + 1);
+        return;
+      }
+      if (version !== navigationVersion || flow !== requestedFlow) return;
+      if (!flow.nextSessionId || !(await extendThrough(events.length + 1)))
+        return version === navigationVersion && flow === requestedFlow
+          ? seek(events.length)
+          : undefined;
+    }
+  })().catch(() => {});
+};
 $('step-over').onclick = () => {
   pause();
   const version = navigationVersion;
@@ -2754,6 +2792,9 @@ document.addEventListener('keydown', (e) => {
     ArrowRight: () => seek(cursor + 1),
     Home: () => seek(0),
     End: () => seek(flow.steps.length),
+    i: () => $('step-into').click(),
+    o: () => $('step-over').click(),
+    u: () => $('step-out').click(),
     '/': () => {
       if (window.matchMedia('(max-width: 650px)').matches)
         document.querySelector('button[data-mobile-view="trace"]').click();
