@@ -58,6 +58,105 @@ test.afterAll(async () => {
   await runtime?.close();
 });
 
+test('source-line navigation refreshes loaded visits without replacing original source', async ({
+  page,
+}) => {
+  const source = 'function run() {\n  let total = 0;\n  return total;\n}';
+  const recorded = (
+    id: number,
+    kind: TraceEvent['kind'],
+    line: number,
+  ): TraceEvent => ({
+    id: `event-${id}`,
+    kind,
+    callId: 'call-main',
+    symbolId: 'run',
+    label: `step ${id}`,
+    source: { file: 'run.js', line, endLine: line },
+    values: {},
+    locals: { 'call-main': { total: id } },
+    stack: ['call-main'],
+    certainty: 'mock',
+  });
+  const chunks = [
+    [recorded(1, 'enter', 1), recorded(2, 'assign', 2)],
+    [recorded(3, 'assign', 2), recorded(4, 'return', 3)],
+  ];
+  let previousSessionId: string | undefined;
+  let firstSessionId = '';
+  for (const [index, events] of chunks.entries()) {
+    const session = await runtime.store.create(
+      traceToFlow(
+        {
+          version: 2,
+          provider: 'source-navigation-fixture',
+          projectRoot: 'fixture',
+          sourceHash: 'source-navigation',
+          target: 'run',
+          scenario: {},
+          events,
+          diagnostics: ['Synthetic continuation fixture'],
+          truncated: index === 0,
+          filesAnalyzed: 1,
+          cacheHits: 0,
+          sourceFiles: { 'run.js': source },
+          simulation: {
+            mode: 'ai-mock',
+            complete: index === 1,
+            coverage: 'Prepared source visit test',
+            evidenceIds: [],
+            ...(previousSessionId ? { previousSessionId } : {}),
+          },
+        },
+        'run',
+      ),
+    );
+    firstSessionId ||= session.id;
+    previousSessionId = session.id;
+  }
+  await page.goto(`${runtime.baseUrl}/flow/${firstSessionId}`);
+  const requests: string[] = [];
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('request', (request) => {
+    if (request.url().includes('/api/flow/')) requests.push(request.url());
+  });
+  const row = page.locator('#snippet .code-row[data-line="2"]');
+  const jump = row.locator('.code-jump');
+  await expect(jump).toHaveAccessibleName(
+    'Next recorded execution of line 2 (1 loaded visit)',
+  );
+  await expect(row.locator('.code-text')).toHaveText('  let total = 0;');
+  await row.evaluate((node) => (node.dataset.preserved = 'yes'));
+  await jump.press('Enter');
+  await expect(page.locator('#progress')).toHaveText('2 / 2');
+  await page.locator('#next').click();
+  await expect(page.locator('#timeline')).toHaveAttribute('max', '4');
+  await expect(page.locator('#progress')).toHaveText('3 / 4');
+  await expect(row).toHaveAttribute('data-preserved', 'yes');
+  await expect(jump).toHaveAccessibleName(
+    'Next recorded execution of line 2 (2 loaded visits)',
+  );
+  await expect(row.locator('.code-text')).toHaveText('  let total = 0;');
+  await jump.press('Enter');
+  await expect(page.locator('#progress')).toHaveText('2 / 4');
+  await jump.press('Enter');
+  await expect(page.locator('#progress')).toHaveText('3 / 4');
+  await expect(jump).toBeFocused();
+  await jump.press('Shift+Enter');
+  await expect(page.locator('#progress')).toHaveText('2 / 4');
+  await jump.press('Shift+Space');
+  await expect(page.locator('#progress')).toHaveText('3 / 4');
+  await jump.click({ modifiers: ['Shift'] });
+  await expect(page.locator('#progress')).toHaveText('2 / 4');
+  await expect(jump).toHaveAttribute(
+    'aria-description',
+    /previous recorded visit/,
+  );
+  expect(requests).toHaveLength(1);
+  expect(errors).toEqual([]);
+});
+
 test('legacy handoffs show an unverified overview before playback on desktop and mobile', async ({
   page,
 }) => {
@@ -2301,6 +2400,26 @@ test('observed JavaScript recording replays actual source lines, locals and outp
     await expect(page.locator('#local-tree')).toContainText('a: 10');
     await expect(page.locator('#local-tree')).toContainText('b: 20');
     await expect(page.locator('#console-output')).toHaveText('');
+    const addVisits = recorded.events
+      .map((event, index) => ({ event, step: index + 1 }))
+      .filter(
+        ({ event }) =>
+          event.source?.file === 'node-main.cjs' && event.source.line === 2,
+      );
+    const addJump = page.locator(
+      '#snippet .code-row[data-line="2"] .code-jump',
+    );
+    await expect(addJump).toHaveAccessibleName(
+      `Next recorded execution of line 2 (${addVisits.length} loaded visit${addVisits.length === 1 ? '' : 's'})`,
+    );
+    await addJump.press('Enter');
+    await expect(page.locator('#progress')).toHaveText(
+      `${addVisits.find(({ step }) => step > entryIndex + 1)?.step ?? addVisits[0]!.step} / ${recorded.events.length}`,
+    );
+    await expect(page.locator('.executing-line')).toHaveAttribute(
+      'data-line',
+      '2',
+    );
     await page.locator('#timeline').fill(String(outputIndex + 1));
     await expect(page.locator('#source')).toHaveText(
       'No source location recorded',
@@ -2400,6 +2519,22 @@ test('verified TypeScript source map follows the original lines in real browser 
     await expect(page.locator('.executing-line')).toContainText(
       'const result = value * 2;',
     );
+    const mappedVisits = recorded.events
+      .map((event, index) => ({ event, step: index + 1 }))
+      .filter(
+        ({ event }) =>
+          event.source?.file === 'src/entry.ts' && event.source.line === 2,
+      );
+    const mappedJump = page.locator(
+      '#snippet .code-row[data-line="2"] .code-jump',
+    );
+    await mappedJump.press('Enter');
+    await expect(page.locator('#progress')).toHaveText(
+      `${mappedVisits.find(({ step }) => step > mappedIndex + 1)?.step ?? mappedVisits[0]!.step} / ${recorded.events.length}`,
+    );
+    await expect(page.locator('.executing-line .code-text')).toContainText(
+      'const result = value * 2;',
+    );
     const finalIndex = Number(
       await page.locator('#timeline').getAttribute('max'),
     );
@@ -2472,6 +2607,53 @@ test('recorded five-iteration loop revisits original lines and restores each his
     );
     const requests: string[] = [];
     page.on('request', (request) => requests.push(request.url()));
+    const visits = trace.events
+      .map((event, index) => ({ event, step: index + 1 }))
+      .filter(
+        ({ event }) =>
+          event.source?.file === 'five-iterations.py' &&
+          event.source.line === 3,
+      );
+    expect(visits.length).toBeGreaterThanOrEqual(5);
+    const jump = page.locator('#snippet .code-row[data-line="3"] .code-jump');
+    await expect(jump).toHaveAccessibleName(
+      `Next recorded execution of line 3 (${visits.length} loaded visits)`,
+    );
+    for (const { step } of visits) {
+      await jump.press('Enter');
+      await expect(page.locator('#progress')).toHaveText(
+        `${step} / ${trace.events.length}`,
+      );
+      await expect(page.locator('#snippet .executing-line')).toHaveAttribute(
+        'data-line',
+        '3',
+      );
+      await expect(jump).toBeFocused();
+    }
+    await jump.press('Shift+Enter');
+    await expect(page.locator('#progress')).toHaveText(
+      `${visits[visits.length - 2]!.step} / ${trace.events.length}`,
+    );
+    await jump.press('Shift+Enter');
+    await expect(page.locator('#progress')).toHaveText(
+      `${visits[visits.length - 3]!.step} / ${trace.events.length}`,
+    );
+    await jump.press('Enter');
+    await expect(page.locator('#progress')).toHaveText(
+      `${visits[visits.length - 2]!.step} / ${trace.events.length}`,
+    );
+    await jump.press('Enter');
+    await expect(page.locator('#progress')).toHaveText(
+      `${visits[visits.length - 1]!.step} / ${trace.events.length}`,
+    );
+    // A line executed more than once cycles through its recorded visits.
+    // Source inspection can be resumed from a line even if Follow was off.
+    await page.locator('#follow').uncheck();
+    await jump.press('Enter');
+    await expect(page.locator('#follow')).toBeChecked();
+    await expect(page.locator('#progress')).toHaveText(
+      `${visits[0]!.step} / ${trace.events.length}`,
+    );
     for (const { event, step } of body) {
       await page.locator('#timeline').fill(String(step));
       await expect(page.locator('#source')).toHaveText('five-iterations.py');

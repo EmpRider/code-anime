@@ -33,6 +33,7 @@ let renderedMethod;
 const expandedCalls = new Set();
 let shownSource = '';
 let shownFirstLine = 1;
+let shownSourceVisitRevision = -1;
 let manualSourceWindow;
 const sourceRows = new Map();
 let highlightedSourceRow;
@@ -47,6 +48,7 @@ let lastConsoleText = '';
 let consolePageBack = 0;
 const CONSOLE_PAGE_SIZE = 300;
 const sourceLines = new Map();
+const sourceLineVisits = new Map();
 const sourceCache = new Map();
 const sourceSyntaxCache = new Map();
 const consoleEvents = [];
@@ -298,6 +300,7 @@ function buildNodes(preserveInspection = false) {
     consolePageBack = 0;
   }
   sourceLines.clear();
+  sourceLineVisits.clear();
   // Continuations are checked for source-content equality before they are
   // appended. Keep prepared lines and lexical context for those files;
   // replaying a new chunk must not re-tokenize multi-megabyte sources.
@@ -378,6 +381,8 @@ function buildNodes(preserveInspection = false) {
     frameSources.get(event.callId).push(index);
     const key = event.source.file + ':' + event.source.line;
     if (!sourceLines.has(key)) sourceLines.set(key, index + 1);
+    if (!sourceLineVisits.has(key)) sourceLineVisits.set(key, []);
+    sourceLineVisits.get(key).push(index + 1);
   });
   clearConnection();
   $('canvas').replaceChildren();
@@ -932,6 +937,24 @@ function precedingIndexedEvent(index, key, before) {
   }
   return low ? flow.trace.events[positions[low - 1]] : undefined;
 }
+// The source editor navigates the same prepared replay as the timeline. Loop
+// lines can be visited repeatedly, including by different call frames; visit
+// order must be based on recorded sequence numbers, never source line order.
+function adjacentSourceVisit(key, backward = false) {
+  const visits = sourceLineVisits.get(key);
+  if (!visits?.length) return;
+  let low = 0;
+  let high = visits.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (visits[middle] < cursor || (!backward && visits[middle] === cursor))
+      low = middle + 1;
+    else high = middle;
+  }
+  return backward
+    ? (visits[low - 1] ?? visits.at(-1))
+    : (visits[low] ?? visits[0]);
+}
 function renderSource(state, event, initial = false) {
   const trace = flow.trace;
   if (!initial && !$('follow').checked && !pinnedCallId)
@@ -1026,10 +1049,16 @@ function renderSource(state, event, initial = false) {
     shownFirstLine !== firstLine ||
     !$('snippet').hasChildNodes();
   let focusedSourceGutter;
+  let focusedSourceJump;
   if (needsBuild) {
     const focused = document.activeElement;
     if ($('snippet').contains(focused) && focused?.matches('.code-gutter'))
       focusedSourceGutter = {
+        line: Number(focused.parentElement.dataset.line),
+        sameSource: sourceKey === shownSource,
+      };
+    if ($('snippet').contains(focused) && focused?.matches('.code-jump'))
+      focusedSourceJump = {
         line: Number(focused.parentElement.dataset.line),
         sameSource: sourceKey === shownSource,
       };
@@ -1074,6 +1103,48 @@ function renderSource(state, event, initial = false) {
   $('source-empty').hidden = Boolean(
     sourceCode !== undefined || sourceEvent?.snippet,
   );
+  if (needsBuild || shownSourceVisitRevision !== traceRevision) {
+    shownSourceVisitRevision = traceRevision;
+    // New prepared continuations can add visits to lines in a source window
+    // already on screen. Refresh only those row controls, leaving the source
+    // tokens and editor scroll position intact.
+    for (const [line, row] of sourceRows) {
+      const key = location.file + ':' + line;
+      const visits = sourceLineVisits.get(key);
+      if (!visits?.length) continue;
+      let jump = row.querySelector('.code-jump');
+      if (!jump) {
+        // Keep the source and its syntax tokens as selectable source text.
+        // This small action occupies the existing source indent instead of
+        // turning the user's original statement into a button.
+        jump = text('button', '', 'code-jump');
+        jump.type = 'button';
+        row.insertBefore(jump, row.querySelector('.code-text'));
+      }
+      jump.title = `Next recorded execution of line ${line} (${visits.length} loaded visit${visits.length === 1 ? '' : 's'})`;
+      jump.setAttribute('aria-label', jump.title);
+      jump.setAttribute(
+        'aria-description',
+        'Shift+Enter or Shift+Space jumps to the previous recorded visit; Shift+click works with a pointer.',
+      );
+      const navigate = (backward) => {
+        const position = adjacentSourceVisit(key, backward);
+        if (position === undefined) return;
+        // Use the selected event's original frame and source location.
+        $('follow').checked = true;
+        pinnedCallId = undefined;
+        manualSourceWindow = undefined;
+        seek(position);
+      };
+      jump.onclick = (event) => navigate(event.shiftKey);
+      jump.onkeydown = (event) => {
+        if (!event.shiftKey || (event.key !== 'Enter' && event.key !== ' '))
+          return;
+        event.preventDefault();
+        navigate(true);
+      };
+    }
+  }
   if (needsBuild || shownBreakpointVersion !== sourceBreakpointVersion) {
     shownBreakpointVersion = sourceBreakpointVersion;
     // A line may run several times (for example, inside a loop). The gutter
@@ -1166,6 +1237,14 @@ function renderSource(state, event, initial = false) {
       (button) => button && !button.disabled,
     );
     (target ?? $('follow')).focus({ preventScroll: true });
+  }
+  if (focusedSourceJump) {
+    const target = focusedSourceJump.sameSource
+      ? sourceRows.get(focusedSourceJump.line)?.querySelector('.code-jump')
+      : undefined;
+    (target ?? active?.querySelector('.code-jump') ?? $('follow')).focus({
+      preventScroll: true,
+    });
   }
   if (
     sourceStackCalls?.length !== state.stack.length ||

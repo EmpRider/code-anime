@@ -9,10 +9,51 @@ Authority: the original 37 numbered requirements in the attached
 `pasted-text-1.txt`. This checklist tracks the original scope; it does not redefine
 completion around existing tests. **The overall implementation is incomplete.**
 
+## Final local verification (October 14)
+
+After source-visit forward/backward navigation and explicit Python exit handling,
+`npm run check` passed TypeScript typechecking, **149 core tests** with **one
+optional CodeGraph integration skip**, production build, and Prettier.
+`npm run test:browser` passed **all 51 Chromium tests**, including real Python
+loop navigation, JavaScript and mapped TypeScript source navigation, stored
+continuations, deep recursion, and large observed execution stress.
+`npm run package:check` passed installed CLI, MCP handshake, player assets,
+and flow API verification. These are bounded test results, not acceptance of
+all 37 requirements or every runtime language and environment.
+
 Evidence labels below distinguish tested behavior from inspection and missing
 verification. A test of one scenario does not prove all languages, inputs, or
 execution paths. Previous test results are checkpoint evidence, not promises
 about future changes.
+
+## Recorded source-line navigation (October 14)
+
+The captured original-source editor now provides a compact, keyboard-accessible
+navigation control for lines with recorded execution events. Activating it seeks
+to the next _loaded_ visit of that source line in recorded event order, cycling
+to the first recorded visit after the last one. Shift+Enter, Shift+Space, or
+Shift+click seeks to the previous recorded visit, wrapping from the first to
+the final loaded visit. Both directions use indexed visits and the existing
+shared `seek` path, which updates execution highlighting, stack, variables,
+console, and timeline;
+navigation re-enables Follow and clears manual source-window inspection.
+Original syntax-highlighted source remains selectable and separate from the
+navigation control. No AI preprocessing is requested by this interaction.
+
+The focused real Python five-iteration recording validates every recorded
+visit to the repeated loop line, forward and backward navigation, keyboard
+focus, wraparound, automatic Follow,
+and zero new requests during navigation. A separate two-part prepared trace
+validates that later continuation imports update visit counts and source-line
+navigation without replacing displayed source rows or re-tokenizing the code.
+The 51-test Chromium suite, 148 passing core tests (one optional CodeGraph
+skip), TypeScript typecheck, build, Prettier, and packed-package verification
+passed before the follow-up reverse-visit navigation change. Both focused
+reverse-navigation and recorded-loop Chromium tests passed after that change;
+the full suite remains a separate gate until repeated on the final changes.
+This improves bounded coverage for requirements 10–14, 24–25, 28, 30–31, and
+35–36. Cross-language semantics, screen-reader acceptance, and full rendered
+VisualJS interaction parity remain open.
 
 ## Browse complete original source during inspection (October 13)
 
@@ -588,7 +629,12 @@ realistic paint/heap performance acceptance requirements.
    infrastructure filtering, and worker-thread coverage remain unverified.
 3. **Understand entry through completion — partial.**
    Python recording tests exercise calls, locals, returns, loops, branches,
-   exceptions, generators, and asyncio. JavaScript tests now cover CommonJS and
+   exceptions, generators, and asyncio. The Python recorder now distinguishes
+   deliberate successful `sys.exit(0)` and `sys.exit(None)` termination from a
+   nonzero `SystemExit`: successful exits are complete recordings, while nonzero
+   exits remain explicitly partial. A real execution test verifies both
+   outcomes, no code executed after the exit, the original console output,
+   and no invented normal return from the unwound module. JavaScript tests now cover CommonJS and
    ES modules, debugger-observed nested calls and locals, loops, 37 levels of
    recursion, timers, output, nonzero exit, and event-budget truncation.
    V8-reported JavaScript throws and entry into catch scopes are now tested as
@@ -1070,7 +1116,8 @@ realistic paint/heap performance acceptance requirements.
     regressions pass, but full rendered visual review and keyboard/screen-reader
     validation are still required.
 37. **Integrated implementation and final delivery — in progress.**
-    Implementation remains on `codex/execution-visualizer-improvements`.
+    Implementation continues on `codex/recorded-stress-performance` (stacked
+    PR #6).
     Final delivery requires closing the gaps above and revalidating every
     supported language and primary interaction, including rendered visual review.
 

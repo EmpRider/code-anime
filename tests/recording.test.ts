@@ -170,6 +170,59 @@ test('records actual nested calls, loop states, executed branches, returns and c
   }
 });
 
+test('Python intentional successful exits are complete, while nonzero exits remain partial', async () => {
+  const files = {
+    'exit-zero.py':
+      'import sys\nprint("before")\nsys.exit(0)\nprint("never")\n',
+    'exit-none.py':
+      'import sys\nprint("before")\nsys.exit(None)\nprint("never")\n',
+    'exit-two.py': 'import sys\nprint("before")\nsys.exit(2)\nprint("never")\n',
+  };
+  const f = await fixture(files);
+  try {
+    for (const [entry, expectedComplete] of [
+      ['exit-zero.py', true],
+      ['exit-none.py', true],
+      ['exit-two.py', false],
+    ] as const) {
+      const job = await f.service.run({
+        action: 'start',
+        language: 'python',
+        projectRoot: f.root,
+        entry,
+      });
+      const result = await wait(f.service, job.jobId);
+      assert.equal(result.complete, expectedComplete, entry);
+      assert.match(result.diagnostics!.join(' '), /SystemExit/);
+      if (!expectedComplete)
+        assert.match(result.diagnostics!.join(' '), /exit code: 2/);
+      const { events } = await allEvents(f.store, result.sessionId!);
+      assert.equal(
+        events
+          .filter((event) => event.kind === 'console')
+          .map((event) => event.output)
+          .join(''),
+        'before\n',
+      );
+      assert.ok(
+        !events.some(
+          (event) => event.source?.line === 4 && event.source.file === entry,
+        ),
+      );
+      assert.ok(
+        !events.some(
+          (event) => event.kind === 'return' && event.source?.file === entry,
+        ),
+      );
+      const saved = (await f.store.get(result.sessionId!))!.flow.trace!;
+      assert.equal(saved.recording?.complete, expectedComplete);
+      assert.equal(saved.truncated, !expectedComplete);
+    }
+  } finally {
+    await f.close();
+  }
+});
+
 test('records observed JavaScript calls, source steps, loop values and output across user files', async () => {
   const main = [
     "const { add } = require('./helper.cjs');",

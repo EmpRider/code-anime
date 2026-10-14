@@ -260,7 +260,25 @@ try:
 except Boundary as error:
     reason = str(error)
 except SystemExit as error:
-    reason = 'Program exited via SystemExit; exit code: ' + str(error.code)
+    # A zero/None SystemExit is a normal, fully observed Python termination.
+    # The exception unwinds user frames, so it must not create normal returns,
+    # but the execution is complete when it deliberately ends with success.
+    exit_code = error.code
+    complete = exit_code is None or (
+        type(exit_code) in (int, bool) and exit_code == 0
+    )
+    if complete:
+        reason = 'Program terminated normally via SystemExit(' + (
+            'None' if exit_code is None else '0'
+        ) + ')'
+    else:
+        # Avoid invoking __str__ on a user-defined exception payload.
+        described = (
+            str(exit_code)[:200]
+            if type(exit_code) in (int, bool, str)
+            else type(exit_code).__name__
+        )
+        reason = 'Program exited via SystemExit; exit code: ' + described
 except BaseException as error:
     reason = 'Program terminated with ' + type(error).__name__
 finally:

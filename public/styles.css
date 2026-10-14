@@ -1606,6 +1606,41 @@ main {
   padding: 0 18px;
   tab-size: 2;
 }
+.code-jump {
+  position: sticky;
+  left: 62px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 18px;
+  margin-right: -18px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #c3b4ff;
+  font: inherit;
+  min-height: 22px;
+  opacity: 0;
+  cursor: pointer;
+}
+.code-jump::before {
+  content: '↪';
+}
+.code-row:hover .code-jump,
+.code-row.executing-line .code-jump,
+.code-row:focus-within .code-jump,
+.code-jump:focus-visible {
+  background: #a18ce91e;
+  opacity: 1;
+}
+@media (hover: none) {
+  .code-jump {
+    opacity: 0.8;
+  }
+}
 .token-keyword {
   color: #bb9dff;
 }
