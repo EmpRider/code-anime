@@ -20,6 +20,25 @@ assets, and flow API. `git diff --check` reported no whitespace errors. These
 results verify the local checkout only; CI for the new changes and the wider
 37-requirement objective remain separate acceptance gates.
 
+## Ubuntu Node 22 Inspector throughput follow-up (October 14)
+
+At commit `3ff43ad`, the PR-triggered CI run `38519284154` passed all five
+jobs. The push-triggered run `38519279732` failed its Ubuntu Node 22 check
+twice, although its other four jobs passed. Both failures occurred in the real
+2.2 MiB JavaScript multi-module recording: the recorder reached the unchanged
+60-second budget after 4,206 and 5,791 observed events respectively, saved an
+explicitly incomplete trace, and did not satisfy the test's complete-execution
+assertion. Diagnostics show Inspector traffic slowing to approximately 40 ms
+per response during part of the run.
+
+The local follow-up permits at most three concurrent read-only Linux Inspector
+ACK requests, and emits extra pulses only when the oldest response has been
+pending for more than 10 ms. Normal fast responses continue with one request.
+The process budget, event assertions, source and value provenance, and
+incomplete-trace semantics are unchanged. This is an unverified performance
+hypothesis until a new cross-platform CI run exercises it; prior reruns alone
+do not establish the root cause.
+
 ## Grouped class/method Execution Path (October 14)
 
 The prepared execution path now offers a compact class/method invocation map
@@ -33,12 +52,19 @@ pages. The method-map layout cannot collapse the main execution list to zero
 height when expanded. When interleaved async work resumes an earlier invocation,
 Follow locates the page containing that event's actual call ID instead of the
 most recently entered invocation.
+Recorded symbol IDs also retain file provenance: `module.py:Widget.run` groups
+under that module's Widget class, while `main.cjs:add` displays `add()` under
+the recorded file. Source filename extensions are not mistaken for method
+separators, and same-named classes from different modules remain distinct.
 
 Focused unit tests cover invocation grouping, caller-only entry stacks, and
 paired call/entry events. Chromium regressions cover selection/disclosure,
 bounded pagination across 21 child invocations, keyboard navigation, timeline
 synchronization (including an earlier async invocation resuming across a page
 boundary), and no additional analysis requests during interaction.
+Additional unit fixtures cover Python/JavaScript file-qualified symbols and
+namespace separators, and a real Node.js browser recording checks its method
+card and source-file group.
 After these changes, the complete local `npm run check` finished with **157
 passed tests, one optional CodeGraph skip, zero failures**, plus typecheck,
 build, and formatting verification. The full Chromium run passed **59 tests**;

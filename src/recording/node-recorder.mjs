@@ -1387,7 +1387,11 @@ async function connect(url) {
     // command to supply an outgoing ACK while inspection or stepping is waiting.
     // Limit pulses after a step so long-running user computations stay idle.
     const connectedSocket = socket;
-    let outstanding = false;
+    // A stalled ACK pulse can itself take ~40 ms on Linux. Allow at most two
+    // additional pulses only after the oldest has waited longer than 10 ms,
+    // so a delayed first reply cannot suppress all outgoing ACK traffic.
+    // Fast replies continue to use a single in-flight read-only request.
+    const ackInFlight = new Set();
     let supported = true;
     const ackPulse = setInterval(() => {
       if (
@@ -1399,7 +1403,7 @@ async function connect(url) {
         clearInterval(ackPulse);
         return;
       }
-      if (!inspected || outstanding || !supported) return;
+      if (!inspected || !supported) return;
       const pendingWork = [...requests.values()].some(
         (pending) => pending.method !== 'Runtime.getIsolateId',
       );
@@ -1407,13 +1411,16 @@ async function connect(url) {
         diagnosticPhase === 'awaiting next pause' &&
         performance.now() - lastStepSentAt < 100;
       if (!pendingWork && !recentStep) return;
-      outstanding = true;
+      if (ackInFlight.size >= 3) return;
+      const now = performance.now();
+      if (ackInFlight.size && now - Math.min(...ackInFlight) < 10) return;
+      ackInFlight.add(now);
       void request('Runtime.getIsolateId').then(
         () => {
-          outstanding = false;
+          ackInFlight.delete(now);
         },
         () => {
-          outstanding = false;
+          ackInFlight.delete(now);
           // Older Inspector versions may lack this optional method.
           supported = false;
         },
