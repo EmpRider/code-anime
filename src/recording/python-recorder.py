@@ -13,6 +13,7 @@ import threading
 import dis
 import itertools
 import asyncio
+import types
 
 root, entry, max_events, max_bytes, *arguments = sys.argv[1:]
 root = os.path.realpath(root)
@@ -24,6 +25,7 @@ suspended = set()
 tasks = {}
 sources = {}
 paths = {}
+project_classes = {}
 count = 0
 calls = 0
 size = 0
@@ -33,7 +35,7 @@ source_bytes = 0
 MAX_SOURCE_FILE_BYTES = 2 * 1024 * 1024
 MAX_SOURCE_TOTAL_BYTES = 4 * 1024 * 1024
 active = True
-scope = "Main-thread Python user code for this input, including generator/coroutine suspension and single-thread asyncio tasks. Line events show state BEFORE the highlighted line; return events show state after returning. Coroutine await/suspend events are scheduler transitions, not awaited results. Async task stacks are observed Python frames, not inferred causal chains. Native/dependency internals, additional threads or processes, binary console writes and object internals are not captured. Values are bounded; unavailable fields are explicitly marked."
+scope = "Main-thread Python user code for this input, including generator/coroutine suspension and single-thread asyncio tasks. Line events show state BEFORE the highlighted line; return events show state after returning. User-defined instance fields and native slots are snapshotted without invoking application accessors; methods and dependency object internals remain opaque. Exception arguments are observed without invoking user-defined formatting. Coroutine await/suspend events are scheduler transitions, not awaited results. Async task stacks are observed Python frames, not inferred causal chains. Native/dependency internals, additional threads or processes, and binary console writes are not captured. Values are bounded; unavailable fields are explicitly marked."
 
 
 class Boundary(BaseException):
@@ -50,6 +52,86 @@ def send(message, budget=True):
     protocol.flush()
 
 
+def instance_properties(item, kind, depth, seen):
+    """Read native instance storage without invoking application accessors.
+
+    The exact builtin dict and member/getset descriptors expose stored fields;
+    arbitrary __dict__ properties, __getattribute__, and slot-like descriptors
+    supplied by user code must never run during a debugger snapshot.
+    """
+    properties = {}
+    omitted = False
+    classes = type.__getattribute__(kind, '__mro__')
+    for cls in classes:
+        definitions = type.__getattribute__(cls, '__dict__')
+        descriptor = definitions.get('__dict__')
+        if type(descriptor) is not types.GetSetDescriptorType:
+            continue
+        try:
+            stored = descriptor.__get__(item, kind)
+        except (AttributeError, TypeError):
+            continue
+        if type(stored) is dict:
+            for name, child in stored.items():
+                if type(name) is not str or name in ('__dict__', '__weakref__'):
+                    continue
+                if len(properties) >= 40:
+                    omitted = True
+                    break
+                properties[name] = value(child, depth + 1, seen)
+        break
+    for cls in classes:
+        for name, descriptor in type.__getattribute__(cls, '__dict__').items():
+            if type(descriptor) is not types.MemberDescriptorType or name in ('__dict__', '__weakref__') or name in properties:
+                continue
+            if len(properties) >= 40:
+                omitted = True
+                break
+            try:
+                child = descriptor.__get__(item, kind)
+            except AttributeError:  # Uninitialized slot.
+                continue
+            properties[name] = value(child, depth + 1, seen)
+        if omitted:
+            break
+    return properties, omitted
+
+
+def is_project_class(kind):
+    # Do not recursively snapshot runtime and dependency objects that happen
+    # to be reachable from a user's locals (modules, functions, import state).
+    # Their internals are outside the recorded user-code execution scope.
+    identity = id(kind)
+    cached = project_classes.get(identity)
+    if cached is not None and cached[0] is kind:
+        return cached[1]
+    module_name = type.__getattribute__(kind, '__module__')
+    if module_name == '__main__':
+        included = True  # runpy executes the requested entry as __main__.
+    else:
+        module = sys.modules.get(module_name)
+        filename = module.__dict__.get('__file__') if type(module) is types.ModuleType else None
+        if type(filename) is str:
+            try:
+                actual = os.path.realpath(filename)
+                rel = os.path.relpath(actual, root)
+                included = rel != '..' and not rel.startswith('..' + os.sep) and not os.path.isabs(rel)
+                included = included and not any(
+                    part in {'.git', '.venv', 'venv', 'node_modules', 'site-packages'}
+                    for part in rel.split(os.sep)
+                )
+            except (OSError, ValueError):
+                # A Windows import may reside on another drive, for which
+                # relpath raises ValueError; its internals are out of scope.
+                included = False
+        else:
+            included = False
+    # Retain the class reference so dynamically generated classes cannot reuse
+    # a cached id with a different origin during a long recording.
+    project_classes[identity] = (kind, included)
+    return included
+
+
 def value(item, depth=0, seen=None):
     kind = type(item)
     if item is None or kind is bool:
@@ -60,14 +142,25 @@ def value(item, depth=0, seen=None):
         return item if math.isfinite(item) else {'$float': str(item)}
     if kind is str:
         return item if len(item) <= 2000 else {'$preview': item[:2000], '$unavailable': 'String exceeds 2000 characters'}
-    if kind not in (list, tuple, dict):
-        return {'$type': kind.__name__, '$unavailable': 'Opaque value; no user repr or properties invoked'}
     if depth >= 4:
         return {'$unavailable': 'Value nesting exceeds snapshot budget'}
     seen = set() if seen is None else seen
     if id(item) in seen:
         return {'$unavailable': 'Repeated or cyclic reference'}
     seen = seen | {id(item)}
+    if kind is not list and kind is not tuple and kind is not dict:
+        name = type.__getattribute__(kind, '__name__')
+        if not is_project_class(kind):
+            return {'$type': name, '$unavailable': 'Dependency or runtime object internals not inspected'}
+        properties, omitted = instance_properties(item, kind, depth, seen)
+        if properties:
+            return {
+                '$type': name,
+                'properties': properties,
+                '$unavailable': ('Additional instance fields omitted' if omitted else
+                                 'Methods, descriptors and internal state not inspected'),
+            }
+        return {'$type': name, '$unavailable': 'Opaque value; no user repr or accessors invoked'}
     if kind is dict:
         result = {}
         for key, child in itertools.islice(item.items(), 40):
@@ -209,7 +302,14 @@ def trace(frame, event, arg):
         if event == 'line':
             emit(frame, 'statement')
         elif event == 'exception':
-            emit(frame, 'throw', note='Exception observed: ' + arg[0].__name__)
+            # BaseException's native args descriptor bypasses overridden
+            # properties and user __str__/__repr__; arbitrary payload objects
+            # remain bounded snapshots with explicit unknowns.
+            exception_type, exception_value, _ = arg
+            arguments = BaseException.args.__get__(exception_value, BaseException)
+            name = type.__getattribute__(exception_type, '__name__')
+            emit(frame, 'throw', result={'type': name, 'args': value(arguments)},
+                 note='Python reported exception propagation: ' + name)
         elif event == 'return':
             opcode = dis.opname[frame.f_code.co_code[frame.f_lasti]]
             if opcode in ('YIELD_VALUE', 'YIELD_FROM'):
@@ -221,7 +321,7 @@ def trace(frame, event, arg):
                     emit(frame, 'yield', result=value(arg),
                          note='Generator yielded; invocation remains suspended')
             elif arg is None and opcode not in ('RETURN_VALUE', 'RETURN_CONST'):
-                emit(frame, 'throw', unwinding=True, note='Exception unwound this frame; no normal return value')
+                emit(frame, 'unresolved', unwinding=True, note='Exception unwound this frame; no normal return value')
             else:
                 emit(frame, 'return', result=value(arg))
             if id(frame) not in suspended:

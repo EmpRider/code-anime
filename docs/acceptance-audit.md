@@ -11,8 +11,8 @@ completion around existing tests. **The overall implementation is incomplete.**
 
 ## Final local verification (October 14)
 
-After source-visit forward/backward navigation and explicit Python exit handling,
-`npm run check` passed TypeScript typechecking, **149 core tests** with **one
+After source-visit forward/backward navigation and expanded Python recording,
+`npm run check` passed TypeScript typechecking, **151 core tests** with **one
 optional CodeGraph integration skip**, production build, and Prettier.
 `npm run test:browser` passed **all 51 Chromium tests**, including real Python
 loop navigation, JavaScript and mapped TypeScript source navigation, stored
@@ -20,6 +20,33 @@ continuations, deep recursion, and large observed execution stress.
 `npm run package:check` passed installed CLI, MCP handshake, player assets,
 and flow API verification. These are bounded test results, not acceptance of
 all 37 requirements or every runtime language and environment.
+
+## Additional Python runtime accuracy (October 14)
+
+Python runtime snapshots now include bounded, directly stored fields of
+project-defined class instances, including native slot descriptors, ordinary
+instance dictionaries, and nested containers. Both entry-point classes and
+classes imported from other project modules are eligible. The recorder reads
+native storage descriptors directly: user properties, overridden
+`__getattribute__`, `__repr__`, methods, and dependency/runtime object internals
+are not evaluated. Cycles, depth, and property counts remain explicitly bounded.
+These are observed snapshots before each source line executes; they expose
+mutations through the existing replay timeline without fabricating individual
+assignment events.
+
+Python exception events now carry the exception type and native argument
+snapshot. User exception string formatting and representation hooks are not
+called. The subsequent frame unwind is represented by an `unresolved` exit
+event instead of a duplicate `throw` or a fabricated normal `return`.
+Regression fixtures cover cross-module instance mutation, slots, cycles,
+unsafe accessors, exception subclasses with side-effectful formatting, and
+historical variable values. They also cover inherited slots alongside native
+instance dictionaries. Class-origin checks treat inaccessible or cross-drive
+module paths as out of scope instead of crashing a Windows recording.
+Large-source and deep-recursion regression tests
+protect the trace-byte budget against accidental expansion of system objects.
+These additions narrow requirements 3, 5, 23, 29, and 35; they do not establish
+arbitrary-language runtime support or complete all 37 requirements.
 
 Evidence labels below distinguish tested behavior from inspection and missing
 verification. A test of one scenario does not prove all languages, inputs, or

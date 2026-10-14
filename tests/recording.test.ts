@@ -223,6 +223,189 @@ test('Python intentional successful exits are complete, while nonzero exits rema
   }
 });
 
+test('Python recording observes instance mutations and slots without executing user getters or repr', async () => {
+  const lines = [
+    'from models import ExternalRecord',
+    'getter_reads = 0',
+    'class Wallet:',
+    '    def __init__(self):',
+    '        self.amount = 10',
+    '        self.child = {"items": [1]}',
+    '        self.loop = self',
+    '    def __repr__(self):',
+    '        raise RuntimeError("repr evaluated")',
+    '    def __getattribute__(self, name):',
+    '        if name == "__dict__":',
+    '            raise RuntimeError("custom __dict__ read")',
+    '        return object.__getattribute__(self, name)',
+    '    @property',
+    '    def dangerous(self):',
+    '        global getter_reads',
+    '        getter_reads += 1',
+    '        return "unobserved"',
+    'class SlotBox:',
+    '    __slots__ = ("count",)',
+    '    def __init__(self):',
+    '        self.count = 2',
+    'class BaseSlots:',
+    '    __slots__ = ("base",)',
+    '    def __init__(self):',
+    '        self.base = 3',
+    'class MixedSlots(BaseSlots):',
+    '    __slots__ = ("child", "__dict__")',
+    '    def __init__(self):',
+    '        super().__init__()',
+    '        self.child = 6',
+    '        self.extra = 7',
+    'wallet = Wallet()',
+    'box = SlotBox()',
+    'mixed = MixedSlots()',
+    'other = ExternalRecord()',
+    'wallet.amount = 15',
+    'box.count += 3',
+    'other.count += 2',
+    'wallet.child["items"].append(2)',
+    'mixed.base += 2',
+    'mixed.child += 1',
+    'mixed.extra += 1',
+    'print(wallet.amount, box.count, other.count, getter_reads, mixed.base, mixed.child, mixed.extra)',
+  ];
+  const f = await fixture({
+    'instances.py': lines.join('\n') + '\n',
+    'models.py':
+      'class ExternalRecord:\n    def __init__(self):\n        self.count = 4\n',
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'python',
+      projectRoot: f.root,
+      entry: 'instances.py',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const at = (line: string) => {
+      const event = events.find(
+        (item) =>
+          item.kind === 'statement' &&
+          item.source?.file === 'instances.py' &&
+          item.source.line === lines.indexOf(line) + 1,
+      );
+      assert.ok(event, line);
+      return event;
+    };
+    const before = at('wallet.amount = 15');
+    assert.equal(
+      (localValue(before, before.callId, 'wallet') as any).properties.amount,
+      10,
+    );
+    const mutated = at('box.count += 3');
+    const wallet = localValue(mutated, mutated.callId, 'wallet') as any;
+    assert.equal(wallet.$type, 'Wallet');
+    assert.equal(wallet.properties.amount, 15);
+    assert.deepEqual(wallet.properties.child, { items: [1] });
+    assert.deepEqual(wallet.properties.loop, {
+      $unavailable: 'Repeated or cyclic reference',
+    });
+    assert.equal(Object.hasOwn(wallet.properties, 'dangerous'), false);
+    const last = at(
+      'print(wallet.amount, box.count, other.count, getter_reads, mixed.base, mixed.child, mixed.extra)',
+    );
+    assert.deepEqual((localValue(last, last.callId, 'box') as any).properties, {
+      count: 5,
+    });
+    assert.deepEqual(
+      (localValue(last, last.callId, 'wallet') as any).properties.child,
+      { items: [1, 2] },
+    );
+    assert.deepEqual(
+      (localValue(last, last.callId, 'other') as any).properties,
+      { count: 6 },
+    );
+    assert.deepEqual(
+      (localValue(last, last.callId, 'mixed') as any).properties,
+      { extra: 8, child: 7, base: 5 },
+    );
+    assert.equal(localValue(last, last.callId, 'getter_reads'), 0);
+    assert.equal(
+      events
+        .filter((item) => item.kind === 'console')
+        .map((item) => item.output)
+        .join(''),
+      '15 5 6 0 5 7 8\n',
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test('Python exception events preserve native arguments without evaluating exception formatting', async () => {
+  const f = await fixture({
+    'exceptions.py': [
+      'format_reads = 0',
+      'class UserError(Exception):',
+      '    def __str__(self):',
+      '        global format_reads',
+      '        format_reads += 1',
+      '        return "side effect"',
+      '    def __repr__(self):',
+      '        raise RuntimeError("repr side effect")',
+      'def fail():',
+      '    raise UserError("wrong amount", {"actual": 17})',
+      'try:',
+      '    fail()',
+      'except UserError as error:',
+      '    print(error.args[0])',
+      'print(format_reads)',
+      '',
+    ].join('\n'),
+  });
+  try {
+    const job = await f.service.run({
+      action: 'start',
+      language: 'python',
+      projectRoot: f.root,
+      entry: 'exceptions.py',
+    });
+    const result = await wait(f.service, job.jobId);
+    assert.equal(result.complete, true, JSON.stringify(result));
+    const { events } = await allEvents(f.store, result.sessionId!);
+    const thrown = events.filter(
+      (event) => event.kind === 'throw' && event.symbolId.endsWith(':fail'),
+    );
+    assert.equal(thrown.length, 1, JSON.stringify(thrown));
+    assert.equal(thrown[0]!.source?.line, 10);
+    assert.deepEqual(thrown[0]!.result, {
+      type: 'UserError',
+      args: ['wrong amount', { actual: 17 }],
+    });
+    assert.equal(thrown[0]!.certainty, 'observed');
+    assert.ok(
+      events.some(
+        (event) =>
+          event.kind === 'unresolved' && event.callId === thrown[0]!.callId,
+      ),
+      'Frame unwinding must not manufacture a second exception or a return',
+    );
+    assert.equal(
+      events
+        .filter((event) => event.kind === 'console')
+        .map((event) => event.output)
+        .join(''),
+      'wrong amount\n0\n',
+    );
+    assert.equal(
+      events.some(
+        (event) => event.kind === 'return' && event.symbolId.endsWith(':fail'),
+      ),
+      false,
+    );
+  } finally {
+    await f.close();
+  }
+});
+
 test('records observed JavaScript calls, source steps, loop values and output across user files', async () => {
   const main = [
     "const { add } = require('./helper.cjs');",
