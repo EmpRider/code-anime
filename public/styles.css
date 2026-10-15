@@ -2692,3 +2692,16 @@ button.node:hover {
 .session-stats span {
   color: #a8b3cc;
 }
+
+/* Flow Arrows SVG Overlay */
+svg.flow-arrows {
+  overflow: visible;
+}
+.flow-group {
+  z-index: 1; /* Ensure groups are above arrows if needed, or arrows above? Arrows should be below nodes usually */
+  position: relative;
+}
+button.node {
+  z-index: 2;
+  position: relative;
+}

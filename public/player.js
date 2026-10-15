@@ -2143,6 +2143,78 @@ function followSelectedEventRow() {
   )
     list.scrollTop = Math.max(0, top - list.clientHeight / 2);
 }
+
+// --- SVG Arrow Drawing ---
+const drawConnections = () => {
+  const canvas = document.getElementById("canvas");
+  if (!canvas || !flow || !cursor) return;
+  
+  // Remove old SVG if exists
+  let svg = canvas.querySelector("svg.flow-arrows");
+  if (!svg) {
+    svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.classList.add("flow-arrows");
+    svg.style.position = "absolute";
+    svg.style.top = "0";
+    svg.style.left = "0";
+    svg.style.width = "100%";
+    svg.style.height = "100%";
+    svg.style.pointerEvents = "none";
+    svg.style.zIndex = "0";
+    canvas.appendChild(svg);
+  }
+  svg.innerHTML = ""; // Clear old paths
+
+  // Get current step
+  const step = flow.steps[cursor - 1];
+  if (!step) return;
+
+  const fromNode = nodes.get(step.from);
+  const toNode = nodes.get(step.to);
+
+  if (fromNode && toNode) {
+    const canvasRect = canvas.getBoundingClientRect();
+    const fromRect = fromNode.getBoundingClientRect();
+    const toRect = toNode.getBoundingClientRect();
+
+    // Calculate centers relative to canvas
+    const x1 = fromRect.left + fromRect.width / 2 - canvasRect.left + canvas.scrollLeft;
+    const y1 = fromRect.top + fromRect.height / 2 - canvasRect.top + canvas.scrollTop;
+    const x2 = toRect.left + toRect.width / 2 - canvasRect.left + canvas.scrollLeft;
+    const y2 = toRect.top + toRect.height / 2 - canvasRect.top + canvas.scrollTop;
+
+    // Draw path
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const d = `M ${x1} ${y1} C ${(x1+x2)/2} ${y1}, ${(x1+x2)/2} ${y2}, ${x2} ${y2}`;
+    path.setAttribute("d", d);
+    path.setAttribute("stroke", "#c4b5fd");
+    path.setAttribute("stroke-width", "2");
+    path.setAttribute("fill", "none");
+    path.setAttribute("marker-end", "url(#arrowhead)");
+    
+    // Add marker def if not exists
+    if (!svg.querySelector("defs")) {
+      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+      marker.setAttribute("id", "arrowhead");
+      marker.setAttribute("markerWidth", "10");
+      marker.setAttribute("markerHeight", "7");
+      marker.setAttribute("refX", "9");
+      marker.setAttribute("refY", "3.5");
+      marker.setAttribute("orient", "auto");
+      const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+      polygon.setAttribute("points", "0 0, 10 3.5, 0 7");
+      polygon.setAttribute("fill", "#c4b5fd");
+      marker.appendChild(polygon);
+      defs.appendChild(marker);
+      svg.appendChild(defs);
+    }
+
+    svg.appendChild(path);
+  }
+};
+// -------------------------
+
 function render() {
   if (!flow) return;
   refreshSourcePresentation();
@@ -2167,7 +2239,7 @@ function render() {
   }
   $('canvas').querySelector('.canvas-empty')?.remove();
   const pathView = $('view-mode').value === 'path' && overviewItems.length;
-  if (!cursor || pathView) clearConnection();
+  if (!cursor || pathView) clearConnection(); else drawConnections();
   if (!pathView) $('canvas').querySelector('.flow-overview')?.remove();
   if (pathView) $('canvas').querySelector('.packet')?.remove();
   for (const node of nodes.values())
