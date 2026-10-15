@@ -2605,3 +2605,90 @@ button.node {
   .app-header { padding: 0 12px; }
   main { padding: 12px; }
 }
+
+/* High-contrast theme updates */
+:root {
+  --bg: #0a0c10;
+  --panel: #0f1218;
+  --border: #3a4258;
+  --muted: #a8b3cc;
+  --accent: #c4b5fd;
+  --mint: #7ee8c7;
+  --amber: #fcd9a8;
+}
+
+body {
+  color: #f0f4ff;
+}
+
+pre {
+  color: #d4daf0;
+}
+
+.flow-group {
+  border-color: #4a5578;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.flow-group-dir {
+  border-color: #5a6588;
+  background: rgba(90, 101, 136, 0.08);
+}
+
+.flow-group-file {
+  border-color: #3a4568;
+  background: rgba(58, 69, 104, 0.12);
+}
+
+.flow-group-label {
+  color: #c8d0e8;
+  border-color: #4a5578;
+  background: #0f1218;
+}
+
+button.node {
+  border-color: #4a5578;
+  background: #1a1f2e;
+  color: #e8ecf8;
+}
+
+button.node:hover {
+  border-color: #6a7598;
+  background: #242a3e;
+}
+
+.event-row {
+  color: #d8e0f0;
+}
+
+.event-label {
+  color: #f0f4ff;
+}
+
+.source-line {
+  color: #d4daf0;
+}
+
+.source-line[aria-current="step"] {
+  background: #2a2542;
+  border-left-color: #c4b5fd;
+}
+
+.mock-badge {
+  color: #fcd9a8;
+  border-color: #8a7555;
+  background: rgba(252, 217, 168, 0.08);
+}
+
+.count-badge {
+  color: #a8b3cc;
+  background: #1a1f2e;
+}
+
+.session-stats strong {
+  color: #f0f4ff;
+}
+
+.session-stats span {
+  color: #a8b3cc;
+}
