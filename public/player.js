@@ -343,7 +343,7 @@ function buildNodes(preserveInspection = false) {
   methodMapPositions = new Map(
     methodMap.invocations.map((entry, index) => [entry.callId, index]),
   );
-  // Legacy agent-authored flows have ordered handoffs but no recorded runtime
+  // Legacy structural flows have ordered handoffs but no prepared mock
   // events. Present that known structure immediately, with explicit evidence
   // labels, instead of hiding every node in an empty Focus view at step zero.
   if (!overviewItems.length && !flow.trace?.events?.length)
@@ -802,7 +802,12 @@ function renderMethodDetails() {
             row.append(
               text('small', event.source.file + ':' + event.source.line),
             );
-            const original = flow.trace.sourceFiles?.[event.source.file];
+            const original = Object.hasOwn(
+              flow.trace.sourceFiles ?? {},
+              event.source.file,
+            )
+              ? flow.trace.sourceFiles[event.source.file]
+              : undefined;
             if (original !== undefined) {
               if (!sourceCache.has(event.source.file))
                 sourceCache.set(event.source.file, original.split(/\r?\n/));
@@ -905,7 +910,7 @@ function frameLocals(state, event) {
     ? (state.locals[activeFrame(state, event)] ?? {})
     : state.locals;
 }
-// A recorded exit can already have a caller-only stack. Source annotations
+// A prepared exit can already have a caller-only stack. Source annotations
 // must use the invocation whose line is highlighted, never its caller's locals.
 function sourceFrameLocals(state, event) {
   const locals = state.locals ?? {};
@@ -926,7 +931,7 @@ function sourceFrameLocals(state, event) {
   if (scopedToStack && callId && !state.stack.includes(callId)) return {};
   return frameLocals(state, event);
 }
-// Compare recorded snapshots of the same invocation. A newly entered frame
+// Compare prepared snapshots of the same invocation. A newly entered frame
 // has no preceding state; switching frames must not look like a mutation.
 function precedingFrameLocals(state, event, previousEvent) {
   if (!event?.locals) return undefined;
@@ -983,7 +988,7 @@ function precedingIndexedEvent(index, key, before) {
 }
 // The source editor navigates the same prepared replay as the timeline. Loop
 // lines can be visited repeatedly, including by different call frames; visit
-// order must be based on recorded sequence numbers, never source line order.
+// order must be based on prepared sequence numbers, never source line order.
 function adjacentSourceVisit(key, backward = false) {
   const visits = sourceLineVisits.get(key);
   if (!visits?.length) return;
@@ -1015,10 +1020,13 @@ function renderSource(state, event, initial = false) {
   if (!$('follow').checked && !sourceEvent) sourceEvent = inspectedSourceEvent;
   if (sourceEvent && !initial) inspectedSourceEvent = sourceEvent;
   const location = sourceEvent?.source;
-  const sourceCode = location ? trace?.sourceFiles?.[location.file] : undefined;
-  $('source').textContent = location?.file ?? 'No source location recorded';
+  const sourceCode =
+    location && Object.hasOwn(trace?.sourceFiles ?? {}, location.file)
+      ? trace.sourceFiles[location.file]
+      : undefined;
+  $('source').textContent = location?.file ?? 'No source location supplied';
   $('source').title = location?.generated
-    ? `Original source mapped from V8 location ${location.generated.file}:${location.generated.line}; source-map content verified against the project file`
+    ? `Generated-source location supplied with the static mock trace: ${location.generated.file}:${location.generated.line}`
     : '';
   $('source-line').textContent =
     location && !initial ? 'L' + location.line : '—';
@@ -1130,12 +1138,12 @@ function renderSource(state, event, initial = false) {
         gutter.type = 'button';
         gutter.title = stepIndex
           ? 'Toggle breakpoint at line ' + i
-          : 'No execution recorded on this line';
+          : 'No simulated visit to this line';
         gutter.setAttribute(
           'aria-label',
           stepIndex
             ? 'Set breakpoint at line ' + i
-            : 'Line ' + i + ': no recorded execution',
+            : 'Line ' + i + ': no simulated visit',
         );
         gutter.disabled = !stepIndex;
         row.append(gutter, codeText(sourceSyntaxCache.get(location.file)(i)));
@@ -1165,11 +1173,11 @@ function renderSource(state, event, initial = false) {
         jump.type = 'button';
         row.insertBefore(jump, row.querySelector('.code-text'));
       }
-      jump.title = `Next recorded execution of line ${line} (${visits.length} loaded visit${visits.length === 1 ? '' : 's'})`;
+      jump.title = `Next simulated visit to line ${line} (${visits.length} loaded visit${visits.length === 1 ? '' : 's'})`;
       jump.setAttribute('aria-label', jump.title);
       jump.setAttribute(
         'aria-description',
-        'Shift+Enter or Shift+Space jumps to the previous recorded visit; Shift+click works with a pointer.',
+        'Shift+Enter or Shift+Space jumps to the previous simulated visit; Shift+click works with a pointer.',
       );
       const navigate = (backward) => {
         const position = adjacentSourceVisit(key, backward);
@@ -1208,11 +1216,11 @@ function renderSource(state, event, initial = false) {
       gutter.disabled = !index;
       gutter.title = index
         ? 'Toggle breakpoint at line ' + line
-        : 'No execution recorded on this line';
+        : 'No simulated visit to this line';
       gutter.setAttribute(
         'aria-label',
         !index
-          ? `Line ${line}: no recorded execution`
+          ? `Line ${line}: no simulated visit`
           : marked
             ? `Remove breakpoint at line ${line}`
             : `Set breakpoint at line ${line}`,
@@ -1269,7 +1277,11 @@ function renderSource(state, event, initial = false) {
   const renderSourceValues = () => {
     if (!hasValues) {
       valuePanel.replaceChildren(
-        text('p', 'No recorded values for this step.', 'source-value-evidence'),
+        text(
+          'p',
+          'No simulated values for this step.',
+          'source-value-evidence',
+        ),
       );
     } else {
       const list = text('dl', '', 'source-value-list');
@@ -1417,7 +1429,7 @@ function renderConsole() {
   const value = consoleEvents
     .slice(start, end)
     .map((e) => e.display)
-    .join(flow.trace?.recording ? '' : '\n');
+    .join('');
   if (value !== lastConsoleText) {
     $('console-output').textContent = value;
     lastConsoleText = value;
@@ -1458,13 +1470,12 @@ async function loadNextChunk() {
     const response = await fetch('/api/flow/' + nextId);
     if (!response.ok) throw new Error('Could not load continuation ' + nextId);
     const next = await response.json();
-    const currentEvidence =
-      currentFlow.trace?.recording ?? currentFlow.trace?.simulation;
-    const nextEvidence = next.trace?.recording ?? next.trace?.simulation;
+    const currentEvidence = currentFlow.trace?.simulation;
+    const nextEvidence = next.trace?.simulation;
     if (
       !nextEvidence ||
       nextEvidence.mode !== currentEvidence?.mode ||
-      nextEvidence.runId !== currentEvidence?.runId ||
+      nextEvidence.baselineSessionId !== currentEvidence?.baselineSessionId ||
       nextEvidence.previousSessionId !== state.tailId ||
       next.endpoint !== currentFlow.endpoint ||
       next.trace.projectRoot !== currentFlow.trace?.projectRoot ||
@@ -1476,7 +1487,7 @@ async function loadNextChunk() {
       next.trace.events.length !== next.steps?.length ||
       !next.trace.events.length
     )
-      throw new Error('Continuation does not match the current execution');
+      throw new Error('Continuation does not match the current mock scenario');
     if (
       state.loadedIds.has(nextId) ||
       (next.nextSessionId &&
@@ -1492,18 +1503,20 @@ async function loadNextChunk() {
       newIds.some((id) => typeof id !== 'string' || existingIds.has(id)) ||
       new Set(newIds).size !== newIds.length
     )
-      throw new Error('Continuation contains duplicate execution events');
+      throw new Error('Continuation contains duplicate mock events');
     const previous = currentFlow.trace.events.at(-1)?.id;
     const numbered = /^event-(\d+)$/.exec(previous ?? '');
     if (
       numbered &&
       newIds.some((id, i) => id !== `event-${Number(numbered[1]) + i + 1}`)
     )
-      throw new Error('Continuation execution sequence is discontinuous');
+      throw new Error('Continuation event sequence is discontinuous');
     for (const [file, content] of Object.entries(
       next.trace.sourceFiles ?? {},
     )) {
-      const current = currentFlow.trace.sourceFiles?.[file];
+      const current = Object.hasOwn(currentFlow.trace.sourceFiles ?? {}, file)
+        ? currentFlow.trace.sourceFiles[file]
+        : undefined;
       if (current !== undefined && current !== content)
         throw new Error('Source file changed between prepared chunks: ' + file);
     }
@@ -1522,6 +1535,8 @@ async function loadNextChunk() {
     ];
     currentFlow.trace.truncated = next.trace.truncated;
     currentEvidence.complete = nextEvidence.complete;
+    currentEvidence.coverage = nextEvidence.coverage;
+    currentEvidence.coverageAssessment = nextEvidence.coverageAssessment;
     currentFlow.nextSessionId = next.nextSessionId;
     state.tailId = nextId;
     state.loadedIds.add(nextId);
@@ -1619,7 +1634,7 @@ function activeMethodMapPosition() {
   if (!cursor) return -1;
   const entries = methodMap.invocations;
   // An interleaved task can resume an invocation entered many pages earlier.
-  // Follow its observed event identity, not the last entry in event order.
+  // Follow its prepared event identity, not the last entry in event order.
   const activeCallId = flow.trace?.events?.[cursor - 1]?.callId;
   const activePosition = methodMapPositions.get(activeCallId);
   if (activePosition !== undefined && entries[activePosition]?.index <= cursor)
@@ -1847,7 +1862,7 @@ function renderFlowOverview() {
       ),
       text(
         'span',
-        `${overviewItems.length} transitions · ${structural ? 'no runtime observations' : 'select to inspect'}`,
+        `${overviewItems.length} transitions · ${structural ? 'static structure only' : 'select to inspect'}`,
       ),
     );
     panel.append(heading);
@@ -2084,20 +2099,15 @@ function render() {
   renderedFlow = flow;
   renderedCursor = cursor;
   renderedInspectorRevision = traceRevision;
-  const recording = flow.trace?.recording;
   const isMock = flowHasMock;
-  const evidenceLabel = recording
-    ? 'Recorded execution'
-    : isMock
-      ? 'Simulated values'
-      : 'Static / unverified evidence';
+  const evidenceLabel = isMock
+    ? 'Simulated values'
+    : 'Static / unverified evidence';
   $('evidence-mode').textContent = evidenceLabel;
   $('evidence-mode').title = evidenceLabel;
-  $('trace-order').textContent = recording
-    ? 'Recorded runtime order'
-    : isMock
-      ? 'Ordered by simulated execution'
-      : 'Graph traversal / supplied order';
+  $('trace-order').textContent = isMock
+    ? 'Ordered by simulated execution'
+    : 'Graph traversal / supplied order';
   if (positionChanged) {
     animation?.cancel();
     $('canvas').querySelector('.packet')?.remove();
@@ -2127,17 +2137,27 @@ function render() {
           ? 'More prepared steps available'
           : flow.trace?.truncated
             ? 'Trace incomplete · see coverage'
-            : 'Replay complete'
-        : recording
-          ? 'Recorded execution · local session'
-          : isMock
-            ? 'Mock execution · local session'
-            : 'Structural / unverified flow',
+            : isMock
+              ? 'Mock scenario complete · source coverage unverified'
+              : 'Replay complete'
+        : isMock
+          ? 'Mock execution · local session'
+          : 'Structural / unverified flow',
   );
-  $('coverage').textContent =
-    recording?.coverage ??
-    flow.trace?.simulation?.coverage ??
-    'Structural/legacy flow: execution completeness is not established.';
+  const coverageAssessment = flow.trace?.simulation?.coverageAssessment;
+  const coverageSummary = {
+    unknown: 'Source coverage unverified',
+    partial: 'Scenario partial · source coverage unverified',
+    unresolved: 'Unresolved source/behavior boundaries',
+    'provider-truncated': 'CodeGraph reported incomplete results',
+  };
+  $('coverage').textContent = flow.trace?.simulation
+    ? [
+        flow.trace.simulation.coverage,
+        coverageSummary[coverageAssessment?.status ?? 'unknown'],
+        ...(coverageAssessment?.reasons ?? []),
+      ].join(' · ')
+    : 'Structural/legacy flow: execution completeness is not established.';
   $('diagnostics').textContent = JSON.stringify(
     flow.trace
       ? {
@@ -2146,6 +2166,7 @@ function render() {
           scenario: flow.trace.scenario,
           filesAnalyzed: flow.trace.filesAnalyzed,
           truncated: flow.trace.truncated,
+          coverageAssessment,
           diagnostics: flow.trace.diagnostics,
         }
       : { note: 'Legacy agent-authored flow' },
@@ -2182,20 +2203,20 @@ function render() {
     sourceStackCalls = [];
     inspectorStackCalls = [];
     const sources = flow.trace?.sourceFiles;
-    const observedSource = flow.trace?.events.find(
+    const preparedSource = flow.trace?.events.find(
       (entry) =>
         entry.source?.file &&
         Object.prototype.hasOwnProperty.call(sources ?? {}, entry.source.file),
     )?.source;
     const initialFile =
-      observedSource?.file ??
+      preparedSource?.file ??
       (Object.prototype.hasOwnProperty.call(sources ?? {}, flow.trace?.target)
         ? flow.trace.target
         : Object.keys(sources ?? {})[0]);
     if (initialFile) {
       renderSource(
         { stack: [] },
-        { source: observedSource ?? { file: initialFile, line: 1 } },
+        { source: preparedSource ?? { file: initialFile, line: 1 } },
         true,
       );
     } else {
@@ -2220,7 +2241,7 @@ function render() {
     $('packet-title').textContent = 'Ready to explore';
     $('event-kind').textContent = 'READY';
     $('playback-label').textContent = 'Ready when you are';
-    $('active-path').textContent = 'Your execution, one step at a time';
+    $('active-path').textContent = 'Explore a simulated code flow';
     if (pathView) renderFlowOverview();
     else if (!nodes.size) {
       const empty = text('div', '', 'canvas-empty');
@@ -2321,7 +2342,7 @@ function render() {
     ? Object.entries(event.origins)
         .map(([key, origin]) => key + ' ← ' + origin)
         .join('\n')
-    : 'No origin metadata recorded';
+    : 'No origin metadata supplied';
   followSelectedEventRow();
   if (pathView) {
     renderFlowOverview();
@@ -2479,15 +2500,20 @@ $('play').onclick = () => {
 $('next').onclick = () => seek(cursor + 1);
 $('previous').onclick = () => seek(cursor - 1);
 $('restart').onclick = () => seek(0);
-// An entering/resuming recorder frame can carry only its callers in `stack`.
+// An entering/resuming mock frame can carry only its callers in `stack`.
 // The event's own invocation is still active until its exit/unwind. Returns
 // and throws can already have popped that frame, so step from the surviving
 // caller instead. This matches the same invocation IDs used by the method map.
 function steppingInvocation(event) {
   if (!event) return undefined;
   if (event.kind === 'console' && !event.stack?.length) return undefined;
-  // A completed frame can still be present in a recorder's exit snapshot.
-  // Use recorded parentage, regardless of whether the stack was popped yet.
+  // A simulated exception can unwind several frames. The immediate parent
+  // of the throwing invocation may already have exited as well; continue
+  // from the surviving frame in the prepared post-unwind stack.
+  if (event.kind === 'throw' && !event.stack?.includes(event.callId))
+    return event.stack?.at(-1);
+  // A completed frame can still be present in a prepared exit snapshot.
+  // Use prepared parentage, regardless of whether the stack was popped yet.
   // An exception notification is different: a caught throw can continue in
   // the same frame, so only unwind when that frame is actually absent.
   if (
@@ -2497,8 +2523,22 @@ function steppingInvocation(event) {
     return parentInvocationId(event);
   return invocations.has(event.callId) ? event.callId : event.stack?.at(-1);
 }
+// One throw can close multiple nested mock invocations without emitting an
+// individual return/throw event for every intermediate frame. Resolve the
+// prepared invocation ancestry, never inferred scheduler or task labels.
+function nestedThrowExitsInvocation(event, callId) {
+  if (event?.kind !== 'throw' || event.stack?.includes(callId)) return false;
+  const visited = new Set();
+  let child = event.callId;
+  while (child && !visited.has(child)) {
+    if (child === callId) return true;
+    visited.add(child);
+    child = parentInvocationId(invocations.get(child));
+  }
+  return false;
+}
 // Stepping is computed from the preprocessed invocation snapshots only.
-// Step Into follows the next observed event in the selected invocation or the
+// Step Into follows the next prepared event in the selected invocation or the
 // entry of its direct child. Unrelated asynchronous calls can be interleaved
 // between those events, even on the same thread or scheduler task.
 $('step-into').onclick = () => {
@@ -2516,7 +2556,7 @@ $('step-into').onclick = () => {
     while (true) {
       for (; i < events.length; i++) {
         const next = events[i];
-        // Step Into follows one recorded event in this frame, or the entry
+        // Step Into follows one prepared event in this frame, or the entry
         // of a directly invoked child. Sibling tasks (even if they have the
         // same scheduler labels) do not represent progress in this frame.
         if (
@@ -2555,7 +2595,11 @@ $('step-over').onclick = () => {
       for (; i < events.length; i++) {
         // Shared task/thread labels do not establish invocation identity.
         // Sibling callbacks can run while this invocation is suspended.
-        if (events[i].callId !== callId) continue;
+        if (
+          events[i].callId !== callId &&
+          !nestedThrowExitsInvocation(events[i], callId)
+        )
+          continue;
         if (version === navigationVersion && flow === requestedFlow)
           seek(i + 1);
         return;
@@ -2576,8 +2620,8 @@ $('step-out').onclick = () => {
   const current = events?.[cursor - 1];
   if (!current) return;
   const callId = steppingInvocation(current);
-  // Pipe output has no observed invocation to step out of. Advance to the next
-  // recorded event instead of leaving Step Out unresponsive at this position.
+  // Pipe output has no invocation to step out of. Advance to the next
+  // prepared event instead of leaving Step Out unresponsive at this position.
   if (!callId) {
     if (current.kind === 'console') return seek(cursor + 1);
     return;
@@ -2590,7 +2634,8 @@ $('step-out').onclick = () => {
         // Only the invocation's own terminal event proves it has exited.
         // A different call with the same task/thread may be an interleaved
         // sibling, rather than a return to our caller.
-        if (next.callId !== callId) continue;
+        const nestedUnwind = nestedThrowExitsInvocation(next, callId);
+        if (next.callId !== callId && !nestedUnwind) continue;
         if (
           next.kind === 'return' ||
           next.kind === 'unresolved' ||
@@ -3020,8 +3065,7 @@ async function load() {
       buildNodes();
       render();
     };
-    const previous = (flow.trace?.recording ?? flow.trace?.simulation)
-      ?.previousSessionId;
+    const previous = flow.trace?.simulation?.previousSessionId;
     if (previous) {
       $('previous-chunk').hidden = false;
       $('previous-chunk').href = '/flow/' + previous;

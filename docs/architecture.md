@@ -4,20 +4,24 @@ The entry point composes a bounded file-backed session store, loopback HTTP play
 
 ## Default mock execution lifecycle
 
+The permanent static/mock-only boundary is enforced by the repository's
+`AGENTS.md` and the `npm run check:scope` CI guard. The guard rejects known
+recorder implementations, the recording MCP tool, and observed-value markers
+in production source. A future change to this architecture must update the
+project-owner rule explicitly rather than reviving application execution.
+
 1. The host resolves its active workspace and requests `read_codegraph_evidence`.
 2. The native adapter checks CodeGraph installation and index readiness, then retrieves source/relationships through CodeGraph. It never parses application syntax itself.
-3. The simulation service retains provider text and issues a project-scoped, expiring evidence receipt. Responses can be read in pages; additional file ranges come from CodeGraph.
+3. The simulation service retains provider text and issues a project-scoped, expiring evidence receipt. Responses can be read in pages, with coverage tracked per receipt so missing response pages prevent false complete claims; additional file ranges come from CodeGraph.
 4. The host AI sends compact semantic operations directly to build_mock_animation. It does not create a script, JSON file or custom simulator.
 5. The MCP animation builder creates IDs, pushes/pops invocation frames, applies local/object field updates and creates full after-event snapshots. Append requests are atomic and retryable. Finish automatically chunks, validates and persists the trace, rolls back partially stored chunks on failure, and returns the localhost URL. The one-shot generate_mock_flow_animation tool remains a compatibility API.
 6. The browser renders fields inside moving packets, highlights changes, and restores complete local/stack snapshots for replay/seek. Linked chunks preserve a long scenario; baseline/proposed scenarios can be selected in one player.
 
-The simulation service does not embed an LLM, execute application code or prove semantic correctness. The skill supplies the AI orchestration. Receipts establish source retrieval and project identity, not correctness of every calculated value. Unknown effects remain explicitly assumed/unresolved.
+The simulation service does not embed an LLM, execute application code or prove semantic correctness. The skill supplies the AI orchestration. Receipts establish source retrieval and project identity, not correctness of every calculated value. A trace with an unresolved event in any continuation chunk must be finalized as incomplete, with a coverage explanation; unread CodeGraph evidence pages likewise prevent complete finalization.
 
-## Runtime recordings
+## Static-only product boundary
 
-`record_execution` is a separate opt-in entry path through `RecordingService`. Bundled Python and Node.js recorders run trusted entry files in child processes and stream source snapshots and observed events. Status exposes progress; cancellation, timeout and byte/event budgets stop capture while retaining accepted events. It reuses `EventJournal`, `traceToFlow` and the session store rather than introducing a second player or state model. Recording metadata carries scope, completion, a run UUID and continuation ancestry. Continuations must keep that run UUID and evidence mode; runtime and simulation chunks cannot mix.
-
-Python tracing covers main-thread user code, including generator yield/resume and coroutine suspension/resumption. Asyncio task identities distinguish interleaved execution; they do not establish causal relationships between tasks. Concurrent threads are an explicit Python recording boundary. JavaScript uses the V8 Inspector protocol to record debugger-visible user frames, pre-line snapshots and process output; debugger-reported exceptions from user source and catch-scope entry are observed. JavaScript returns are emitted when V8 provides a return value; Promise snapshots include V8-reported state and settlement result when present at that point. Later transitions remain unobserved. Unobserved return values, frame-exit causes and async timing are never inferred. JavaScript stdout/stderr events record UTF-8 text received from process pipes with `certainty: observed`, but use a process-level identity with no source, invocation stack, or local snapshot: asynchronous pipe delivery cannot prove which user method wrote the output or when the write occurred. Stream-specific text order is preserved; an exact ordering between stdout and stderr writes is not established. Workers, child processes and native internals remain outside its scope. Both recorders document bounded values and unsupported effects in each trace, and neither promotes mock events. Execution is not sandboxed and requires a user request to run trusted code. Both recorder assets are included in the compiled npm package. Default mock workflows continue to require CodeGraph and do not execute the target application.
+This application visualizes a simulated scenario derived by the host AI from indexed CodeGraph source evidence. No analyzed application entry point is run, imported, compiled, debugged or instrumented. The `src/runtime.ts` name refers only to the Code Anime server and localhost player lifecycle; it never runs the target program. Mock events describe hypothetical inputs, branches, mutations, output and returns, with uncertainty and incomplete source coverage explicitly identified. The permanent boundary is specified in `AGENTS.md`.
 
 ## Structural tools
 

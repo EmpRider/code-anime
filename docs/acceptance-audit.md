@@ -1,5 +1,216 @@
 # Execution visualizer acceptance audit
 
+> **Current static/mock-only acceptance:** see
+> [`static-mock-acceptance.md`](static-mock-acceptance.md) for the authoritative
+> 37-requirement ledger under `AGENTS.md`. Entries below retain historical
+> recorder-era context and must not be used as current product acceptance.
+
+## October 15 — verified static/mock-only checkpoint
+
+Current local verification after the independent simulated-task identity patch:
+
+- `npm run check:scope`, production `tsc -p tsconfig.json --noEmit`, and
+  `git diff --check` passed.
+- The focused builder, simulation, and mock-completeness suite passed **37/37**.
+- Prepared-trace Chromium playback passed **5/5**, including 20,000 prepared
+  events and five persisted continuations. This establishes prepared playback
+  behavior, not the accuracy of AI-simulated semantics.
+- On Windows, a temporary synthetic project with **Kotlin, Java, and
+  TypeScript** indexed three files through CodeGraph. Code Anime's native MCP
+  adapter successfully retrieved each language's original method definition
+  and callee relationship. A new opt-in regression in
+  `tests/native-codegraph.test.ts` passed. The full suite passed **9/9** with
+  `CODE_ANIME_TEST_CODEGRAPH=codegraph`, including the existing Kotlin-only
+  structural integration test. These tests index inert fixture source; they
+  never run the analyzed application.
+- `npm run package:check` passed the installed CLI, MCP handshake, localhost
+  player assets, and flow API smoke checks.
+- Full `npm run typecheck` still fails because removed recorder APIs and the
+  obsolete `observed` certainty value remain in historical tests, alongside a
+  separate builder-test type error. A broader continuation suite passed
+  **32/35**, with three legacy assertions expecting the removed
+  `Recorded execution` label instead of the current `Simulated values` label.
+
+**Not release-ready.** No cross-platform live CodeGraph verification or
+requirement-by-requirement static/mock acceptance proof exists yet. The earlier
+automatic safety refusal covering obsolete recorder-test deletion/rewrite
+remains in effect. A later combined source-inspection request was also refused
+with `This tool call was blocked by OpenAI because we couldn't determine the
+safety status of the request.` Neither blocked operation was retried. The
+current worktree remains uncommitted; this checkpoint claims no release.
+
+> **Historical audit — superseded by `AGENTS.md` (October 14, 2026).**
+> This document preserves earlier investigation and test history; its references
+> to observed execution, runtime recording, Python/JavaScript recorders, and
+> execution-derived values describe an abandoned implementation and are **not**
+> current capabilities, requirements, or acceptance evidence. Code Anime now
+> uses CodeGraph source evidence and AI-supplied **mock values** only. It must
+> never execute, import, debug, or instrument the analyzed application. Apply
+> the permanent repository rule in `AGENTS.md` and the static-only workflow in
+> `docs/architecture.md` when assessing current scope. Historical green tests
+> below do not establish acceptance of the current static/mock-only product.
+
+## October 15 — scenario completion versus graph coverage
+
+**October 15 independent-task follow-up:** The builder and one-shot integrity
+validator now accept optional `taskId` on AI-authored mock operations/events.
+Each simulated async task retains its own invocation stack across interleaved
+events, while the builder keeps global mock object and local snapshots. The
+validator rejects reused invocation identities across tasks and a completed
+scenario with explicitly entered active task frames. Legacy operations without
+`taskId` remain on the original default stack. Focused mock tests passed
+**37/37**, the scope guard and production TypeScript passed, and the prepared
+Chromium suite passed **5/5**. The installed-package smoke check also passed.
+These checks do not establish observed async scheduling or complete cross-
+language CodeGraph acceptance; task ordering remains explicitly simulated.
+
+The stored mock trace now includes `simulation.coverageAssessment` with a
+structured `status` (`unknown`, `partial`, `unresolved`, or
+`provider-truncated`) and reasons. The MCP result exposes the same assessment.
+A completed mock scenario does **not** claim exhaustive CodeGraph source
+coverage merely because cited receipts were read. The player shows this
+distinction and refreshes coverage when loading a prepared continuation.
+Tests also verify that reading previously unread pages can clear a stale
+uncertainty classification in a subsequent chunk.
+
+**Verified:** 36 focused static/mock tests, production TypeScript, the static
+scope guard, production build, targeted formatting, and `git diff --check`
+passed. The prepared Chromium suite passed **5/5**, including large persisted
+continuations, and the installed CLI/MCP/player package smoke test passed.
+Full `npm run typecheck` remains **failing** on obsolete recorder-dependent
+tests for deliberately removed functionality. Historical runtime fixture tests
+also remain incompatible with static/mock-only labeling; their cleanup was
+previously blocked by automatic safety review. No recorder was restored.
+This checkpoint is **not release-ready**: live cross-language CodeGraph
+integration, exhaustive source coverage, the full acceptance matrix, and
+cross-platform CI remain unverified.
+
+## Latest verified static/mock update — October 15, 2026
+
+The one-shot event validator now rejects a completed flow when an explicitly
+entered root invocation is still active. It also requires a source location for
+every completed proposed event and checks proposed event locations against
+structured CodeGraph node evidence. A later continuation cannot claim
+completion if an earlier event (including a legacy snapshot or an incomplete
+proposal) had no source/call-site location. Partial scenarios can retain such
+events, with `complete: false`.
+
+Verification after these edits:
+
+| Gate                                                                           | Observed result         | Limit                                                                                                                            |
+| ------------------------------------------------------------------------------ | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Focused static builder / mock-completeness / simulation suite                  | **34 passed, 0 failed** | Does not establish agent semantic correctness or complete codebase coverage                                                      |
+| Production TypeScript, `check:scope`, build, formatting and `git diff --check` | **Passed**              | Checks production code and tested formatting only                                                                                |
+| Installed-package smoke check                                                  | **Passed**              | CLI, MCP handshake, localhost player assets and flow API                                                                         |
+| Prepared-trace Chromium browser suite                                          | **5 passed, 0 failed**  | Synthetic browser scenarios, including 20,000 events and five continuations                                                      |
+| Full `npm run typecheck`                                                       | **Failed**              | Historical recorder-dependent test files still import removed `RecordingService` and use deleted `recording` / `observed` fields |
+
+This is not a release-ready checkpoint. The obsolete runtime-test cleanup was
+previously rejected by automatic safety review and has not been retried through
+another tool or approach. Remaining requirements include explicit evidence
+coverage states, event-level source and data provenance, async task semantics,
+live cross-language CodeGraph integration, accessibility, the full 37-item
+static/mock acceptance matrix, and cross-platform CI verification. Production
+runtime recorders remain removed in the local worktree; no Git commit, push or
+release is claimed.
+
+## Current static/mock checkpoint (October 15, 2026)
+
+The migration is still **in progress**, with uncommitted changes on
+`codex/python-observed-catch`. This is a verification checkpoint, not acceptance
+of all 37 requirements. All scenarios below use prepared AI-mock events or
+synthetic fixtures; none executes the analyzed application.
+
+**October 15 provenance follow-up:** Method-entry events now check exact
+CodeGraph node definitions even when the event also cites less structured
+`explore` evidence. An additional receipt cannot conceal a contradictory
+definition file or an entry before that definition. The new mixed-receipt
+regression and the existing mock builder/completeness tests passed **27/27**.
+The new mock test fixture is typed against the shared `TraceEvent` contract.
+This does not validate other source-language semantics, method-call edges, or
+exhaustive relationship discovery.
+
+After removing unused `acorn`, `npm run check:scope`, production TypeScript
+(`npx tsc --noEmit -p tsconfig.json`), `npm run build`, and
+`npm run package:check` passed. The package smoke check covered the installed
+CLI, MCP handshake, player assets, and flow API. A later grouped post-edit
+compiler/scope/format/whitespace command was **blocked by automatic safety
+review** and did not execute. Those checks remain unverified after the newest
+provenance edit; earlier passing results must not be substituted for them.
+
+**October 15 verification update:** A selected static/mock unit suite passed
+**56 tests**, with **one live CodeGraph integration test skipped** (unindexed
+repository). The prepared-trace browser suite passed **5/5**. Production-only
+TypeScript, format, scope, package, and whitespace checks passed. Full
+`npm run typecheck` still fails due to the obsolete recorder-dependent tests
+described below. Full repository acceptance and cross-language live validation
+remain unverified.
+
+- `npm run check:scope`: passed the static/mock-only scope guard.
+- `npx tsc --noEmit -p tsconfig.json`: passed production TypeScript checking.
+- `npm run format:check` and `git diff --check`: passed.
+- Focused builder, simulation, evidence, and source-catalog regressions:
+  **29/29 passed**, including 42 nested calls, continuation integrity,
+  incomplete evidence rejection, and prepared source-snapshot limits.
+- Source filenames that shadow JavaScript object properties are handled as
+  dictionary keys throughout collection, validation, and session persistence.
+  A missing `toString` file can no longer appear present; an actual `__proto__`
+  file survives serialization and can be highlighted by the player.
+- Mock object identities named `constructor`, `toString`, and `__proto__` now
+  survive builder append batches, trace schema validation, and persistence.
+  The newly added regression exercises all three identities across two batches.
+- CodeGraph evidence now surfaces explicit provider truncation separately from
+  pagination of the cached response. A fully read provider response such as
+  `Showing 100 of 240` can no longer certify `complete: true`; partial traces
+  record the missing-coverage diagnostic. A fuller replacement receipt can be
+  used for completion. Fenced source-code strings resembling provider messages
+  do not trigger this guard. This catches **reported** truncation but cannot
+  prove unreported missing graph edges or AI interpretation accuracy.
+- October 15 follow-up: `callees` evidence at an explicitly requested result
+  limit is also treated as an uncertain coverage boundary unless CodeGraph
+  confirms the total; fuller evidence can replace the capped receipt. Return
+  events with `assignTo` now expose the surviving caller's before/after variable
+  snapshots and assignment target, preserving the callee's simulated result.
+  Focused mock builder and completeness regressions passed **22/22**; the
+  production TypeScript check and static scope guard passed after these edits.
+  These additions improve value playback and detectable coverage boundaries,
+  but do not prove full CodeGraph/source or cross-language coverage.
+- Structured CodeGraph `node` evidence now exposes its definition-file locations.
+  If every receipt cited by a mock event is a structured node response, a
+  conflicting event source file prevents `complete:true`. Partial sessions
+  retain the discrepancy in diagnostics and structured simulation metadata,
+  and subsequent continuation chunks cannot silently certify it. The check
+  does not yet verify symbol ownership, source-line meaning, or receipts from
+  `explore` and other CodeGraph tools; full event-level provenance remains open.
+- October 15 symbol-location follow-up: when a mock `enter` event cites only
+  structured CodeGraph node receipts and an exact matching symbol definition
+  is present, a mixed response containing another file cannot be used to
+  misattribute that method entry. An entry positioned before its matching
+  declaration is also rejected. Partial traces retain both discrepancies
+  across continuations. Aliases, source-language semantics, statement spans,
+  and caller/callee edge validity remain unverified. The focused builder and
+  mock-completeness suite passed **26/26** with two new regressions. A separate
+  static-unit selection passed **21 tests, one live CodeGraph skip**; the
+  prepared browser suite passed **5/5**, and production TypeScript, scope,
+  build, and whitespace checks passed. Full `npm run typecheck` still fails on
+  historical recorder tests; full static acceptance remains incomplete.
+- `npx playwright test tests/browser/large-trace.spec.ts`: **5/5 passed**,
+  including the additional unusual-filename browser regression.
+  The new mock-player regression verifies initial source visibility, reversible
+  line/console playback, and no additional API requests for ordinary stepping.
+  Existing stress cases cover 20,000 prepared events and 1,500 invocations
+  spread over five persisted continuations.
+- `npm run package:check`: passed installed CLI, MCP handshake, player assets,
+  and flow API checks.
+
+**Unresolved acceptance gates:** The full `npm run typecheck` still fails on
+obsolete recorder-dependent tests referencing deleted `RecordingService`,
+`trace.recording`, and `certainty: 'observed'`. The full unit and browser suites,
+cross-language CodeGraph integration, all 37 requirements, and cross-platform CI
+are not yet verified green. Earlier automatic safety review blocked removal or
+rewriting of those old recorder tests; the rejected operation did not execute
+and must not be circumvented. Do not restore runtime recording to satisfy them.
+
 Checkpoint: 2026-10-14, branch `codex/python-observed-catch`, based on
 `main` at `1e6bf18` after merged PRs #6–#11. The new Python handler change
 is not yet validated or merged.

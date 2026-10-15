@@ -5,6 +5,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { traceToFlow, type AnalysisInput, CandidateError } from './contract.js';
 import type { Trace, TraceEvent } from '../domain/trace.js';
 import { resolveCodeGraphLaunch } from './codegraph-launcher.js';
+import { sourceBoundary } from '../services/source-catalog.js';
 
 interface SymbolInfo {
   name: string;
@@ -58,6 +59,38 @@ function selectedTarget(target: string) {
   return match
     ? { symbol: match[1]!, file: match[2]!, line: Number(match[3]) }
     : { symbol: target };
+}
+function scopedCalleeEvidence(response: string, node: SymbolInfo) {
+  if (/Aggregated results across \d+ symbols/i.test(response))
+    throw new Error(
+      'CodeGraph merged callees from different definitions; this provider cannot isolate the requested method',
+    );
+  if (/no definition.*matches file/i.test(response))
+    throw new Error('CodeGraph ignored the requested definition file');
+  if (!/distinct definitions/i.test(response))
+    return { text: response, unscopedCount: false };
+  // Each named definition has its own section. Neither its edges nor its
+  // coverage count may be borrowed from a different same-named method.
+  const headings = [
+    ...response.matchAll(/^\*\*(.+?)\*\* \([\w_]+\) — (.+?):(\d+)\s*$/gm),
+  ];
+  const index = headings.findIndex(
+    (m) => m[2] === node.file && Number(m[3]) === node.line,
+  );
+  if (index < 0)
+    throw new Error(
+      'CodeGraph returned ambiguous callee definitions; narrow the target',
+    );
+  const text = response.slice(
+    headings[index]!.index!,
+    headings[index + 1]?.index ?? response.length,
+  );
+  return {
+    text,
+    unscopedCount:
+      /Showing [\d,]+ of [\d,]+/i.test(response) &&
+      !/Showing [\d,]+ of [\d,]+/i.test(text),
+  };
 }
 async function connect(input: AnalysisInput, signal: AbortSignal) {
   const prefix: unknown = JSON.parse(
@@ -201,6 +234,11 @@ export async function analyzeNativeCodeGraph(
       return nodes[0]!;
     };
     const root = await getNode(selectedTarget(input.target));
+    const rootBoundary = sourceBoundary(input.projectRoot, root.file);
+    if (rootBoundary)
+      throw new Error(
+        `Selected CodeGraph entry ${idOf(root)} is outside user-written project source: ${rootBoundary}`,
+      );
     const events: TraceEvent[] = [];
     const expanded = new Set<string>();
     let truncated = false;
@@ -209,7 +247,6 @@ export async function analyzeNativeCodeGraph(
       truncated = true;
       boundaries.add(reason);
     };
-    let requests = 0;
     const maxEvents = input.maxEvents ?? 2000;
     // Depth is unlimited by default. Any boundary must be caller-specified;
     // the event budget and provider timeout remain resource safeguards.
@@ -257,40 +294,120 @@ export async function analyzeNativeCodeGraph(
         {},
         'Indexed symbol visit; graph traversal, not observed execution',
       );
-      requests++;
-      let text = await connection.call('codegraph_callees', {
-        symbol: node.name,
-        file: node.file,
-        limit: 100,
-      });
-      evidence.push(text);
-      if (/Aggregated results across \d+ symbols/i.test(text))
-        throw new Error(
-          'CodeGraph merged callees from different definitions; this provider cannot isolate the requested method',
-        );
-      if (/no definition.*matches file/i.test(text))
-        throw new Error('CodeGraph ignored the requested definition file');
-      if (/distinct definitions/i.test(text)) {
-        // Same-file methods on different classes: CodeGraph supplies per-definition sections.
-        const headings = [
-          ...text.matchAll(/^\*\*(.+?)\*\* \([\w_]+\) — (.+?):(\d+)\s*$/gm),
-        ];
-        const index = headings.findIndex(
-          (m) => m[2] === node.file && Number(m[3]) === node.line,
-        );
-        if (index < 0)
-          throw new Error(
-            'CodeGraph returned ambiguous callee definitions; narrow the target',
+      // Start with a small response, but grow the request when CodeGraph may
+      // have more relationships than it returned. The event budget is the
+      // actual capacity boundary, rather than an arbitrary 100-callee cap.
+      const relationshipBudget = Math.max(1, maxEvents - events.length);
+      let requested = Math.min(100, relationshipBudget);
+      let text = '';
+      let previousCount = -1;
+      let relationshipBoundary = false;
+      const knownRelationships = new Set<string>();
+      let changedRelationships = false;
+      for (;;) {
+        let response: string;
+        try {
+          response = await connection.call('codegraph_callees', {
+            symbol: node.name,
+            file: node.file,
+            limit: requested,
+          });
+        } catch (error) {
+          if (signal.aborted || !text) throw error;
+          relationshipBoundary = true;
+          incomplete(
+            `CodeGraph could not expand callee evidence for ${idOf(node)} to ${requested} relationships: ${error instanceof Error ? error.message : String(error)}.`,
           );
-        text = text.slice(
-          headings[index]!.index!,
-          headings[index + 1]?.index ?? text.length,
+          break;
+        }
+        evidence.push(response);
+        const scoped = scopedCalleeEvidence(response, node);
+        response = scoped.text;
+        if (scoped.unscopedCount)
+          incomplete(
+            `CodeGraph reported a shared callee count for different definitions of ${idOf(node)}; selected method coverage is unverified.`,
+          );
+        const rawRows = [
+          ...response.matchAll(
+            /^- .+? \([\w_]+\) - .+:\d+(?: — via .+)?\s*$/gm,
+          ),
+        ].map((match) => match[0].trimEnd());
+        // Repeated identical rows cannot establish distinct call edges.
+        // Count unique relationships when checking provider completeness.
+        const rows = [...new Set(rawRows)];
+        const count = rows.length;
+        if (count < rawRows.length)
+          incomplete(
+            `CodeGraph repeated ${rawRows.length - count} identical callee relationships for ${idOf(node)}; distinct relationship coverage cannot be verified.`,
+          );
+        // A larger request must retain previously returned relationships.
+        // An unstable provider response is partial evidence even if it claims
+        // to contain the entire graph.
+        if (
+          knownRelationships.size &&
+          [...knownRelationships].some((row) => !rows.includes(row))
+        ) {
+          changedRelationships = true;
+          incomplete(
+            `CodeGraph changed previously returned callee relationships for ${idOf(node)}; retaining all retrieved evidence and marking coverage incomplete.`,
+          );
+        }
+        for (const row of rows) knownRelationships.add(row);
+        if (previousCount >= 0 && count < previousCount) {
+          relationshipBoundary = true;
+          incomplete(
+            `CodeGraph returned only ${count} relationships for ${idOf(node)} after previously returning ${previousCount}; retaining the larger evidence set.`,
+          );
+          break;
+        }
+        text = response;
+        const shown = text.match(/Showing ([\d,]+) of ([\d,]+)/i);
+        const reportedCount = shown
+          ? Number(shown[1]!.replaceAll(',', ''))
+          : undefined;
+        const total = shown ? Number(shown[2]!.replaceAll(',', '')) : undefined;
+        // A truncated/invalid provider payload can claim complete coverage
+        // despite containing fewer edges than its own reported row count.
+        if (reportedCount !== undefined && count < reportedCount) {
+          relationshipBoundary = true;
+          incomplete(
+            `CodeGraph reported ${reportedCount} relationships for ${idOf(node)} but returned only ${count} parseable rows; coverage cannot be verified.`,
+          );
+          break;
+        }
+        const explicitlyTruncated =
+          (reportedCount !== undefined && reportedCount < total!) ||
+          /(?:… \+|truncated)/i.test(text);
+        const potentiallyFull = count >= requested && !shown;
+        if (!explicitlyTruncated && !potentiallyFull) break;
+        if (requested >= relationshipBudget || count <= previousCount) {
+          relationshipBoundary = true;
+          break;
+        }
+        previousCount = count;
+        requested = Math.min(
+          relationshipBudget,
+          Math.max(requested * 2, total ?? 0),
         );
       }
+      if (changedRelationships) {
+        const finalRows = new Set(
+          [
+            ...text.matchAll(/^- .+? \([\w_]+\) - .+:\d+(?: — via .+)?\s*$/gm),
+          ].map((match) => match[0].trimEnd()),
+        );
+        for (const row of knownRelationships) {
+          if (!finalRows.has(row)) text += `\n${row}`;
+        }
+      }
       const links = [
-        ...text.matchAll(
-          /^- (.+?) \(([\w_]+)\) - (.+?):(\d+)(?: — via (.+))?\s*$/gm,
-        ),
+        ...new Map(
+          [
+            ...text.matchAll(
+              /^- (.+?) \(([\w_]+)\) - (.+?):(\d+)(?: — via (.+))?\s*$/gm,
+            ),
+          ].map((match) => [match[0].trimEnd(), match] as const),
+        ).values(),
       ].map((m) => ({
         name: m[1]!,
         file: m[3]!,
@@ -306,17 +423,9 @@ export async function analyzeNativeCodeGraph(
         throw new Error(
           `Unsupported CodeGraph callee response: ${text.slice(0, 300)}`,
         );
-      const shown = text.match(/Showing (\d+) of (\d+)/i);
-      if (
-        (shown && Number(shown[1]) < Number(shown[2])) ||
-        /… \+|truncated/i.test(text)
-      )
+      if (relationshipBoundary)
         incomplete(
-          `CodeGraph returned only part of the callees for ${idOf(node)}.`,
-        );
-      else if (links.length >= 100 && !shown)
-        incomplete(
-          `CodeGraph returned the requested 100-callee limit for ${idOf(node)}; additional relationships may exist.`,
+          `CodeGraph callee coverage for ${idOf(node)} stopped after requesting ${requested} relationships (event capacity ${maxEvents}); additional relationships may exist.`,
         );
       const children = [
         ...links,
@@ -335,13 +444,19 @@ export async function analyzeNativeCodeGraph(
           break;
         }
         const stub: SymbolInfo = { ...child, snippet: '', members: [] };
+        const boundary = sourceBoundary(input.projectRoot, child.file);
         emit(
           stub,
           'call',
           path,
           { from: idOf(node), to: idOf(stub), relationship: child.relation },
-          'Indexed relationship; order and runtime values are unknown',
+          boundary
+            ? `Source boundary (${boundary}); implementation intentionally not expanded`
+            : 'Indexed relationship; order and runtime values are unknown',
         );
+        // Keep the indexed call visible but never expand third-party,
+        // generated, sensitive, or out-of-project implementations.
+        if (boundary) continue;
         if (path.length >= maxDepth) {
           incomplete(
             `Depth budget ${maxDepth} prevented expansion of ${idOf(stub)}.`,
@@ -351,7 +466,6 @@ export async function analyzeNativeCodeGraph(
         // Static graph expansion is per symbol. Recursion and repeated call
         // relationships are represented, but never called observed execution.
         if (expanded.has(idOf(stub))) continue;
-        requests++;
         try {
           const detail = await getNode({
             symbol: child.name,

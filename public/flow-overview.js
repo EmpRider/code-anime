@@ -3,8 +3,8 @@ import {
   preparePlainTerminalOutput,
 } from './terminal-text.js';
 
-// Recorders differ on whether a stack includes the entering invocation or
-// only its callers. All prepared views must agree on parent attribution.
+// Prepared trace events may include the entering invocation or only its
+// callers. All views must agree on parent attribution.
 export function parentInvocationId(event) {
   const stack = event?.stack ?? [];
   const parent =
@@ -55,11 +55,18 @@ export function buildFlowOverview(
       ].includes(event.kind)
     )
       continue;
-    // Recorded returns may be emitted before or after the callee leaves its
+    // Prepared returns may be emitted before or after the callee leaves its
     // stack. In either case the current invocation cannot be its own parent.
     const stack = event.stack ?? [];
+    // A simulated return or exception can carry the post-unwind stack, which
+    // no longer contains the original caller. Preserve the parent established
+    // at this invocation's entry for every later event in that invocation.
+    // Explicit event ancestry remains authoritative when supplied.
     const parentId =
-      parentInvocationId(event) ?? invocationParents.get(event.callId);
+      event.parentCallId ??
+      (event.kind === 'enter'
+        ? parentInvocationId(event)
+        : (invocationParents.get(event.callId) ?? parentInvocationId(event)));
     if (event.kind === 'enter') {
       invocations.set(event.callId, event.symbolId);
       if (parentId && parentId !== event.callId)
@@ -84,7 +91,7 @@ export function buildFlowOverview(
         ? events[offset - 1]
         : undefined;
     const previous = transitions.at(-1);
-    // Python print and many streams emit text and a newline separately.
+    // Console mock events may provide text and a newline separately.
     // Combine fragments of one print statement, not unrelated writes from
     // subsequent lines. Without a source location the grouping is unknown.
     const sameSource =
@@ -147,7 +154,7 @@ export function buildMethodGroups(events = []) {
     if (event?.kind !== 'enter' || !event.callId || entries.has(event.callId))
       continue;
     const symbol = event.symbolId ?? 'Unknown symbol';
-    // Runtime recorders qualify symbols with the exact relative source file:
+    // CodeGraph-qualified symbols may contain the relative source file:
     // `module.py:Worker.run` or `main.cjs:add`. Split that provenance before
     // looking for class/method delimiters; the dot in `.py` is not a class.
     const sourceFile = event.source?.file;
@@ -175,7 +182,7 @@ export function buildMethodGroups(events = []) {
               (qualified.slice(separator, separator + 2) === '::' ? 2 : 1),
           )
         : qualified;
-    // Some recorders include the entering frame in `stack`; others report
+    // Some prepared events include the entering frame in `stack`; others report
     // only the frames that led to it. In the latter case the final frame is
     // the caller. Never infer a parent by dropping that final frame.
     const parentCallId = parentInvocationId(event);
@@ -213,7 +220,7 @@ export function buildMethodGroups(events = []) {
 }
 
 // Keep summaries small even for a trace with large nested values. Inspection
-// of the actual value is available in the synchronized runtime inspector.
+// of the mock value is available in the synchronized step inspector.
 function briefValue(value) {
   if (Array.isArray(value)) return `Array(${value.length})`;
   if (value && typeof value === 'object')

@@ -9,6 +9,7 @@ const record = z.record(z.unknown());
 export const operationSchema = z
   .object({
     kind: eventSchema.shape.kind,
+    taskId: z.string().min(1).max(100).optional(),
     label: z.string().min(1).max(180),
     symbol: z.string().min(1).max(200).optional(),
     source: sourceSchema.optional(),
@@ -84,6 +85,7 @@ interface Build {
   id: string;
   createdAt: number;
   frames: Frame[];
+  taskFrames: Map<string, Frame[]>;
   objects: Record<string, Record<string, unknown>>;
   events: EventJournal;
   calls: number;
@@ -135,6 +137,14 @@ export class AnimationBuilder {
       status: b.result ? 'ready' : b.busy ? 'processing' : 'building',
       eventCount: b.events.count,
       stack: b.frames.map((f) => ({ callId: f.id, symbol: f.symbol })),
+      activeTasks: Object.fromEntries(
+        [...b.taskFrames]
+          .filter(([, frames]) => frames.length)
+          .map(([id, frames]) => [
+            id,
+            frames.map((frame) => ({ callId: frame.id, symbol: frame.symbol })),
+          ]),
+      ),
       nextAction:
         'Send the next operations batch directly through this tool; do not create scripts or payload files.',
       ...(b.result ?? {}),
@@ -152,21 +162,33 @@ export class AnimationBuilder {
           b.events.close();
           this.builds.delete(id);
         }
-      if (this.builds.size >= 10)
-        throw new Error(
-          'Build limit reached; cancel or finish existing builds',
-        );
+      // Validate a new scenario before releasing any retained finalized handle.
+      // Failed evidence checks must not invalidate existing idempotent requests.
       const { root } = await this.simulation.checkEvidence(
         p.projectRoot,
         p.evidenceIds,
       );
-      if (this.builds.size >= 10) throw new Error('Build limit reached');
+      // Completed sessions are persisted in SessionStore. Keep their build
+      // handles for idempotent status/finish calls until another scenario
+      // needs capacity; then release the oldest finalized handle.
+      if (this.builds.size >= 10)
+        for (const [id, b] of this.builds) {
+          if (b.busy || !b.result) continue;
+          b.events.close();
+          this.builds.delete(id);
+          if (this.builds.size < 10) break;
+        }
+      if (this.builds.size >= 10)
+        throw new Error(
+          'Build limit reached; cancel or finish existing builds',
+        );
       const b: Build = {
         input: { ...p, projectRoot: root },
         id: randomUUID(),
         createdAt: Date.now(),
         frames: [],
-        objects: {},
+        taskFrames: new Map(),
+        objects: Object.create(null) as Record<string, Record<string, unknown>>,
         events: new EventJournal(),
         calls: 0,
         batches: new Map(),
@@ -216,7 +238,11 @@ export class AnimationBuilder {
         await this.simulation.checkEvidence(b.input.projectRoot, evidenceIds);
         const state = {
           frames: clone(b.frames),
-          objects: clone(b.objects),
+          taskFrames: clone(b.taskFrames),
+          objects: Object.assign(
+            Object.create(null),
+            clone(b.objects),
+          ) as Record<string, Record<string, unknown>>,
           calls: b.calls,
         };
         const events = p.operations.map((op, i) =>
@@ -225,6 +251,7 @@ export class AnimationBuilder {
         await b.events.append(events);
         // Commit only after the whole batch validates. Retried batch IDs are idempotent.
         b.frames = state.frames;
+        b.taskFrames = state.taskFrames;
         b.objects = state.objects;
         b.calls = state.calls;
         b.input.evidenceIds = evidenceIds;
@@ -241,9 +268,13 @@ export class AnimationBuilder {
     }
     if (!b.events.count)
       throw new Error('Append execution steps before finishing');
-    if (p.complete && b.frames.length)
+    if (
+      p.complete &&
+      (b.frames.length ||
+        [...b.taskFrames.values()].some((frames) => frames.length))
+    )
       throw new Error(
-        'Active call frames remain; append their returns or finish with complete:false and explain the boundary',
+        'Active call frames remain in one or more mock tasks; append their returns or finish with complete:false and explain the boundary',
       );
     b.busy = true;
     const created: string[] = [];
@@ -302,6 +333,7 @@ export class AnimationBuilder {
   private apply(
     state: {
       frames: Frame[];
+      taskFrames: Map<string, Frame[]>;
       objects: Record<string, Record<string, unknown>>;
       calls: number;
     },
@@ -309,10 +341,18 @@ export class AnimationBuilder {
     index: number,
     defaultEvidence: string[],
   ): TraceEvent {
-    const caller = state.frames.at(-1);
+    const task = op.taskId ?? 'main';
+    let frames = task === 'main' ? state.frames : state.taskFrames.get(task);
+    if (!frames) {
+      if (op.kind !== 'enter')
+        throw new Error(`Task ${task} must begin with an enter operation`);
+      frames = [];
+      state.taskFrames.set(task, frames);
+    }
+    const caller = frames.at(-1);
     if (op.kind === 'enter') {
       if (!op.symbol) throw new Error('Enter requires a symbol');
-      state.frames.push({
+      frames.push({
         id: `call-${++state.calls}`,
         symbol: op.symbol,
         source: op.source,
@@ -320,14 +360,20 @@ export class AnimationBuilder {
         locals: clone(op.inputs ?? {}),
       });
     }
-    const frame = state.frames.at(-1);
+    const frame = frames.at(-1);
     if (!frame) throw new Error('Begin the flow with an enter operation');
     if (op.unwindTo !== undefined && op.kind !== 'throw')
       throw new Error('unwindTo is only valid for throw operations');
+    if (op.kind === 'unresolved' && op.certainty !== 'unresolved')
+      throw new Error('Unresolved events must use certainty: unresolved');
+    if (op.certainty === 'unresolved' && !op.note?.trim())
+      throw new Error(
+        'Unresolved events must explain missing source evidence or semantics in note',
+      );
     if (
       op.unwindTo !== undefined &&
       op.unwindTo !== null &&
-      !state.frames.some((f) => f.id === op.unwindTo)
+      !frames.some((f) => f.id === op.unwindTo)
     )
       throw new Error(
         'unwindTo must identify an active invocation or be null for an uncaught exception',
@@ -343,8 +389,14 @@ export class AnimationBuilder {
       throw new Error('Invalid source line range');
     if ((op.fields || op.unsetFields) && !op.objectId)
       throw new Error('Object field changes need objectId');
+    // Object IDs are supplied by the agent. Treat them as opaque keys, including
+    // "constructor", "toString", and "__proto__", never inherited properties.
     const before = clone(
-      op.objectId ? (state.objects[op.objectId] ?? {}) : frame.locals,
+      op.objectId && Object.hasOwn(state.objects, op.objectId)
+        ? state.objects[op.objectId]!
+        : op.objectId
+          ? {}
+          : frame.locals,
     );
     frame.locals = patch(frame.locals, op.set, op.unset);
     if (op.assignTo && !Object.hasOwn(op, 'result'))
@@ -355,7 +407,9 @@ export class AnimationBuilder {
       frame.locals = patch(frame.locals, { [op.assignTo]: op.result });
     if (op.objectId) {
       const object = patch(
-        state.objects[op.objectId] ?? {},
+        Object.hasOwn(state.objects, op.objectId)
+          ? state.objects[op.objectId]!
+          : {},
         op.fields,
         op.unsetFields,
       );
@@ -374,20 +428,25 @@ export class AnimationBuilder {
       beforeSnapshot = { ...(op.inputs ?? {}), result: null };
       after = { ...(op.inputs ?? {}), result: clone(op.result) };
     }
-    const parent = state.frames.at(-2);
+    const parent = frames.at(-2);
     if (op.kind === 'throw' && op.unwindTo !== undefined) {
       const retained =
         op.unwindTo === null
           ? 0
-          : state.frames.findIndex((f) => f.id === op.unwindTo) + 1;
-      state.frames.splice(retained);
+          : frames.findIndex((f) => f.id === op.unwindTo) + 1;
+      frames.splice(retained);
     }
     if (op.kind === 'return') {
-      state.frames.pop();
+      frames.pop();
       if (op.assignTo) {
         if (!parent)
           throw new Error('Root return cannot assign to a caller frame');
+        // The assignment happens in the surviving caller, so the return
+        // event's value diff must compare that frame before and after binding.
+        // The callee's returned value remains available separately as result.
+        beforeSnapshot = clone(parent.locals);
         parent.locals = patch(parent.locals, { [op.assignTo]: op.result });
+        after = clone(parent.locals);
       }
     }
     const event: TraceEvent = {
@@ -396,6 +455,7 @@ export class AnimationBuilder {
       symbolId: op.symbol ?? frame.symbol,
       label: op.label,
       callId: frame.id,
+      ...(op.taskId ? { taskId: op.taskId } : {}),
       ...(parent ? { parentCallId: parent.id } : {}),
       ...(source ? { source } : {}),
       evidenceIds: op.evidenceIds ?? frame.evidenceIds,
@@ -407,14 +467,20 @@ export class AnimationBuilder {
             ? (parent?.symbol ?? 'caller')
             : (op.symbol ?? frame.symbol),
         ...op.values,
+        ...(op.kind === 'return' && op.assignTo
+          ? { assignedTo: op.assignTo, assignedInCallId: parent!.id }
+          : {}),
       },
       before: beforeSnapshot,
       after,
       locals: Object.fromEntries(
-        state.frames.map((f) => [f.id, clone(f.locals)]),
+        [...state.frames, ...[...state.taskFrames.values()].flat()].map((f) => [
+          f.id,
+          clone(f.locals),
+        ]),
       ),
       objects: clone(state.objects),
-      stack: state.frames.map((f) => f.id),
+      stack: frames.map((f) => f.id),
       certainty: op.certainty,
       ...(op.inputs ? { inputs: clone(op.inputs) } : {}),
       ...(Object.hasOwn(op, 'result') ? { result: clone(op.result) } : {}),

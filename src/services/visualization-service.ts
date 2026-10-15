@@ -89,23 +89,9 @@ export class VisualizationService {
         events: 2000,
         concurrentJobs: 2,
       },
-      tools: 11,
-      runtimeRecording: {
-        tool: 'record_execution',
-        languages: ['python', 'javascript'],
-        scope:
-          'Opt-in Python or Node.js JavaScript runtime recording with real local side effects. Python records generators/asyncio; JavaScript records V8 Inspector source steps, parameters, bounded locals and output. JavaScript return values and worker threads are outside the observed scope. No CodeGraph required for runtime recording.',
-        unsupported: [
-          'other threads/processes',
-          'native internals',
-          'binary output',
-          'opaque object internals',
-          'JavaScript return values and exact asynchronous output-to-line timing',
-        ],
-        pythonCommand:
-          process.env.CODE_ANIME_PYTHON_COMMAND ||
-          (process.platform === 'win32' ? 'python' : 'python3'),
-      },
+      tools: 10,
+      executionPolicy:
+        'Static CodeGraph source evidence and agent-authored mock values only; never execute or record the analyzed application.',
       workflow:
         'read_codegraph_evidence → build_mock_animation begin/append/finish → localhost URL',
       simulation:
@@ -276,10 +262,6 @@ export class VisualizationService {
     if (!session?.flow.trace)
       throw new Error('Change plans require an analyzed trace baseline');
     const trace = structuredClone(session.flow.trace);
-    if (trace.recording)
-      throw new Error(
-        'Runtime recordings cannot include proposed events; prepare a separate simulated change scenario',
-      );
     if (trace.events.length + changes.length > 2000)
       throw new Error('Plan exceeds event limit');
     for (const [i, change] of changes.entries())

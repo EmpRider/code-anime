@@ -151,7 +151,7 @@ test('loading a continuation resolves split terminal control bytes without chang
     ['call-a'],
     'A.ts',
     5,
-    { output: '1mred\x1b[0m', values: { stream: 'stdout' } },
+    { output: '1m\nred\x1b[0m', values: { stream: 'stdout' } },
   );
   const first = chunk([allEvents[0], firstOutput], undefined, 'chunk-two');
   const second = chunk([secondOutput], 'chunk-one');
@@ -171,7 +171,7 @@ test('loading a continuation resolves split terminal control bytes without chang
     assert.equal(get('console-output').textContent, 'before\nred');
     assert.equal(requests(), 1);
     assert.equal(firstOutput.output, 'before\x1b[3');
-    assert.equal(secondOutput.output, '1mred\x1b[0m');
+    assert.equal(secondOutput.output, '1m\nred\x1b[0m');
   } finally {
     dom.window.close();
   }
@@ -206,9 +206,81 @@ test('source, stepping and console remain synchronized across prepared session b
     assert.equal(get('source').textContent, 'B.ts');
     assert.equal(get('frame-list').children.length, 1);
     moveTo(window, get, 8);
-    assert.equal(get('status').textContent, 'Replay complete');
+    assert.equal(
+      get('status').textContent,
+      'Mock scenario complete · source coverage unverified',
+    );
     assert.equal(get('frame-list').children.length, 0);
     assert.equal(requests(), 1, 'prepared sessions should only be loaded once');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('reversible mock object state and caller assignments survive task interleaving across stored chunks', async () => {
+  const shared = (count) => ({ shared: { count } });
+  const events = [
+    event(1, 'enter', 'A.m', 'main', ['main'], 'A.ts', 2, { objects: {} }),
+    event(2, 'enter', 'B.m2', 'worker', ['worker'], 'B.ts', 2, {
+      taskId: 'worker',
+      objects: {},
+    }),
+    event(3, 'mutate', 'B.m2', 'worker', ['worker'], 'B.ts', 3, {
+      taskId: 'worker',
+      objects: shared(1),
+    }),
+    event(4, 'enter', 'B.m2', 'child', ['main', 'child'], 'B.ts', 2, {
+      parentCallId: 'main',
+      objects: shared(1),
+    }),
+    event(5, 'mutate', 'B.m2', 'child', ['main', 'child'], 'B.ts', 3, {
+      objects: shared(2),
+    }),
+    event(6, 'return', 'B.m2', 'child', ['main'], 'B.ts', 4, {
+      result: 2,
+      objects: shared(2),
+      locals: { main: { childResult: 2 }, worker: {} },
+    }),
+    event(7, 'mutate', 'B.m2', 'worker', ['worker'], 'B.ts', 3, {
+      taskId: 'worker',
+      objects: shared(3),
+      locals: { main: { childResult: 2 }, worker: {} },
+    }),
+    event(8, 'return', 'B.m2', 'worker', [], 'B.ts', 4, {
+      taskId: 'worker',
+      objects: shared(3),
+    }),
+    event(9, 'console', 'A.m', 'main', ['main'], 'A.ts', 5, {
+      output: 'final=3',
+      objects: shared(3),
+      locals: { main: { childResult: 2 } },
+    }),
+    event(10, 'return', 'A.m', 'main', [], 'A.ts', 6, { objects: shared(3) }),
+  ];
+  const first = chunk(events.slice(0, 5), undefined, 'chunk-two');
+  const { dom, window, get, requests } = await createPlayer(
+    () => chunk(events.slice(5), 'chunk-one'),
+    first,
+  );
+  try {
+    moveTo(window, get, 3);
+    assert.equal(JSON.parse(get('objects').textContent).shared.count, 1);
+    moveTo(window, get, 5);
+    assert.equal(JSON.parse(get('objects').textContent).shared.count, 2);
+    get('next').click();
+    await waitFor(() => get('progress').textContent === '6 / 10');
+    assert.equal(JSON.parse(get('locals').textContent).main.childResult, 2);
+    moveTo(window, get, 7);
+    assert.equal(JSON.parse(get('objects').textContent).shared.count, 3);
+    assert.equal(JSON.parse(get('locals').textContent).main.childResult, 2);
+    moveTo(window, get, 9);
+    assert.equal(get('console-output').textContent, 'final=3');
+    moveTo(window, get, 3);
+    assert.equal(JSON.parse(get('objects').textContent).shared.count, 1);
+    assert.equal(get('console-output').textContent, '');
+    moveTo(window, get, 9);
+    assert.equal(JSON.parse(get('objects').textContent).shared.count, 3);
+    assert.equal(requests(), 1, 'reverse seek must reuse prepared sessions');
   } finally {
     dom.window.close();
   }
@@ -498,6 +570,106 @@ test('stepping uses the active invocation after entry, return and exception unwi
       get('progress').textContent,
       '7 / 7',
       'second step-out should exit the caller',
+    );
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('step over and out stop at a nested mock exception that unwinds multiple frames', async () => {
+  const events = [
+    event(1, 'enter', 'A.main', 'root', ['root'], 'A.ts', 2),
+    event(2, 'enter', 'B.work', 'middle', ['root', 'middle'], 'B.ts', 2),
+    event(3, 'await', 'B.work', 'middle', ['root', 'middle'], 'B.ts', 3),
+    event(4, 'enter', 'Other.task', 'worker', ['worker'], 'B.ts', 2, {
+      taskId: 'other',
+    }),
+    event(5, 'throw', 'Other.task', 'worker', [], 'B.ts', 3, {
+      taskId: 'other',
+    }),
+    event(6, 'enter', 'C.fail', 'deep', ['root', 'middle', 'deep'], 'B.ts', 3),
+    // The simulated exception closes both C.fail and B.work at once.
+    event(7, 'throw', 'C.fail', 'deep', ['root'], 'B.ts', 4),
+    event(8, 'catch', 'A.main', 'root', ['root'], 'A.ts', 4),
+    event(9, 'return', 'A.main', 'root', [], 'A.ts', 6),
+  ];
+  const { dom, window, get, requests } = await createPlayer(
+    undefined,
+    chunk(events),
+  );
+  try {
+    moveTo(window, get, 2);
+    get('step-out').click();
+    assert.equal(get('progress').textContent, '7 / 9');
+    moveTo(window, get, 3);
+    get('step-over').click();
+    assert.equal(get('progress').textContent, '7 / 9');
+    moveTo(window, get, 7);
+    get('step-over').click();
+    assert.equal(get('progress').textContent, '8 / 9');
+    moveTo(window, get, 7);
+    get('step-out').click();
+    assert.equal(get('progress').textContent, '9 / 9');
+    assert.equal(requests(), 0);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('multi-frame mock unwinding navigates across prepared chunks and restores source and console', async () => {
+  const events = [
+    event(1, 'enter', 'A.main', 'root', ['root'], 'A.ts', 2),
+    event(2, 'enter', 'B.work', 'middle', ['root', 'middle'], 'B.ts', 2),
+    event(3, 'await', 'B.work', 'middle', ['root', 'middle'], 'B.ts', 3),
+    event(4, 'enter', 'Other.task', 'worker', ['worker'], 'B.ts', 2, {
+      taskId: 'other',
+    }),
+    event(5, 'return', 'Other.task', 'worker', [], 'B.ts', 3, {
+      taskId: 'other',
+    }),
+    event(6, 'enter', 'C.fail', 'deep', ['root', 'middle', 'deep'], 'B.ts', 3),
+    event(7, 'throw', 'C.fail', 'deep', ['root'], 'B.ts', 4),
+    event(8, 'catch', 'A.main', 'root', ['root'], 'A.ts', 4),
+    event(9, 'console', 'A.main', 'root', ['root'], 'A.ts', 5, {
+      output: 'recovered',
+    }),
+    event(10, 'return', 'A.main', 'root', [], 'A.ts', 6),
+  ];
+  const first = chunk(events.slice(0, 2), undefined, 'chunk-two');
+  const { dom, window, get, requests } = await createPlayer(
+    (url) =>
+      url.endsWith('chunk-two')
+        ? chunk(events.slice(2, 6), 'chunk-one', 'chunk-three')
+        : chunk(events.slice(6), 'chunk-two'),
+    first,
+  );
+  try {
+    moveTo(window, get, 2);
+    get('step-out').click();
+    await waitFor(() => get('progress').textContent === '7 / 10');
+    assert.equal(get('source').textContent, 'B.ts');
+    assert.equal(get('console-output').textContent, '');
+    assert.equal(get('frame-list').children.length, 1);
+
+    moveTo(window, get, 3);
+    get('step-over').click();
+    assert.equal(get('progress').textContent, '7 / 10');
+    get('step-into').click();
+    assert.equal(get('progress').textContent, '8 / 10');
+    assert.equal(get('source').textContent, 'A.ts');
+    get('next').click();
+    assert.equal(get('console-output').textContent, 'recovered');
+    get('previous').click();
+    assert.equal(get('console-output').textContent, '');
+    moveTo(window, get, 6);
+    assert.equal(get('frame-list').children.length, 3);
+    assert.equal(get('source').textContent, 'B.ts');
+    get('step-out').click();
+    assert.equal(get('progress').textContent, '7 / 10');
+    assert.equal(
+      requests(),
+      2,
+      'navigation only fetches persisted continuations',
     );
   } finally {
     dom.window.close();
@@ -804,7 +976,10 @@ test('switching to baseline during a pending continuation keeps its timeline iso
     assert.equal(get('next-chunk').hidden, true);
     moveTo(window, get, 2);
     assert.equal(get('next').disabled, true);
-    assert.equal(get('status').textContent, 'Replay complete');
+    assert.equal(
+      get('status').textContent,
+      'Mock scenario complete · source coverage unverified',
+    );
     assert.equal(get('play').textContent, 'Play');
     switchVariant('proposed');
     assert.equal(get('progress').textContent, '4 / 8');
@@ -992,7 +1167,7 @@ test('runtime continuation rejects a different recording or simulated evidence',
           get('status').textContent.includes('Continuation unavailable'),
         );
         assert.equal(get('progress').textContent, '4 / 4');
-        assert.equal(get('evidence-mode').textContent, 'Recorded execution');
+        assert.equal(get('evidence-mode').textContent, 'Simulated values');
       } finally {
         dom.window.close();
       }

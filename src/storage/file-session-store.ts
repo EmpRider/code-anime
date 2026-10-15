@@ -292,11 +292,10 @@ export class FileSessionStore implements SessionStore {
         this.index.set(id, {
           createdAt: session.createdAt,
           ...(sourceSnapshotId ? { sourceSnapshotId } : {}),
-          ...((session.flow.trace?.recording ?? session.flow.trace?.simulation)
-            ?.previousSessionId
+          ...(session.flow.trace?.simulation?.previousSessionId
             ? {
-                previousSessionId: (session.flow.trace?.recording ??
-                  session.flow.trace?.simulation)!.previousSessionId!,
+                previousSessionId:
+                  session.flow.trace.simulation.previousSessionId,
               }
             : {}),
         });
@@ -380,9 +379,7 @@ export class FileSessionStore implements SessionStore {
           flag: 'wx',
         });
         await rename(temporary, target);
-        const previousSessionId = (
-          flow.trace?.recording ?? flow.trace?.simulation
-        )?.previousSessionId;
+        const previousSessionId = flow.trace?.simulation?.previousSessionId;
         this.index.set(session.id, {
           createdAt: session.createdAt,
           ...(sourceSnapshotId ? { sourceSnapshotId } : {}),

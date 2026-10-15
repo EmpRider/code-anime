@@ -6,13 +6,17 @@ import {
 import { z } from 'zod';
 import { readFileSync } from 'node:fs';
 import { type SessionStore } from '../domain/flow.js';
+import { eventSchema } from '../domain/trace.js';
 import { AnimationBuilder } from '../services/animation-builder.js';
 import { SimulationService } from '../services/simulation-service.js';
 import { VisualizationService } from '../services/visualization-service.js';
-import { RecordingService } from '../services/recording-service.js';
 
 const string = { type: 'string' };
 const object = { type: 'object', additionalProperties: true };
+// Keep advertised event kinds in sync with the actual trace validator. Agents
+// build their requests from tools/list, so an omitted kind is unusable even
+// when the server's event builder accepts it.
+const eventKinds = eventSchema.shape.kind.options;
 const schema = (
   properties: Record<string, unknown>,
   required: string[] = [],
@@ -32,33 +36,11 @@ export function createMcpServer(
     service.root(root),
   );
   const builder = new AnimationBuilder(simulation, store);
-  const recorder = new RecordingService(store, baseUrl, (root) =>
-    service.root(root),
-  );
   const server = new Server(
     { name: 'code-anime', version },
     { capabilities: { tools: {} } },
   );
   const tools = [
-    {
-      name: 'record_execution',
-      description:
-        'Execute a trusted Python or JavaScript entry file and record actual runtime events. Runs application code with local permissions and real side effects; use only when execution is requested. No CodeGraph or AI-generated steps required. Returns jobId; use status to get progress and a player URL, cancel to retain partial evidence. Python captures main-thread calls, generators, asyncio tasks, return values, exceptions, lines, locals and output. JavaScript captures V8 debugger-visible functions, pre-line locals and process output. JavaScript frame exits have no verified return value, and worker threads or child processes are outside scope.',
-      inputSchema: schema(
-        {
-          action: { type: 'string', enum: ['start', 'status', 'cancel'] },
-          language: { type: 'string', enum: ['python', 'javascript'] },
-          projectRoot: string,
-          entry: string,
-          args: { type: 'array', items: string },
-          jobId: string,
-          timeoutMs: { type: 'integer', minimum: 100, maximum: 300000 },
-          maxEvents: { type: 'integer', minimum: 10, maximum: 100000 },
-          maxTraceBytes: { type: 'integer', minimum: 4096, maximum: 67108864 },
-        },
-        ['action'],
-      ),
-    },
     {
       name: 'visualizer_capabilities',
       description:
@@ -197,22 +179,9 @@ export function createMcpServer(
               {
                 kind: {
                   type: 'string',
-                  enum: [
-                    'enter',
-                    'call',
-                    'return',
-                    'assign',
-                    'transform',
-                    'mutate',
-                    'branch',
-                    'loop',
-                    'await',
-                    'throw',
-                    'catch',
-                    'unresolved',
-                    'plan',
-                  ],
+                  enum: eventKinds,
                 },
+                taskId: { type: 'string', minLength: 1, maxLength: 100 },
                 label: string,
                 symbol: string,
                 source: schema(
@@ -220,6 +189,13 @@ export function createMcpServer(
                     file: string,
                     line: { type: 'integer', minimum: 1 },
                     endLine: { type: 'integer', minimum: 1 },
+                    generated: schema(
+                      {
+                        file: string,
+                        line: { type: 'integer', minimum: 1 },
+                      },
+                      ['file', 'line'],
+                    ),
                   },
                   ['file', 'line', 'endLine'],
                 ),
@@ -227,6 +203,7 @@ export function createMcpServer(
                 evidenceIds: { type: 'array', items: string },
                 inputs: object,
                 result: {},
+                output: { type: 'string', maxLength: 16000 },
                 set: object,
                 unset: { type: 'array', items: string },
                 assignTo: string,
@@ -282,31 +259,25 @@ export function createMcpServer(
                 id: string,
                 kind: {
                   type: 'string',
-                  enum: [
-                    'enter',
-                    'call',
-                    'return',
-                    'assign',
-                    'transform',
-                    'mutate',
-                    'branch',
-                    'loop',
-                    'await',
-                    'throw',
-                    'catch',
-                    'unresolved',
-                    'plan',
-                  ],
+                  enum: eventKinds,
                 },
                 symbolId: string,
                 label: string,
                 callId: string,
+                taskId: string,
                 parentCallId: string,
                 source: schema(
                   {
                     file: string,
                     line: { type: 'integer', minimum: 1 },
                     endLine: { type: 'integer', minimum: 1 },
+                    generated: schema(
+                      {
+                        file: string,
+                        line: { type: 'integer', minimum: 1 },
+                      },
+                      ['file', 'line'],
+                    ),
                   },
                   ['file', 'line', 'endLine'],
                 ),
@@ -314,11 +285,13 @@ export function createMcpServer(
                 values: object,
                 inputs: object,
                 result: {},
+                output: string,
                 before: object,
                 after: object,
                 objectId: string,
                 origins: { type: 'object', additionalProperties: string },
                 locals: object,
+                objects: object,
                 snippet: { type: 'string', maxLength: 800 },
                 stack: { type: 'array', items: string },
                 certainty: {
@@ -361,9 +334,6 @@ export function createMcpServer(
       const raw = request.params.arguments ?? {};
       let result: unknown;
       switch (request.params.name) {
-        case 'record_execution':
-          result = await recorder.run(raw);
-          break;
         case 'visualizer_capabilities':
           z.object({}).strict().parse(raw);
           result = service.capabilities();
@@ -470,7 +440,6 @@ export function createMcpServer(
     }
   });
   server.onclose = () => {
-    recorder.close();
     service.close();
     builder.close();
     simulation.close();

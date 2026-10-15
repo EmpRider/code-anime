@@ -1,6 +1,6 @@
 # CodeGraph evidence and AI simulation
 
-Code Anime uses CodeGraph for source discovery/retrieval and the host AI for mock execution. The default simulation workflow does not execute application code. A separate opt-in Python runtime recorder captures observed execution; see the README for its scope and limits.
+Code Anime uses CodeGraph for source discovery/retrieval and the host AI for source-grounded mock execution. Every value, branch, return and console event is simulated. The analyzed application is never executed, instrumented or recorded. The permanent product boundary is documented in `AGENTS.md`.
 
 ## Native connection
 
