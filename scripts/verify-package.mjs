@@ -24,14 +24,12 @@ try {
   const paths = packed.files.map((file) => file.path);
   for (const path of [
     'dist/index.js',
-    'dist/recording/python-recorder.py',
-    'dist/recording/node-recorder.mjs',
-    'dist/recording/inspector-stderr.mjs',
     'public/index.html',
     'public/player.js',
     'public/styles.css',
     'public/replay.js',
     'skills/code-anime/SKILL.md',
+    'AGENTS.md',
     'LICENSE',
   ])
     assert.ok(paths.includes(path), 'Missing package asset: ' + path);
@@ -116,88 +114,26 @@ try {
   });
   await client.connect(transport);
   const tools = await client.listTools();
-  assert.equal(tools.tools.length, 11);
-  await writeFile(join(project, 'runtime.py'), 'print(10 + 20)\n');
-  const recordCall = async (arguments_) => {
-    const response = await client.callTool({
-      name: 'record_execution',
-      arguments: arguments_,
-    });
-    assert.notEqual(response.isError, true, JSON.stringify(response));
-    return JSON.parse(response.content[0].text);
-  };
-  const recordingJob = await recordCall({
-    action: 'start',
-    language: 'python',
-    projectRoot: project,
-    entry: 'runtime.py',
-  });
-  let recording;
-  for (let i = 0; i < 200; i++) {
-    recording = await recordCall({
-      action: 'status',
-      jobId: recordingJob.jobId,
-    });
-    if (!['running', 'saving'].includes(recording.status)) break;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  assert.equal(recording.status, 'ready', JSON.stringify(recording));
-  assert.equal(recording.complete, true);
-  const recordedFlow = await (
-    await fetch(new URL('/api/flow/' + recording.sessionId, recording.url))
-  ).json();
-  assert.equal(
-    recordedFlow.trace.events
-      .filter((event) => event.kind === 'console')
-      .map((event) => event.output)
-      .join(''),
-    '30\n',
-  );
-  await writeFile(
-    join(project, 'runtime.cjs'),
-    'function add(a, b) { return a + b; }\nconsole.log(add(10, 20));\n',
-  );
-  const javascriptJob = await recordCall({
-    action: 'start',
-    language: 'javascript',
-    projectRoot: project,
-    entry: 'runtime.cjs',
-  });
-  let javascriptRecording;
-  for (let i = 0; i < 200; i++) {
-    javascriptRecording = await recordCall({
-      action: 'status',
-      jobId: javascriptJob.jobId,
-    });
-    if (!['running', 'saving'].includes(javascriptRecording.status)) break;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  assert.equal(
-    javascriptRecording.status,
-    'ready',
-    JSON.stringify(javascriptRecording),
-  );
-  assert.equal(javascriptRecording.complete, true);
-  const javascriptFlow = await (
-    await fetch(
-      new URL(
-        '/api/flow/' + javascriptRecording.sessionId,
-        javascriptRecording.url,
-      ),
-    )
-  ).json();
-  assert.equal(javascriptFlow.trace.provider, 'node-v8-inspector');
+  assert.equal(tools.tools.length, 10);
+  for (const tool of ['read_codegraph_evidence', 'build_mock_animation'])
+    assert.ok(
+      tools.tools.some((item) => item.name === tool),
+      'Missing mock tool: ' + tool,
+    );
   assert.ok(
-    javascriptFlow.trace.events.some(
-      (event) => event.kind === 'enter' && event.symbolId === 'runtime.cjs:add',
-    ),
+    !tools.tools.some((item) => item.name === 'record_execution'),
+    'Runtime recording tool must not be advertised',
   );
-  assert.equal(
-    javascriptFlow.trace.events
-      .filter((event) => event.kind === 'console')
-      .map((event) => event.output)
-      .join(''),
-    '30\n',
+  assert.ok(
+    !paths.some(
+      (path) =>
+        path.startsWith('dist/recording/') ||
+        /^dist\/services\/recording-service\./.test(path) ||
+        /^dist\/.*(?:node-recorder|python-recorder|inspector-stderr)/.test(
+          path,
+        ),
+    ),
+    'Runtime recording implementation leaked into package',
   );
   const submission = await client.callTool({
     name: 'visualize_code_flow',
@@ -223,6 +159,15 @@ try {
   const trace = await (
     await fetch(new URL('/api/flow/' + ready.sessionId, ready.url))
   ).json();
+  assert.ok(
+    trace.trace.events.every((event) => event.certainty !== 'observed'),
+    'Packaged flow must never describe simulated or structural data as observed',
+  );
+  assert.equal(
+    trace.trace.recording,
+    undefined,
+    'Recording metadata must not be exposed',
+  );
   assert.equal(
     trace.trace.provider,
     nativeCommand ? 'codegraph-native' : 'codegraph-bridge: fixture',

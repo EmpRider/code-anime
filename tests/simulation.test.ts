@@ -187,6 +187,26 @@ test('CodeGraph receipts gate full mock state, continuation and proposed compari
       }),
       /before and after/,
     );
+    await assert.rejects(
+      service.submit({
+        ...payload,
+        events: [
+          event('invalid-location', {
+            source: { file: 'Service.kt', line: 999, endLine: 999 },
+          }),
+          event('invalid-location-return', {
+            kind: 'return',
+            stack: [],
+          }),
+        ],
+      }),
+      /beyond its \d+ source lines/,
+    );
+    assert.deepEqual(
+      await store.list(),
+      [],
+      'Invalid source positions must not persist a session',
+    );
     const first = await service.submit({
       ...payload,
       events: events.slice(0, 7),
@@ -285,5 +305,89 @@ test('missing CodeGraph blocks evidence retrieval and creates no animation', asy
   } finally {
     service.close();
     await store.close();
+  }
+});
+
+test('mock continuation rejects mismatched CodeGraph evidence and changed source snapshots', async () => {
+  const projectRoot = await mkdtemp(join(tmpdir(), 'code-anime-source-drift-'));
+  const path = join(projectRoot, 'Handler.kt');
+  await writeFile(path, 'fun run() = 1\n');
+  const store = await FileSessionStore.open(tmpdir(), {
+    ttlMs: 60000,
+    maxSessions: 10,
+    maxSessionBytes: 1000000,
+  });
+  let providerText = 'CodeGraph: Handler.run source version one';
+  const service = new SimulationService(
+    store,
+    'http://localhost:1',
+    async (root) => root,
+    async () => ({ text: providerText, files: 1, status: 'indexed' }),
+  );
+  try {
+    const initialEvidence = await service.read({
+      projectRoot,
+      tool: 'node',
+      arguments: { symbol: 'Handler.run' },
+    });
+    const event = (id: string, evidenceId: string): TraceEvent => ({
+      id,
+      kind: 'statement',
+      symbolId: 'Handler.run',
+      callId: 'call-1',
+      label: 'Simulated statement',
+      evidenceIds: [evidenceId],
+      source: { file: 'Handler.kt', line: 1, endLine: 1 },
+      values: {},
+      locals: {},
+      stack: ['call-1'],
+      certainty: 'mock',
+    });
+    const payload = (id: string, evidenceId: string) => ({
+      projectRoot,
+      endpoint: 'Handler.run',
+      evidenceIds: [evidenceId],
+      scenario: { input: 1 },
+      events: [event(id, evidenceId)],
+      coverage: 'One explicitly simulated statement',
+      complete: false,
+    });
+    const first = await service.submit(
+      payload('first-event', initialEvidence.evidenceId),
+    );
+    providerText = 'CodeGraph: Handler.run source version two';
+    const changedEvidence = await service.read({
+      projectRoot,
+      tool: 'node',
+      arguments: { symbol: 'Handler.run' },
+    });
+    await assert.rejects(
+      service.submit({
+        ...payload('next-event', changedEvidence.evidenceId),
+        continuationOf: first.sessionId,
+      }),
+      /CodeGraph evidence differs/,
+    );
+    await assert.rejects(
+      service.submit({
+        ...payload('next-event', initialEvidence.evidenceId),
+        continuationOf: first.sessionId,
+        baselineSessionId: randomUUID(),
+      }),
+      /preserve its comparison baseline/,
+    );
+    await writeFile(path, 'fun run() = 2\n');
+    await assert.rejects(
+      service.submit({
+        ...payload('next-event', initialEvidence.evidenceId),
+        continuationOf: first.sessionId,
+      }),
+      /changed between mock animation chunks/,
+    );
+    assert.equal((await store.list()).length, 1);
+  } finally {
+    service.close();
+    await store.close();
+    await rm(projectRoot, { recursive: true, force: true });
   }
 });

@@ -1,5 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TraceEvent } from '../domain/trace.js';
@@ -16,21 +16,48 @@ export class EventJournal {
   count = 0;
 
   async append(events: TraceEvent[]) {
-    for (const event of events)
-      if (Buffer.byteLength(JSON.stringify(event)) > CHUNK_BYTES)
+    if (!events.length) return;
+    const pages: string[] = [];
+    let items: string[] = [];
+    let bytes = 2; // JSON array brackets
+    for (const event of events) {
+      const serialized = JSON.stringify(event);
+      const eventBytes = Buffer.byteLength(serialized);
+      if (eventBytes + 2 > CHUNK_BYTES)
         throw new Error('One event snapshot exceeds the session budget');
-    await writeFile(
-      join(this.directory, `${this.batches}.json`),
-      JSON.stringify(events),
-      { mode: 0o600 },
-    );
-    this.batches++;
+      const separatorBytes = items.length ? 1 : 0;
+      if (items.length && bytes + separatorBytes + eventBytes > CHUNK_BYTES) {
+        pages.push(`[${items.join(',')}]`);
+        items = [];
+        bytes = 2;
+      }
+      bytes += (items.length ? 1 : 0) + eventBytes;
+      items.push(serialized);
+    }
+    if (items.length) pages.push(`[${items.join(',')}]`);
+
+    // Do not expose an append until all bounded files are written. If a later
+    // write fails, remove every file attempted in this append before retrying.
+    const attempted: string[] = [];
+    try {
+      for (const [index, page] of pages.entries()) {
+        const path = join(this.directory, `${this.batches + index}.json`);
+        attempted.push(path);
+        await writeFile(path, page, { mode: 0o600 });
+      }
+    } catch (error) {
+      await Promise.allSettled(
+        attempted.map((path) => rm(path, { force: true })),
+      );
+      throw error;
+    }
+    this.batches += pages.length;
     this.count += events.length;
   }
 
   async *chunks(): AsyncGenerator<TraceEvent[]> {
     let chunk: TraceEvent[] = [];
-    let size = 0;
+    let size = 2;
     for (let batch = 0; batch < this.batches; batch++) {
       const events: TraceEvent[] = JSON.parse(
         await readFile(join(this.directory, `${batch}.json`), 'utf8'),
@@ -39,14 +66,14 @@ export class EventJournal {
         const bytes = Buffer.byteLength(JSON.stringify(event));
         if (
           chunk.length &&
-          (chunk.length >= 2000 || size + bytes > CHUNK_BYTES)
+          (chunk.length >= 2000 || size + 1 + bytes > CHUNK_BYTES)
         ) {
           yield chunk;
           chunk = [];
-          size = 0;
+          size = 2;
         }
         chunk.push(event);
-        size += bytes;
+        size += (chunk.length > 1 ? 1 : 0) + bytes;
       }
     }
     if (chunk.length) yield chunk;
