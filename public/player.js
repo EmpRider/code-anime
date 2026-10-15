@@ -490,7 +490,7 @@ function buildNodes(preserveInspection = false) {
       
     // Determine file for this symbol
     let symbolFile = "Unknown";
-    const symbolEvent = (flow.trace?.events ?? []).find(e => e.symbolId === name);
+    const symbolEvent = (flow.trace?.events ?? []).find(e => e.symbolId === name && e.kind === "enter") || (flow.trace?.events ?? []).find(e => e.symbolId === name);
     if (symbolEvent?.source?.file) symbolFile = symbolEvent.source.file;
     node.dataset.file = symbolFile;
     const groupContainer = getOrCreateGroup(symbolFile);
