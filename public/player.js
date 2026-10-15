@@ -292,6 +292,50 @@ function traceSteps(trace) {
   }));
 }
 function buildNodes(preserveInspection = false) {
+  // --- Nested Grouping Helper (v2) ---
+  const getOrCreateGroup = (file) => {
+    if (!file || file === "Unknown") file = "root";
+    const parts = file.split("/");
+    const fileName = parts.pop();
+    const dirPath = parts.length ? parts.join("/") : "root";
+    const canvasEl = document.getElementById("canvas");
+    if (!canvasEl) return null;
+    
+    let dirGroup = canvasEl.querySelector(`.flow-group[data-dir="${dirPath}"]`);
+    if (!dirGroup) {
+      dirGroup = document.createElement("div");
+      dirGroup.className = "flow-group flow-group-dir";
+      dirGroup.dataset.dir = dirPath;
+      const label = document.createElement("div");
+      label.className = "flow-group-label";
+      label.textContent = dirPath === "root" ? "Project Root" : dirPath.split("/").pop();
+      label.title = dirPath;
+      const content = document.createElement("div");
+      content.className = "flow-group-content";
+      dirGroup.appendChild(label);
+      dirGroup.appendChild(content);
+      canvasEl.appendChild(dirGroup);
+    }
+    
+    let fileGroup = dirGroup.querySelector(`.flow-group[data-file="${file}"]`);
+    if (!fileGroup) {
+      fileGroup = document.createElement("div");
+      fileGroup.className = "flow-group flow-group-file";
+      fileGroup.dataset.file = file;
+      const label = document.createElement("div");
+      label.className = "flow-group-label";
+      label.textContent = fileName;
+      label.title = file;
+      const content = document.createElement("div");
+      content.className = "flow-group-content";
+      fileGroup.appendChild(label);
+      fileGroup.appendChild(content);
+      dirGroup.querySelector(".flow-group-content").appendChild(fileGroup);
+    }
+    return fileGroup.querySelector(".flow-group-content");
+  };
+  // -----------------------------------
+
   traceRevision++;
   nodes.clear();
   invocations.clear();
@@ -443,7 +487,16 @@ function buildNodes(preserveInspection = false) {
       node.title = name;
       node.classList.toggle('proposed', proposed.has(name));
       nodes.set(name, node);
-      $('canvas').append(node);
+      
+    // Determine file for this symbol
+    let symbolFile = "Unknown";
+    const symbolEvent = (flow.trace?.events ?? []).find(e => e.symbolId === name);
+    if (symbolEvent?.source?.file) symbolFile = symbolEvent.source.file;
+    node.dataset.file = symbolFile;
+    const groupContainer = getOrCreateGroup(symbolFile);
+    if (groupContainer) groupContainer.appendChild(node);
+    else $('canvas').append(node);
+  
     }
   $('timeline').max = flow.steps.length;
   $('stat-events').textContent = flow.steps.length;
@@ -2395,6 +2448,30 @@ function render() {
       ],
       { duration: Number($('speed').value) * 0.65, easing: 'ease-in-out' },
     );
+
+  // --- Auto-centering Logic (v2) ---
+  if (cursor > 0 && flow && flow.steps[cursor - 1]) {
+    const step = flow.steps[cursor - 1];
+    const activeNode = nodes.get(step.to);
+    const canvasEl = document.getElementById("canvas");
+    if (activeNode && canvasEl) {
+      const nodeLeft = activeNode.offsetLeft;
+      const nodeWidth = activeNode.offsetWidth;
+      const canvasWidth = canvasEl.clientWidth;
+      const targetScrollX = nodeLeft - (canvasWidth / 2) + (nodeWidth / 2);
+      canvasEl.scrollTo({ left: Math.max(0, targetScrollX), behavior: "smooth" });
+    }
+  }
+  const activeSourceRow = document.querySelector(".source-line[aria-current=\"step\"]");
+  const sourceContainerEl = document.getElementById("source-lines");
+  if (activeSourceRow && sourceContainerEl) {
+    const rowTop = activeSourceRow.offsetTop;
+    const rowHeight = activeSourceRow.offsetHeight;
+    const containerHeight = sourceContainerEl.clientHeight;
+    const targetScrollY = rowTop - (containerHeight / 2) + (rowHeight / 2);
+    sourceContainerEl.scrollTo({ top: Math.max(0, targetScrollY), behavior: "smooth" });
+  }
+  // ---------------------------------
 }
 function announceSelectedStep() {
   if (!cursor) {
