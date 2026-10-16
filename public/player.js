@@ -509,8 +509,16 @@ function buildNodes(preserveInspection = false) {
   $('stat-changes').textContent =
     flow.trace?.events.filter(changed).length ?? '—';
   buildList();
-  // --- Zoom Controls (injected once) ---
-  if (!$("canvas").querySelector(".flow-zoom-controls")) {
+  // --- Zoom Controls (scoped to flow wrapper only) ---
+  const canvasEl = $("canvas");
+  let zt = canvasEl.querySelector(".flow-zoom-target");
+  if (!zt) {
+    zt = document.createElement("div");
+    zt.className = "flow-zoom-target";
+    while (canvasEl.firstChild) zt.appendChild(canvasEl.firstChild);
+    canvasEl.appendChild(zt);
+  }
+  if (!canvasEl.querySelector(".flow-zoom-controls")) {
     const zc = document.createElement("div");
     zc.className = "flow-zoom-controls";
     const mkBtn = (label, title, fn) => {
@@ -519,15 +527,15 @@ function buildNodes(preserveInspection = false) {
       b.onclick = fn; return b;
     };
     let z = 1;
-    const apply = () => { $("canvas").style.transform = "scale(" + z + ")"; $("canvas").style.transformOrigin = "top left"; };
+    const apply = () => { zt.style.transform = "scale(" + z + ")"; zt.style.transformOrigin = "top left"; };
     zc.append(
       mkBtn("−", "Zoom out", () => { z = Math.max(0.3, z - 0.15); apply(); }),
       mkBtn("⟲", "Reset", () => { z = 1; apply(); }),
       mkBtn("+", "Zoom in", () => { z = Math.min(2.5, z + 0.15); apply(); })
     );
-    $("canvas").appendChild(zc);
+    canvasEl.appendChild(zc);
   }
-  // --------------------------------------
+  // ---------------------------------------------------
 }
 const LIST_PAGE_SIZE = 150;
 let listPage = 0;
