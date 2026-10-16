@@ -2203,6 +2203,67 @@ const drawConnections = () => {
   const fromNode = nodes.get(step.from);
   const toNode = nodes.get(step.to);
   if (!(fromNode && toNode)) return;
+  
+  // Use Cytoscape for better edge routing if available
+  if (typeof window.cytoscape !== "undefined") {
+    try {
+      const cyTemp = window.cytoscape({
+        headless: true,
+        elements: [
+          { data: { id: "from" } },
+          { data: { id: "to" } },
+          { data: { id: "edge", source: "from", target: "to" } }
+        ],
+        style: [{ selector: "edge", style: { "curve-style": "bezier" } }],
+        layout: { name: "preset" }
+      });
+      const rel = (el) => {
+        let x = 0, y = 0, n = el;
+        while (n && n !== canvas) { x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; }
+        return { x: x + el.offsetWidth / 2, y: y + el.offsetHeight / 2 };
+      };
+      const p1 = rel(fromNode), p2 = rel(toNode);
+      cyTemp.getElementById("from").position(p1);
+      cyTemp.getElementById("to").position(p2);
+      cyTemp.layout({ name: "preset" }).run();
+      const edge = cyTemp.getElementById("edge");
+      const pts = edge.controlPoints ? edge.controlPoints() : null;
+      cyTemp.destroy();
+      
+      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+      marker.setAttribute("id", "arrowhead");
+      marker.setAttribute("markerWidth", "8");
+      marker.setAttribute("markerHeight", "6");
+      marker.setAttribute("refX", "7");
+      marker.setAttribute("refY", "3");
+      marker.setAttribute("orient", "auto");
+      const poly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+      poly.setAttribute("points", "0 0, 8 3, 0 6");
+      poly.setAttribute("fill", "#94a3b8");
+      marker.appendChild(poly);
+      defs.appendChild(marker);
+      svg.appendChild(defs);
+      
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      if (pts && pts.length > 0) {
+        const cp = pts[0];
+        path.setAttribute("d", `M ${p1.x} ${p1.y} Q ${cp.x} ${cp.y}, ${p2.x} ${p2.y}`);
+      } else {
+        const midY = (p1.y + p2.y) / 2;
+        path.setAttribute("d", `M ${p1.x} ${p1.y} L ${p1.x} ${midY} L ${p2.x} ${midY} L ${p2.x} ${p2.y}`);
+      }
+      path.setAttribute("stroke", "#94a3b8");
+      path.setAttribute("stroke-width", "1.5");
+      path.setAttribute("fill", "none");
+      path.setAttribute("opacity", "0.7");
+      path.setAttribute("marker-end", "url(#arrowhead)");
+      svg.appendChild(path);
+      return;
+    } catch (e) { /* fallback below */ }
+  }
+  
+  // Fallback: orthogonal elbow
   const rel = (el) => {
     let x = 0, y = 0, n = el;
     while (n && n !== canvas) { x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; }
@@ -2232,8 +2293,7 @@ const drawConnections = () => {
   path.setAttribute("opacity", "0.7");
   path.setAttribute("marker-end", "url(#arrowhead)");
   svg.appendChild(path);
-};
-// -------------------------
+};// -------------------------
 
 function render() {
   if (!flow) return;
