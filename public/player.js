@@ -336,6 +336,13 @@ function buildNodes(preserveInspection = false) {
   };
   // -----------------------------------
 
+  // --- Symbol->File Map (enter-first) ---
+  const symbolFileMap = new Map();
+  for (const ev of (flow.trace?.events ?? [])) {
+    if (!ev.symbolId || !ev.source?.file) continue;
+    if (ev.kind === 'enter' || !symbolFileMap.has(ev.symbolId)) symbolFileMap.set(ev.symbolId, ev.source.file);
+  }
+  // ------------------------------------
   traceRevision++;
   nodes.clear();
   invocations.clear();
@@ -488,10 +495,8 @@ function buildNodes(preserveInspection = false) {
       node.classList.toggle('proposed', proposed.has(name));
       nodes.set(name, node);
       
-    // Determine file for this symbol
-    let symbolFile = "Unknown";
-    const symbolEvent = (flow.trace?.events ?? []).find(e => e.symbolId === name && e.kind === "enter") || (flow.trace?.events ?? []).find(e => e.symbolId === name);
-    if (symbolEvent?.source?.file) symbolFile = symbolEvent.source.file;
+    // Determine file for this symbol (prebuilt map)
+    let symbolFile = symbolFileMap.get(name) || "root";
     node.dataset.file = symbolFile;
     const groupContainer = getOrCreateGroup(symbolFile);
     if (groupContainer) groupContainer.appendChild(node);
@@ -2148,8 +2153,6 @@ function followSelectedEventRow() {
 const drawConnections = () => {
   const canvas = document.getElementById("canvas");
   if (!canvas || !flow || !cursor) return;
-  
-  // Remove old SVG if exists
   let svg = canvas.querySelector("svg.flow-arrows");
   if (!svg) {
     svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -2157,61 +2160,50 @@ const drawConnections = () => {
     svg.style.position = "absolute";
     svg.style.top = "0";
     svg.style.left = "0";
-    svg.style.width = "100%";
-    svg.style.height = "100%";
     svg.style.pointerEvents = "none";
-    svg.style.zIndex = "0";
+    svg.style.zIndex = "5";
     canvas.appendChild(svg);
   }
-  svg.innerHTML = ""; // Clear old paths
-
-  // Get current step
+  const w = Math.max(canvas.scrollWidth, canvas.clientWidth);
+  const h = Math.max(canvas.scrollHeight, canvas.clientHeight);
+  svg.setAttribute("width", w);
+  svg.setAttribute("height", h);
+  svg.style.width = w + "px";
+  svg.style.height = h + "px";
+  svg.innerHTML = "";
   const step = flow.steps[cursor - 1];
   if (!step) return;
-
   const fromNode = nodes.get(step.from);
   const toNode = nodes.get(step.to);
-
-  if (fromNode && toNode) {
-    const canvasRect = canvas.getBoundingClientRect();
-    const fromRect = fromNode.getBoundingClientRect();
-    const toRect = toNode.getBoundingClientRect();
-
-    // Calculate centers relative to canvas
-    const x1 = fromRect.left + fromRect.width / 2 - canvasRect.left + canvas.scrollLeft;
-    const y1 = fromRect.top + fromRect.height / 2 - canvasRect.top + canvas.scrollTop;
-    const x2 = toRect.left + toRect.width / 2 - canvasRect.left + canvas.scrollLeft;
-    const y2 = toRect.top + toRect.height / 2 - canvasRect.top + canvas.scrollTop;
-
-    // Draw path
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    const d = `M ${x1} ${y1} C ${(x1+x2)/2} ${y1}, ${(x1+x2)/2} ${y2}, ${x2} ${y2}`;
-    path.setAttribute("d", d);
-    path.setAttribute("stroke", "#c4b5fd");
-    path.setAttribute("stroke-width", "2");
-    path.setAttribute("fill", "none");
-    path.setAttribute("marker-end", "url(#arrowhead)");
-    
-    // Add marker def if not exists
-    if (!svg.querySelector("defs")) {
-      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-      const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
-      marker.setAttribute("id", "arrowhead");
-      marker.setAttribute("markerWidth", "10");
-      marker.setAttribute("markerHeight", "7");
-      marker.setAttribute("refX", "9");
-      marker.setAttribute("refY", "3.5");
-      marker.setAttribute("orient", "auto");
-      const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-      polygon.setAttribute("points", "0 0, 10 3.5, 0 7");
-      polygon.setAttribute("fill", "#c4b5fd");
-      marker.appendChild(polygon);
-      defs.appendChild(marker);
-      svg.appendChild(defs);
-    }
-
-    svg.appendChild(path);
-  }
+  if (!(fromNode && toNode)) return;
+  const rel = (el) => {
+    let x = 0, y = 0, n = el;
+    while (n && n !== canvas) { x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; }
+    return { x: x + el.offsetWidth / 2, y: y + el.offsetHeight / 2 };
+  };
+  const p1 = rel(fromNode), p2 = rel(toNode);
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+  marker.setAttribute("id", "arrowhead");
+  marker.setAttribute("markerWidth", "12");
+  marker.setAttribute("markerHeight", "8");
+  marker.setAttribute("refX", "10");
+  marker.setAttribute("refY", "4");
+  marker.setAttribute("orient", "auto");
+  const poly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+  poly.setAttribute("points", "0 0, 12 4, 0 8");
+  poly.setAttribute("fill", "#a78bfa");
+  marker.appendChild(poly);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  const cx = (p1.x + p2.x) / 2;
+  path.setAttribute("d", `M ${p1.x} ${p1.y} C ${cx} ${p1.y}, ${cx} ${p2.y}, ${p2.x} ${p2.y}`);
+  path.setAttribute("stroke", "#a78bfa");
+  path.setAttribute("stroke-width", "2.5");
+  path.setAttribute("fill", "none");
+  path.setAttribute("marker-end", "url(#arrowhead)");
+  svg.appendChild(path);
 };
 // -------------------------
 
@@ -2531,7 +2523,7 @@ function render() {
       const nodeWidth = activeNode.offsetWidth;
       const canvasWidth = canvasEl.clientWidth;
       const targetScrollX = nodeLeft - (canvasWidth / 2) + (nodeWidth / 2);
-      canvasEl.scrollTo({ left: Math.max(0, targetScrollX), behavior: "smooth" });
+      if (typeof canvasEl.scrollTo === "function") canvasEl.scrollTo({ left: Math.max(0, targetScrollX), behavior: "smooth" });
     }
   }
   const activeSourceRow = document.querySelector(".source-line[aria-current=\"step\"]");
