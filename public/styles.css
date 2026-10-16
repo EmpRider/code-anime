@@ -2705,3 +2705,149 @@ button.node {
   z-index: 2;
   position: relative;
 }
+
+/* === Flow UI: White Cards + Colored Dots + Zoom === */
+button.node {
+  background: #ffffff !important;
+  color: #1a1f2e !important;
+  border: none !important;
+  border-radius: 12px !important;
+  padding: 16px 20px !important;
+  min-height: 80px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  position: relative !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+  transition: transform 0.15s, box-shadow 0.15s !important;
+}
+button.node:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 16px rgba(167, 139, 250, 0.35) !important;
+}
+button.node.active {
+  background: #ede9fe !important;
+  box-shadow: 0 0 0 3px #a78bfa, 0 4px 16px rgba(167, 139, 250, 0.4) !important;
+}
+button.node.destination {
+  background: #d1fae5 !important;
+  box-shadow: 0 0 0 3px #6ee7b7, 0 4px 16px rgba(110, 231, 183, 0.4) !important;
+}
+button.node.proposed {
+  background: #fef3c7 !important;
+  border: 2px dashed #f59e0b !important;
+}
+.node-caption {
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  letter-spacing: 1px !important;
+  color: #6b7280 !important;
+  text-transform: uppercase !important;
+}
+.node-name {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: #111827 !important;
+  word-break: break-word !important;
+  text-align: center !important;
+}
+/* Connection dots */
+button.node::before,
+button.node::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  z-index: 5;
+}
+button.node::before {
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #60a5fa;
+}
+button.node::after {
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #a78bfa;
+}
+button.node.active::before,
+button.node.active::after {
+  background: #a78bfa;
+}
+button.node.destination::before,
+button.node.destination::after {
+  background: #10b981;
+}
+/* Group cards */
+.flow-group {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid #4a5578 !important;
+  border-radius: 12px !important;
+  padding: 28px 16px 16px !important;
+  margin: 16px !important;
+}
+.flow-group-label {
+  background: #1a1f2e !important;
+  color: #c8d0e8 !important;
+  border: 1px solid #3a4568 !important;
+  border-radius: 6px !important;
+  padding: 4px 10px !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+}
+.flow-group-content {
+  gap: 20px !important;
+}
+/* Zoom controls */
+.flow-zoom-controls {
+  position: fixed;
+  bottom: 100px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 100;
+  background: #1a1f2e;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #3a4568;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.flow-zoom-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 18px;
+  font-weight: 600;
+  background: #242a3e;
+  border: 1px solid #4a5578;
+  color: #e8ecf8;
+  border-radius: 6px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.flow-zoom-btn:hover {
+  background: #2d3548;
+  border-color: #6a7598;
+}
+/* Arrow visibility */
+svg.flow-arrows {
+  overflow: visible;
+  pointer-events: none;
+  z-index: 10;
+}
+svg.flow-arrows path {
+  stroke: #a78bfa !important;
+  stroke-width: 2.5 !important;
+}
+svg.flow-arrows polygon {
+  fill: #a78bfa !important;
+}

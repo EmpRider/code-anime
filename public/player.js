@@ -509,6 +509,25 @@ function buildNodes(preserveInspection = false) {
   $('stat-changes').textContent =
     flow.trace?.events.filter(changed).length ?? '—';
   buildList();
+  // --- Zoom Controls (injected once) ---
+  if (!$("canvas").querySelector(".flow-zoom-controls")) {
+    const zc = document.createElement("div");
+    zc.className = "flow-zoom-controls";
+    const mkBtn = (label, title, fn) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "flow-zoom-btn"; b.textContent = label; b.title = title;
+      b.onclick = fn; return b;
+    };
+    let z = 1;
+    const apply = () => { $("canvas").style.transform = "scale(" + z + ")"; $("canvas").style.transformOrigin = "top left"; };
+    zc.append(
+      mkBtn("−", "Zoom out", () => { z = Math.max(0.3, z - 0.15); apply(); }),
+      mkBtn("⟲", "Reset", () => { z = 1; apply(); }),
+      mkBtn("+", "Zoom in", () => { z = Math.min(2.5, z + 0.15); apply(); })
+    );
+    $("canvas").appendChild(zc);
+  }
+  // --------------------------------------
 }
 const LIST_PAGE_SIZE = 150;
 let listPage = 0;
