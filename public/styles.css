@@ -2119,7 +2119,7 @@ main {
 }
 @media (min-width: 651px) {
   .workspace {
-    grid-template-columns: var(--trace-width, 220px) 8px minmax(0, 1fr);
+    grid-template-columns: var(--trace-width, 220px) minmax(0, 1fr);
     gap: 6px;
   }
   .workspace.timeline-collapsed:not(.source-focused):not(.flow-focused) {
@@ -2130,11 +2130,7 @@ main {
     display: none;
   }
   #workspace-divider {
-    display: block;
-    cursor: col-resize;
-    touch-action: none;
-    border-radius: 4px;
-    background: var(--border);
+    display: none;
   }
   #workspace-divider:hover,
   #workspace-divider:focus-visible {
@@ -2343,7 +2339,7 @@ main {
 }
 @media (min-width: 1101px) {
   .center-column.show-flow {
-    grid-template-columns: minmax(0, var(--source-share, 55fr)) 8px minmax(
+    grid-template-columns: minmax(0, var(--source-share, 55fr)) minmax(
         0,
         var(--flow-share, 45fr)
       );
@@ -2358,7 +2354,7 @@ main {
     grid-row: 1;
   }
   .center-column.show-flow > .flow-panel {
-    grid-column: 3;
+    grid-column: 2;
     grid-row: 1;
   }
   .center-column.show-flow > .console-panel {
@@ -2366,13 +2362,7 @@ main {
     grid-row: 2;
   }
   .center-column.show-flow > #source-flow-divider {
-    display: block;
-    grid-column: 2;
-    grid-row: 1;
-    cursor: col-resize;
-    touch-action: none;
-    background: var(--border);
-    border-radius: 4px;
+    display: none;
   }
   #source-flow-divider:hover,
   #source-flow-divider:focus-visible {

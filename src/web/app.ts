@@ -62,6 +62,20 @@ export function createWebApp(store: SessionStore) {
       ...(baselineNext ? { baselineNextSessionId: baselineNext.id } : {}),
     });
   });
+  app.post('/api/session', express.json(), async (req, res) => {
+    try {
+      const flow = req.body;
+      if (!flow || !Array.isArray(flow.steps)) {
+        res.status(400).json({ error: 'Invalid flow: steps array required' });
+        return;
+      }
+      const session = await store.create(flow);
+      res.json({ sessionId: session.id });
+    } catch (error) {
+      console.error('[code-anime] Session creation failed:', error);
+      res.status(500).json({ error: 'Could not create session' });
+    }
+  });
   app.get('/flow/:id', (req, res) => {
     if (!sessionIdSchema.safeParse(req.params.id).success) {
       res.status(400).send('Invalid session ID');
