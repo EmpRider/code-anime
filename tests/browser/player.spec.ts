@@ -818,6 +818,7 @@ for (const mobile of [false, true]) {
         0,
       );
       const positions = [
+        ['Horizontal layout', 1, 1],
         ['Pan up', 1, 2],
         ['Zoom in', 1, 3],
         ['Pan left', 2, 1],
@@ -843,6 +844,68 @@ for (const mobile of [false, true]) {
       await controls
         .getByRole('button', { name: 'Fit diagram', exact: true })
         .click();
+      const cursor = await page.locator('#progress').textContent();
+      await page
+        .getByRole('button', { name: 'Expand method B.work', exact: true })
+        .focus();
+      await page.keyboard.press('Enter');
+      const children = page.locator('.diagram-card[data-parent-id]');
+      const beforeDirection = await children.evaluateAll((nodes) =>
+        nodes.map((node) => node.getAttribute('data-step')),
+      );
+      await controls
+        .getByRole('button', { name: 'Horizontal layout', exact: true })
+        .click();
+      await expect(
+        controls.getByRole('button', { name: 'Vertical layout', exact: true }),
+      ).toBeVisible();
+      await expect(page.locator('#progress')).toHaveText(cursor!);
+      expect(
+        await children.evaluateAll((nodes) =>
+          nodes.map((node) => node.getAttribute('data-step')),
+        ),
+      ).toEqual(beforeDirection);
+      const first = (await children.nth(0).boundingBox())!;
+      const second = (await children.nth(1).boundingBox())!;
+      if (second.y > first.y + first.height) {
+        expect(second.x).toBeCloseTo(first.x, 0);
+      } else {
+        expect(second.x).toBeGreaterThan(first.x + first.width);
+        expect(second.y).toBeCloseTo(first.y, 0);
+      }
+      await expect(
+        controls.locator('.diagram-orientation .diagram-layout-icon'),
+      ).toBeVisible();
+      await expect(controls.locator('.diagram-orientation')).not.toContainText(
+        '⇅',
+      );
+      await expect(page.locator('.diagram-routing-status')).toBeEmpty();
+      await controls
+        .getByRole('button', { name: 'Vertical layout', exact: true })
+        .click();
+      const verticalFirst = (await children.nth(0).boundingBox())!;
+      const verticalSecond = (await children.nth(1).boundingBox())!;
+      expect(verticalSecond.y).toBeGreaterThan(
+        verticalFirst.y + verticalFirst.height,
+      );
+      expect(verticalSecond.x).toBeCloseTo(verticalFirst.x, 0);
+      await controls
+        .getByRole('button', { name: 'Horizontal layout', exact: true })
+        .click();
+      await page.reload();
+      await show(page, mobile, 'flow');
+      await expect(
+        controls.getByRole('button', { name: 'Vertical layout', exact: true }),
+      ).toBeVisible();
+      await controls
+        .getByRole('button', { name: 'Vertical layout', exact: true })
+        .click();
+      await expect(
+        controls.getByRole('button', {
+          name: 'Horizontal layout',
+          exact: true,
+        }),
+      ).toBeVisible();
       await page.screenshot({ path: info.outputPath('corner-controls.png') });
     });
     test('method inputs persist and controls follow the selected theme', async ({

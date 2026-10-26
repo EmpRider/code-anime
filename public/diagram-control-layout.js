@@ -1,19 +1,51 @@
 // Source structure only; outcomes and visit boundaries come from prepared events.
 export function layoutControlFlow(
   nodes,
-  { cursor = 0, visits = new Map(), extraHeight = () => 0 } = {},
+  {
+    cursor = 0,
+    visits = new Map(),
+    extraHeight = () => 0,
+    direction = 'vertical',
+    maxWidth = Infinity,
+    targetAspectRatio = 0,
+  } = {},
 ) {
   const cards = [],
     edges = [],
     regions = [];
-  const width = 260,
+  const horizontal = direction === 'horizontal';
+  const heights = new Map();
+  function measure(items) {
+    for (const node of items ?? []) {
+      const title =
+        node.iterations || node.branches || node.type === 'decision'
+          ? (node.title ?? '')
+          : (node.event?.label ?? node.title ?? '');
+      const lines = Math.max(1, Math.ceil(title.length / 30));
+      heights.set(
+        node.id,
+        (node.iterations
+          ? 136
+          : node.type === 'decision'
+            ? Math.max(144, 108 + lines * 20)
+            : 120 +
+              (lines - 1) * 20 +
+              (node.event?.kind === 'return' ? 16 : 0)) + extraHeight(node.id),
+      );
+      measure(node.children);
+      for (const branch of node.branches ?? []) measure(branch.children);
+      for (const visit of node.iterations ?? []) measure(visit.children);
+    }
+  }
+  if (horizontal) measure(nodes);
+  const inset = horizontal ? 32 : 16,
     gap = 44;
   function sequence(items, x, y) {
     let first,
       last,
       bottom = y,
       left = x,
-      right = x + width;
+      right = x + (horizontal ? 0 : 260);
     for (const node of items ?? []) {
       if (node.event?.kind === 'enter') continue;
       const part = place(node, x, bottom);
@@ -39,13 +71,16 @@ export function layoutControlFlow(
       ? (node.title ?? '')
       : (node.event?.label ?? node.title ?? '');
     const lines = Math.max(1, Math.ceil(title.length / 30));
-    const height =
-      (control === 'decision'
-        ? Math.max(144, 108 + lines * 20)
-        : control === 'loop'
-          ? 148
-          : 120 + (lines - 1) * 20 + (node.event?.kind === 'return' ? 16 : 0)) +
-      extraHeight(node.id);
+    const height = horizontal
+      ? 260
+      : (control === 'decision'
+          ? Math.max(144, 108 + lines * 20)
+          : control === 'loop'
+            ? 136
+            : 120 +
+              (lines - 1) * 20 +
+              (node.event?.kind === 'return' ? 16 : 0)) + extraHeight(node.id);
+    const width = horizontal ? heights.get(node.id) : 260;
     const card = { node, id: node.id, x, y, width, height, control };
     cards.push(card);
     let result = {
@@ -80,7 +115,7 @@ export function layoutControlFlow(
           ...result,
           last: body.last,
           bottom: body.bottom + 16,
-          left: body.left - 16,
+          left: body.left - inset,
           right: body.right + 16,
         };
       }
@@ -119,18 +154,19 @@ export function layoutControlFlow(
             placeholder: true,
             x: branchX,
             y: branchY + 56,
-            width,
-            height: 56,
+            width: horizontal ? 56 : 260,
+            height: horizontal ? 260 : 56,
           });
           part.first = part.last = id;
-          part.bottom = branchY + 112;
+          part.right = branchX + (horizontal ? 56 : 260);
+          part.bottom = branchY + 56 + (horizontal ? 260 : 56);
         }
         regions.push({
           id: node.id + '-lane-' + i,
           type: node.type,
-          x: part.left - 16,
+          x: part.left - inset,
           y: branchY,
-          width: part.right - part.left + 32,
+          width: part.right - part.left + inset + 16,
           height: Math.max(70, part.bottom - branchY) + 16,
           label:
             branch.label +
@@ -171,7 +207,7 @@ export function layoutControlFlow(
           }
         }
         result.bottom = Math.max(result.bottom, part.bottom + 16, branchY + 86);
-        result.left = Math.min(result.left, part.left - 16);
+        result.left = Math.min(result.left, part.left - inset);
         result.right = Math.max(result.right, part.right + 16);
         if (!staged) branchX = part.right + gap + 32;
       }
@@ -202,11 +238,112 @@ export function layoutControlFlow(
     return result;
   }
   const bounds = sequence(nodes, 24, 0);
+  if (horizontal) {
+    // Swap layout axes, not text or card dimensions; reserve room for upright labels.
+    for (const card of cards) {
+      [card.x, card.y] = [card.y + 24, card.x];
+      card.width = 260;
+      card.height = card.placeholder ? 56 : heights.get(card.id);
+    }
+    for (const region of regions) {
+      [region.x, region.y] = [region.y + 24, region.x];
+      [region.width, region.height] = [region.height, region.width];
+    }
+    for (const edge of edges)
+      if (edge.sourceSide)
+        edge.sourceSide = edge.sourceSide === 'right' ? 'bottom' : 'right';
+  }
+  let wrapped;
+  if (horizontal && Number.isFinite(maxWidth)) {
+    // Pack containment, not individual screen coordinates, so scopes survive row breaks.
+    const children = new Map([
+      [null, []],
+      ...regions.map((region) => [region, []]),
+    ]);
+    for (const item of [...cards, ...regions]) {
+      const parent =
+        regions
+          .filter(
+            (region) =>
+              region !== item &&
+              region.x <= item.x &&
+              region.y <= item.y &&
+              region.x + region.width >= item.x + item.width &&
+              region.y + region.height >= item.y + item.height &&
+              region.width * region.height > item.width * item.height,
+          )
+          .sort((a, b) => a.width * a.height - b.width * b.height)[0] ?? null;
+      children.get(parent).push(item);
+    }
+    for (const items of children.values())
+      items.sort((a, b) => a.x - b.x || a.y - b.y);
+    function move(item, dx, dy) {
+      item.x += dx;
+      item.y += dy;
+      for (const child of children.get(item) ?? []) move(child, dx, dy);
+    }
+    function pack(parent, available) {
+      const padding = parent ? 12 : 0;
+      const top = parent ? 28 : 0;
+      let x = padding,
+        y = top,
+        rowHeight = 0,
+        right = padding;
+      for (const item of children.get(parent)) {
+        if (children.has(item)) {
+          const size = pack(item, Math.max(284, available - padding * 2));
+          item.width = size.width;
+          item.height = size.height;
+          item.x = item.y = 0;
+        }
+        if (x > padding && x + item.width + padding > available) {
+          x = padding;
+          y += rowHeight + 40;
+          rowHeight = 0;
+        }
+        move(item, x - item.x, y - item.y);
+        right = Math.max(right, x + item.width);
+        rowHeight = Math.max(rowHeight, item.height);
+        x += item.width + 32;
+      }
+      return {
+        width: Math.max(parent ? 260 : 0, right + padding),
+        height: y + rowHeight + padding,
+      };
+    }
+    let available = Math.max(284, maxWidth - 24);
+    wrapped = pack(null, available);
+    // A narrow viewport must not turn horizontal mode into a portrait column.
+    while (
+      targetAspectRatio > 0 &&
+      wrapped.width / wrapped.height < targetAspectRatio &&
+      available < bounds.bottom + 48
+    ) {
+      available *= 1.2;
+      wrapped = pack(null, available);
+    }
+    for (const item of children.get(null)) move(item, 12, 12);
+    wrapped.width += 24;
+    wrapped.height += 24;
+    const byId = new Map(cards.map((card) => [card.id, card]));
+    for (const edge of edges) {
+      const source = byId.get(edge.source),
+        target = byId.get(edge.target);
+      if (target.y >= source.y + source.height) {
+        edge.sourceSide = 'bottom';
+        edge.targetSide = 'top';
+      } else {
+        edge.sourceSide ??= 'right';
+        edge.targetSide = 'left';
+      }
+    }
+  }
   return {
     cards,
     edges,
     regions,
-    width: bounds.right + 24,
-    height: bounds.bottom,
+    width:
+      wrapped?.width ?? (horizontal ? bounds.bottom + 48 : bounds.right + 24),
+    height: wrapped?.height ?? (horizontal ? bounds.right + 24 : bounds.bottom),
   };
 }

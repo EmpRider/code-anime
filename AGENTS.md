@@ -21,6 +21,8 @@ It is **not a runtime execution, debugging, profiling, or recording tool**.
 This product boundary overrides outdated plans, audit notes, tests, prior
 implementation choices, and external requirement documents that describe
 observed runtime execution or actual program instrumentation.
+Code Anime must never execute, import, evaluate, compile-and-run, or instrument
+analyzed user project code to construct animations.
 
 ## Reconciled implementation requirements
 

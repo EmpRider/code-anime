@@ -16,7 +16,7 @@ import './diagram.css';
 Config.autoInsertCSS = false;
 
 const WIDTH = 260;
-const HEIGHT = 128;
+const HEIGHT = 116;
 const STEP_GAP = 64;
 const PAGE_SIZE = 3;
 const element = (tag, value, className) => {
@@ -267,7 +267,36 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
     node.onclick = action;
     return node;
   };
+  let direction = 'vertical';
+  try {
+    if (localStorage.getItem('code-anime-layout') === 'horizontal')
+      direction = 'horizontal';
+  } catch {}
+  const orientation = button('', '', () => {
+    direction = direction === 'vertical' ? 'horizontal' : 'vertical';
+    try {
+      localStorage.setItem('code-anime-layout', direction);
+    } catch {}
+    updateOrientation();
+    signature = '';
+    render(options);
+  });
+  orientation.className = 'diagram-orientation';
+  const layoutIcon = element('span', '', 'diagram-layout-icon');
+  layoutIcon.setAttribute('aria-hidden', 'true');
+  orientation.append(layoutIcon);
+  function updateOrientation() {
+    const name =
+      direction === 'vertical' ? 'Horizontal layout' : 'Vertical layout';
+    orientation.title = name;
+    orientation.setAttribute('aria-label', name);
+    layoutIcon.style.transform =
+      direction === 'vertical' ? '' : 'rotate(90deg)';
+    container.dataset.direction = direction;
+  }
+  updateOrientation();
   controls.append(
+    orientation,
     button('−', 'Zoom out', () => zoom(-0.15)),
     button('Fit', 'Fit diagram', () => fit()),
     button('+', 'Zoom in', () => zoom(0.15)),
@@ -574,7 +603,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
       entries.find((entry) => entry.callSiteIndex === cursor)?.callId ??
       current?.callId ??
       flow.steps[Math.max(0, cursor - 1)]?.to;
-    const vertical = surface.clientWidth < 640;
+    const vertical = direction === 'vertical';
     let cards = [],
       links = [];
     const entryById = new Map(entries.map((entry) => [entry.callId, entry]));
@@ -794,6 +823,15 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
       const method = semantic.methods.find((item) => item.id === card.callId);
       if (card.expanded && method) {
         const layout = layoutControlFlow(method.items, {
+          direction,
+          maxWidth: Math.max(340, surface.clientWidth - 144),
+          targetAspectRatio: Math.max(
+            1.8,
+            Math.min(
+              2.4,
+              surface.clientWidth / Math.max(1, surface.clientHeight),
+            ),
+          ),
           cursor: follow ? cursor : 0,
           visits: selectedVisits,
           extraHeight: (id) =>
@@ -912,9 +950,9 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
       const children = innerCards.filter((child) => child.parentId === card.id);
       if (card.controlLayout) {
         for (const child of children) {
-          child.offsetY = card.headerHeight + 48 + child.layoutY;
+          child.offsetY = card.headerHeight + 16 + child.layoutY;
         }
-        card.height = card.headerHeight + 48 + card.controlLayout.height + 32;
+        card.height = card.headerHeight + 16 + card.controlLayout.height + 32;
         continue;
       }
       const rows = [];
@@ -944,7 +982,13 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
     const key = JSON.stringify([
       mode,
       vertical,
-      diagramCards.map((card) => [card.id, card.height, card.expanded]),
+      vertical ? null : surface.clientWidth,
+      diagramCards.map((card) => [
+        card.id,
+        card.width,
+        card.height,
+        card.expanded,
+      ]),
       [...boundaries.values()],
       links,
     ]);
@@ -959,8 +1003,8 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
         .setGraph({
           rankdir: vertical ? 'TB' : 'LR',
           align: 'UL',
-          ranksep: grouped ? 112 : 56,
-          nodesep: grouped ? 52 : 28,
+          ranksep: grouped ? 64 : 40,
+          nodesep: grouped ? 28 : 24,
           marginx: 20,
           marginy: 20,
         })
@@ -998,18 +1042,27 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
         const files = [...boundaries.values()]
           .filter((boundary) => boundary.kind === 'file')
           .sort((a, b) => layout.node(a.id).x - layout.node(b.id).x);
-        let right = -Infinity;
+        let right = 20,
+          rowHeight = 0,
+          rowTop;
         const top = Math.min(
           ...files.map((file) => {
             const point = layout.node(file.id);
             return point.y - point.height / 2;
           }),
         );
+        rowTop = top;
         for (const file of files) {
           const point = layout.node(file.id);
-          const shift = top - (point.y - point.height / 2);
-          const dx = Math.max(0, right + 112 - (point.x - point.width / 2));
-          right = point.x + dx + point.width / 2;
+          if (right > 20 && right + point.width > surface.clientWidth - 40) {
+            right = 20;
+            rowTop += rowHeight + 64;
+            rowHeight = 0;
+          }
+          const shift = rowTop - (point.y - point.height / 2);
+          const dx = right - (point.x - point.width / 2);
+          right += point.width + 64;
+          rowHeight = Math.max(rowHeight, point.height);
           for (const id of [
             file.id,
             ...file.members,
@@ -1083,7 +1136,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
           id: region.id,
           shape: 'code-anime-control-region',
           x: position.x + 16 + region.x,
-          y: position.y + parent.getData().headerHeight + 48 + region.y,
+          y: position.y + parent.getData().headerHeight + 16 + region.y,
           width: region.width,
           height: Math.max(1, region.height),
           zIndex: 1,
@@ -1188,8 +1241,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
             });
       }
       const unavailable = [];
-      let missingConnections = 0,
-        hiddenLabels = 0;
+      let missingConnections = 0;
       const endpoint = (id, point) => {
         const center = bounds(id);
         return {
@@ -1211,7 +1263,13 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
             ...rectangles.get(item.source),
             ...(sourceCard.control === 'decision' ? { shape: 'diamond' } : {}),
             ...(controlEdge
-              ? { sides: [item.sourceSide ?? 'bottom'], centered: true }
+              ? {
+                  sides:
+                    !vertical && item.kind === 'branch'
+                      ? ['right', 'bottom']
+                      : [item.sourceSide ?? (vertical ? 'bottom' : 'right')],
+                  centered: true,
+                }
               : {}),
           },
           item.kind === 'call' && nodeCells.get(item.target).getData().expanded
@@ -1225,7 +1283,15 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
                 ...(targetCard.control === 'decision'
                   ? { shape: 'diamond' }
                   : {}),
-                ...(controlEdge ? { sides: ['top'], centered: true } : {}),
+                ...(controlEdge
+                  ? {
+                      sides:
+                        !vertical && item.kind === 'branch'
+                          ? ['left', 'top']
+                          : [item.targetSide ?? (vertical ? 'top' : 'left')],
+                      centered: true,
+                    }
+                  : {}),
               },
           item.label,
         );
@@ -1300,26 +1366,13 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
               : [],
           }),
         );
-        if (item.label && !labelBox) {
-          hiddenLabels++;
-          unavailable.push(
-            `Label in Inspector: ${item.label.replaceAll('\n', ' ')}`,
-          );
-        }
       }
       routingStatus.replaceChildren();
       routingStatus.hidden = unavailable.length === 0;
       if (unavailable.length) {
         const summary = element(
           'summary',
-          [
-            missingConnections
-              ? `${missingConnections} connections not drawn`
-              : '',
-            hiddenLabels ? `${hiddenLabels} labels hidden` : '',
-          ]
-            .filter(Boolean)
-            .join(' · '),
+          `${missingConnections} connections not drawn`,
         );
         summary.setAttribute('aria-live', 'polite');
         const list = element('ul');
