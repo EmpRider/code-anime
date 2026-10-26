@@ -193,6 +193,9 @@ export function buildMethodGroups(events = []) {
       methodName: methodName || symbol,
       parentCallId: parentCallId !== event.callId ? parentCallId : undefined,
       index: offset + 1,
+      callSiteIndex: matchedEntry(events[offset - 1], event)
+        ? offset
+        : undefined,
       certainty: event.certainty ?? 'unverified',
     };
     entries.set(event.callId, entry);
@@ -217,6 +220,34 @@ export function buildMethodGroups(events = []) {
     })),
     classCount: groups.size,
   };
+}
+
+// Function identity excludes call sites; invocation records remain unchanged.
+export function groupFunctionInvocations(invocations, events = []) {
+  const functions = new Map();
+  const byCall = new Map();
+  for (const entry of invocations) {
+    const file = events[entry.index - 1]?.source?.file ?? '';
+    const symbol =
+      file && entry.symbol.startsWith(file + ':')
+        ? entry.symbol.slice(file.length + 1)
+        : entry.symbol;
+    const id = 'function:' + JSON.stringify([file, symbol]);
+    if (!functions.has(id))
+      functions.set(id, { id, symbol: entry.symbol, invocations: [] });
+    functions.get(id).invocations.push(entry);
+    byCall.set(entry.callId, id);
+  }
+  const relationships = invocations
+    .filter((entry) => byCall.has(entry.parentCallId))
+    .map((entry) => ({
+      source: byCall.get(entry.parentCallId),
+      target: byCall.get(entry.callId),
+      callId: entry.callId,
+      parentCallId: entry.parentCallId,
+      index: entry.callSiteIndex ?? entry.index,
+    }));
+  return { functions: [...functions.values()], byCall, relationships };
 }
 
 // Keep summaries small even for a trace with large nested values. Inspection

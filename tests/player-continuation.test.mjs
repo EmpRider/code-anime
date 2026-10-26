@@ -119,7 +119,10 @@ async function createPlayer(loadContinuation, first = initial()) {
     };
   };
   window.eval(
-    js.replace(/^import\s+\{[^}]+\}\s+from\s+['"][^'"]+['"];\r?\n/gm, ''),
+    js
+      .replace(/^import\s+\{[^}]+\}\s+from\s+['"][^'"]+['"];\r?\n/gm, '')
+      .replace('export function mountPlayer', 'function mountPlayer') +
+      '\nmountPlayer();',
   );
   await waitFor(
     () => get('progress').textContent === '0 / ' + first.steps.length,
@@ -990,6 +993,37 @@ test('switching to baseline during a pending continuation keeps its timeline iso
     assert.equal(requests(), 1);
   } finally {
     dom.window.close();
+  }
+});
+
+test('comparison navigation links follow the selected variant', async () => {
+  for (const baselinePrevious of [undefined, 'baseline-zero']) {
+    const first = initial();
+    first.trace.simulation.previousSessionId = 'proposed-zero';
+    first.baselineTrace = chunk(allEvents.slice(0, 2), baselinePrevious).trace;
+    const { dom, window, get } = await createPlayer(undefined, first);
+    try {
+      assert.equal(
+        get('previous-chunk').getAttribute('href'),
+        '/flow/proposed-zero',
+      );
+      get('variant').value = 'baseline';
+      get('variant').dispatchEvent(new window.Event('change'));
+      assert.equal(get('previous-chunk').hidden, !baselinePrevious);
+      assert.equal(
+        get('previous-chunk').getAttribute('href'),
+        baselinePrevious ? '/flow/' + baselinePrevious : null,
+      );
+      get('variant').value = 'proposed';
+      get('variant').dispatchEvent(new window.Event('change'));
+      assert.equal(get('previous-chunk').hidden, false);
+      assert.equal(
+        get('previous-chunk').getAttribute('href'),
+        '/flow/proposed-zero',
+      );
+    } finally {
+      dom.window.close();
+    }
   }
 });
 

@@ -16,7 +16,10 @@ function evaluatePlayer(window, source) {
   window.buildMethodGroups = buildMethodGroups;
   window.parentInvocationId = parentInvocationId;
   window.eval(
-    source.replace(/^import\s+\{[^}]+\}\s+from\s+['"][^'"]+['"];\r?\n/gm, ''),
+    source
+      .replace(/^import\s+\{[^}]+\}\s+from\s+['"][^'"]+['"];\r?\n/gm, '')
+      .replace('export function mountPlayer', 'function mountPlayer') +
+      '\nmountPlayer();',
   );
 }
 
@@ -295,8 +298,6 @@ test('studio search, bookmarks, keyboard tabs and breakpoints preserve replay st
     get('previous').click();
     assert.match(get('locals').textContent, /Alice/);
     assert.equal(get('frame-list').children.length, 1);
-    get('view-mode').value = 'map';
-    get('view-mode').dispatchEvent(new window.Event('change'));
     assert.equal(get('canvas').className, 'map');
     assert.equal(get('canvas').querySelectorAll('.packet').length, 1);
     get('search').value = 'nothing matches';
@@ -428,10 +429,8 @@ test('source-first playback follows nested calls, restores parent locals, and re
     evaluatePlayer(window, source);
     for (let i = 0; i < 40 && get('progress').textContent !== '0 / 8'; i++)
       await new Promise((r) => setTimeout(r, 5));
-    assert.equal(get('view-mode').value, 'path');
-    const preparedOverview = get('canvas').querySelector('.flow-overview');
-    assert.ok(preparedOverview, 'the default view summarizes prepared calls');
-    assert.match(preparedOverview.textContent, /B\.method2/);
+    assert.equal(get('canvas').className, 'map');
+    assert.match(get('canvas').textContent, /B\.method2/);
     assert.equal(get('flow-panel').id, 'flow-panel');
     assert.equal(get('toggle-flow').getAttribute('aria-expanded'), 'true');
     get('toggle-flow').click();
@@ -439,15 +438,7 @@ test('source-first playback follows nested calls, restores parent locals, and re
     get('toggle-flow').click();
     get('next').click();
     assert.equal(get('source').textContent, 'A.ts');
-    assert.equal(
-      get('canvas').querySelector('.flow-overview'),
-      preparedOverview,
-    );
-    assert.equal(
-      preparedOverview.querySelector('[aria-current="step"]').dataset
-        .eventIndex,
-      '1',
-    );
+    assert.equal(get('progress').textContent, '1 / 8');
     assert.equal(
       get('snippet').querySelector('.executing-line').dataset.line,
       '2',
@@ -459,30 +450,14 @@ test('source-first playback follows nested calls, restores parent locals, and re
     get('timeline').value = '3';
     get('timeline').dispatchEvent(new window.Event('input'));
     assert.equal(get('source').textContent, 'B.ts');
-    assert.equal(
-      get('canvas').querySelector('.flow-overview'),
-      preparedOverview,
-    );
-    assert.equal(
-      preparedOverview.querySelector('[aria-current="step"]').dataset
-        .eventIndex,
-      '3',
-    );
+    assert.equal(get('progress').textContent, '3 / 8');
     assert.equal(
       get('snippet').querySelector('.executing-line').dataset.line,
       '2',
     );
     assert.match(get('local-tree').textContent, /a: 10/);
-    get('view-mode').value = 'map';
-    get('view-mode').dispatchEvent(new window.Event('change'));
     assert.ok(get('canvas').querySelector('.packet'));
-    get('view-mode').value = 'path';
-    get('view-mode').dispatchEvent(new window.Event('change'));
-    assert.equal(get('canvas').querySelector('.packet'), null);
-    assert.equal(
-      get('canvas').querySelector('[aria-current="step"]').dataset.eventIndex,
-      '3',
-    );
+    assert.match(get('canvas').querySelector('.packet').textContent, /B/);
     assert.doesNotMatch(get('local-tree').textContent, /x: 10/);
     get('source-stack').querySelector('button').click();
     assert.equal(get('source').textContent, 'A.ts');

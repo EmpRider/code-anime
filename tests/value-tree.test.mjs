@@ -78,7 +78,10 @@ test('large object inspectors load bounded pages and retain disclosure through h
     window.matchMedia = () => ({ matches: true });
     window.HTMLElement.prototype.scrollIntoView = () => {};
     window.eval(
-      source.replace(/^import\s+\{[^}]+\}\s+from\s+['"][^'"]+['"];\r?\n/gm, ''),
+      source
+        .replace(/^import\s+\{[^}]+\}\s+from\s+['"][^'"]+['"];\r?\n/gm, '')
+        .replace('export function mountPlayer', 'function mountPlayer') +
+        '\nmountPlayer();',
     );
     for (let i = 0; i < 40 && get('progress').textContent !== '0 / 2'; i++)
       await new Promise((resolve) => setTimeout(resolve, 5));

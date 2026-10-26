@@ -11,6 +11,8 @@ assert.ok(npmCli, 'Run this check through npm run package:check');
 const npm = (...args) =>
   execFileSync(process.execPath, [npmCli, ...args], {
     encoding: 'utf8',
+    // npm 11 rejects allowlists re-exported by npm run as install environment options.
+    env: { ...process.env, npm_config_allow_scripts: '' },
     timeout: 120000,
   });
 const temporary = await mkdtemp(join(tmpdir(), 'code-anime-package-'));
@@ -25,6 +27,10 @@ try {
   for (const path of [
     'dist/index.js',
     'public/index.html',
+    'public/player-entry.js',
+    'public/theme.js',
+    'public/diagram/diagram.js',
+    'public/diagram/diagram.css',
     'public/player.js',
     'public/styles.css',
     'public/replay.js',
@@ -33,6 +39,23 @@ try {
     'LICENSE',
   ])
     assert.ok(paths.includes(path), 'Missing package asset: ' + path);
+  const playerHtml = await readFile('public/index.html', 'utf8');
+  assert.match(playerHtml, /src="\/player-entry\.js"/);
+  const iconPaths = [
+    ...(await readFile('public/styles.css', 'utf8')).matchAll(
+      /\/assets\/icons\/[\w-]+\.png/g,
+    ),
+  ].map(([path]) => path);
+  for (const path of new Set(iconPaths))
+    assert.ok(paths.includes('public' + path), 'Missing icon: ' + path);
+  assert.ok(
+    !paths.some((path) =>
+      /^(client\/|public\/react\/|public\/assets\/index-[^/]+\.(js|css)$)/.test(
+        path,
+      ),
+    ),
+    'Removed React frontend leaked into package',
+  );
   assert.ok(
     !paths.some((path) => /^(src|tests|node_modules)\//.test(path)),
     'Development files leaked into package',
@@ -275,8 +298,14 @@ try {
   );
   const page = await fetch(session.url);
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /Code Anime/);
-  for (const asset of ['/player.js', '/styles.css'])
+  assert.match(await page.text(), /src="\/player-entry\.js"/);
+  for (const asset of [
+    '/player-entry.js',
+    '/player.js',
+    '/styles.css',
+    '/diagram/diagram.js',
+    '/diagram/diagram.css',
+  ])
     assert.equal((await fetch(new URL(asset, session.url))).status, 200);
   console.log(
     'Packed npm package: installed CLI, MCP handshake, player assets and flow API passed.',

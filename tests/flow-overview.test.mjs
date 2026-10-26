@@ -6,6 +6,34 @@ import {
   describeFlowTransition,
 } from '../public/flow-overview.js';
 
+test('method call sites require adjacent matching ancestry and task context', () => {
+  const call = { kind: 'call', callId: 'root', taskId: 'one' };
+  const entry = {
+    kind: 'enter',
+    callId: 'child',
+    parentCallId: 'root',
+    taskId: 'one',
+  };
+  assert.equal(
+    buildMethodGroups([call, entry]).invocations[0].callSiteIndex,
+    1,
+  );
+  for (const change of [
+    { taskId: 'two' },
+    { parentCallId: 'other' },
+    { thread: 'other' },
+  ])
+    assert.equal(
+      buildMethodGroups([call, { ...entry, ...change }]).invocations[0]
+        .callSiteIndex,
+      undefined,
+    );
+  assert.equal(
+    buildMethodGroups([entry]).invocations[0].callSiteIndex,
+    undefined,
+  );
+});
+
 test('class/method map preserves repeated invocations and verified ancestry across interleaved tasks', () => {
   const { invocations, classCount } = buildMethodGroups([
     {
