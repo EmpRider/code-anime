@@ -16,7 +16,7 @@ code must never execute to construct animations.
 | B0f  | Show literal source first, explicitly simulated event second       | B0c; B0e commit; owner approved  | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
 | B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
 | B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
-| B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DONE — DIAGNOSTIC ONLY; T7 bug still open                  |
+| B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DONE — diagnostic; independently fixed and verified in T7  |
 | B0j  | Review accidental trailing README test line                        | B0 gate; owner priority          | LOW_PRIORITY                                               |
 | B0k  | Verify grouped boundaries after method collapse                    | B0f; CI 40602271424              | DONE — 08dfc5b, Chromium 63/63 + Node 4/4                  |
 | T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | PAUSED — wider MVP/revised-plan gate review                |
@@ -25,7 +25,7 @@ code must never execute to construct animations.
 | T4   | Nested ELK geometry and robust Worker protocol                     | T2, T3                           | Pending                                                    |
 | T5   | X6 compound frames, arrows, and existing HTML controls             | T4                               | Pending                                                    |
 | T6   | Async race safety and full player-state preservation               | T5                               | Pending                                                    |
-| T7   | Isolate orientation/panel preference keys with migration           | B0i; B0 browser gate GREEN       | IN_PROGRESS — storage RED verification preflight           |
+| T7   | Isolate orientation/panel preference keys with migration           | B0i; B0 browser gate GREEN       | DONE — 25efa689, Chromium 71/71 + Node 4/4 + package check |
 | T8   | PC-only compact visual clarity and accessibility                   | T6                               | Pending                                                    |
 | T9   | Full mock-trace, performance, and package acceptance               | T1–T8                            | Pending                                                    |
 
@@ -345,7 +345,7 @@ release, publish or remove this task ledger without owner authorization.
   [Actions #40602271424](https://github.com/EmpRider/code-anime/actions/runs/40602271424)
   (63/63 Chromium, four Node/check/package jobs). This is scoped
   MVP preference preservation, not approval of unrelated ELK features.
-- **Observed RED mechanism, browser reproduction pending:**
+- **Observed RED mechanism, browser reproduction confirmed:**
   `public/diagram.js:283–297` reads/writes raw `horizontal|vertical`
   under `code-anime-layout`, while `public/player.js:3050–3077`
   reads/writes JSON panel preferences under the same key. B0i's isolated
@@ -382,6 +382,37 @@ release, publish or remove this task ledger without owner authorization.
 - **Delivery gate:** GitHub task ledger and Council decision pushed/verified
   before any T7 test or source change. Keep T7 IN_PROGRESS until
   exact-head acceptance; do not infer T1–T9 or public Worker signoff.
+
+#### T7 closeout — exact-head browser and package evidence, 2026-10-28
+
+- **True browser RED:** [Actions #40603904321](https://github.com/EmpRider/code-anime/actions/runs/40603904321)
+  at test-first commit `fb18e3dc`: all six new collision regressions
+  failed for the predicted preference overwrite, while the existing 63
+  Chromium cases passed. Linux matrix checks passed as well; this
+  deliberate RED was resolved by subsequent authored/generated changes.
+- **Source and generated artifact:** `public/diagram.js` updates only
+  `code-anime-diagram-orientation`; `public/player.js` continues to own
+  `code-anime-layout` panel JSON. Missing dedicated key migrates exact raw
+  legacy `vertical`/`horizontal` once without deleting or rewriting the
+  old key; invalid/new-key and throwing-storage behavior are safe.
+  Remote authored blob `c2d943425f0d25bb7c7367a6abbf4922f39fb54f`,
+  generated blob `1740f9daf97a42618e67e55f4e86dae5cbf04356`, and
+  regression test blob `9c14b7b6047d49efb49cf9b2ee885e9681b48f77`
+  exactly matched locally rebuilt files. Independent browser QA and
+  layout-architecture reviews approved the source fix.
+- **True browser GREEN and full CI:** [Actions #40604735431](https://github.com/EmpRider/code-anime/actions/runs/40604735431)
+  at exact source/test HEAD `25efa689f5f20aa2b15a5c1e6aa155d0316c389a`
+  passed **71/71 Chromium** (both writer orders, multiple reloads,
+  keyboard controls, panel and source/flow dividers, legacy migration,
+  malformed/null/partial keys, and storage exceptions). All **four**
+  check/package CI matrix jobs passed (Ubuntu/Windows, Node 22/24).
+  Local `npm run check` passed 185 unit tests (two opt-in CodeGraph
+  integration skips), typecheck, build and formatting; local
+  `npm run package:check` passed the packed MCP/CLI/player smoke test.
+- **Scope and next gates:** This closes T7 preference isolation only;
+  B0b–B0h's wider MVP acceptance review and the historical CodeGraph
+  browser evidence gap remain. Neither ELK Worker licensing nor release
+  approval nor any other T1–T9 task is inferred from these checks.
 
 ### Owner-resolved B0e/B0f contracts — implementation gate
 
