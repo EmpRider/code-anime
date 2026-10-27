@@ -432,6 +432,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
   const selectedVisits = new Map();
   let semantic;
   const openValues = new Set();
+  let valuesRevision = 0;
   const valueHeight = (id) => (openValues.has(id) ? 160 : 0);
   function keepValuesReachable(id) {
     const cell = nodeCells.get(id);
@@ -476,12 +477,18 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
   }
   const onValues = (id) => {
     onPause?.();
-    if (openValues.has(id)) openValues.delete(id);
-    else openValues.add(id);
+    const opening = !openValues.has(id);
+    if (opening) openValues.add(id);
+    else openValues.delete(id);
+    const revision = ++valuesRevision;
     render(options, false);
-    requestAnimationFrame(() => {
-      if (!disposed) keepValuesReachable(id);
-    });
+    // Closing a card must never move the camera. Invalidate pending opening
+    // adjustments when a user toggles the same card again before the next frame.
+    if (opening)
+      requestAnimationFrame(() => {
+        if (!disposed && revision === valuesRevision && openValues.has(id))
+          keepValuesReachable(id);
+      });
   };
   let drilldown,
     scope = null,
@@ -571,6 +578,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
   });
   observer.observe(surface);
   function setFlow(value, preserveScope = false) {
+    ++valuesRevision;
     flow = value;
     events = value.trace?.events ?? [];
     drilldown = createDrilldown(events, value.trace?.sourceFiles);
