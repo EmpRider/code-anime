@@ -6,7 +6,7 @@ code must never execute to construct animations.
 
 | Task | Description                                                        | Dependencies                   | Status                                                                 |
 | ---- | ------------------------------------------------------------------ | ------------------------------ | ---------------------------------------------------------------------- |
-| T0   | Restore mandatory formatting CI at the authored/generated boundary | Approved formatting remedy     | DONE — locally verified/reviewed; remote push SHA pending verification |
+| T0   | Restore mandatory formatting CI at the authored/generated boundary | Approved formatting remedy     | DONE — delivered as f2b5f10; remote branch verified |
 | T1   | Conservative, source-proven nested semantic grouping               | T0 and baseline gate           | Pending                                                                |
 | T2   | Pure logical compound topology and truthful execution edges        | T1                             | Pending                                                                |
 | T3   | Real same-origin ELK Worker and distributable package              | T0 and dependency/license gate | Pending                                                                |
@@ -26,9 +26,9 @@ code must never execute to construct animations.
 - Remedy: ignore only generated `public/diagram/` and the three exact minified
   vendor paths; format only the three authored failing files. Authored
   `public/diagram.js`, `public/diagram.css`, and other vendor files stay checked.
-- T0 local verification and independent review passed; delivery pending guarded
-  remote push. After remote verification, record its canonical SHA in next task
-  update.
+- Historical T0 local verification and independent review passed. Patch delivery
+  was verified on 2026-10-27 through the GitHub connector. The full test suite
+  was not rerun during delivery.
 - GREEN: `npm run check` passed scope, typecheck, 185 unit tests (zero failures,
   two opt-in CodeGraph skips), build, and formatting. Authored stdin formatting
   violations were rejected for `src/index.ts`, `public/diagram.js`, and
@@ -38,8 +38,11 @@ code must never execute to construct animations.
   embedded notices are unchanged. `npm run package:check` passed installed CLI,
   MCP handshake, player assets, and flow API checks. A package dry-run manifest
   includes `LICENSE` and all five protected assets with matching byte sizes.
-- Completed push SHA: pending delivery; record it with the next task update to
-  avoid a self-referential commit cycle.
+- Completed delivery SHA: `f2b5f10fbcc59495db00e85a913bf59efb1c492f`.
+- The supplied patch applied cleanly to the baseline; all five patch output blob
+  hashes matched. The supplied tracker and reviewed plan were imported intact
+  in that commit. This follow-up records delivery status.
+- Full reviewed plan: [implementation plan](code-anime-elk-reviewed-implementation-plan-2026-10-27.md).
 
 ## Role owners and acceptance gates
 
