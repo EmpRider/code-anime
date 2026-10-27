@@ -18,7 +18,7 @@ code must never execute to construct animations.
 | B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IMPLEMENTED_CANDIDATE — targeted CI passed; B0k RED        |
 | B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DONE — DIAGNOSTIC ONLY; T7 bug still open                  |
 | B0j  | Review accidental trailing README test line                        | B0 gate; owner priority          | LOW_PRIORITY                                               |
-| B0k  | Verify grouped boundaries after method collapse                    | B0f; CI 40598039061              | COUNCIL_APPROVED_READY — test-contract fix, CI RED         |
+| B0k  | Verify grouped boundaries after method collapse                    | B0f; CI 40598039061              | IMPLEMENTED_CANDIDATE — 17ad7e6, final Chromium pending    |
 | T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | PAUSED — actionable browser failures under AGENTS.md       |
 | T2   | Pure logical compound topology and truthful execution edges        | T1                               | Pending                                                    |
 | T3   | Real same-origin ELK Worker and distributable package              | B0 gate; dependency/license gate | PAUSED — actionable browser failures under AGENTS.md       |
@@ -121,6 +121,29 @@ synchronized visible mock context` cases at `player.spec.ts:2063`:
   test. After the separate corrective commit, require independent review,
   genuine desktop/mobile Chromium PASS and full browser/Node/package/build
   evidence at the final pushed HEAD. Do not mark B0k or B0e–h DONE early.
+
+#### B0k implementation delivery — verification pending
+
+- Council-approved ledger preflight: `f12e159a1a8ce8e02bfb45a02384c01a6f09b48c`;
+  full Council dossier: `d702106fa0d725c19f1dc88ae1412564bc9dad04`.
+  Both commits were verified on the remote branch before the test edit.
+- Scoped test-only commit: `17ad7e67aa12fe9928c0bed3ed7209f528b4e9ee`;
+  only `tests/browser/player.spec.ts` changed. Exact remote test blob
+  `7b008178657d99cd3f72ca4b58a8a77621454c4d` verified. It checks
+  surviving mock file/owner frames, contained methods, removed nested cards,
+  typed call/return edges, cursor, keyboard focus, and owner-B negative
+  hide/restore behavior. No production code or generated asset changed.
+- Local `npm run check` **PASS**: static scope, typecheck, 185 unit tests
+  passed and two opt-in skipped, build, formatting. Local
+  `npm run package:check` **PASS** (installed CLI, MCP handshake, player
+  assets and flow API). Independent browser QA and architecture diff review
+  approved with minor geometry/focus concerns addressed before push.
+- Local Playwright collected **63 tests** but could not launch Chromium: the
+  pinned executable is absent and the attempted browser download returned an
+  invalid zero-length ZIP. This is **not browser acceptance**. Require exact
+  final-head GitHub Actions Chromium and four Node/check/package jobs before
+  marking B0k or the B0 candidates DONE. If newly exposed focus/context or
+  grouping checks fail, create a scoped follow-up task and preserve RED.
 
 ## 2026-10-27 Council reconciliation and next tasks
 
