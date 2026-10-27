@@ -326,6 +326,138 @@ for (const mobile of [false, true]) {
       reducedMotion: 'reduce',
       hasTouch: mobile,
     });
+    test('explicit Fit makes far source steps pointer reachable and remains idempotent', async ({
+      page,
+    }) => {
+      await open(page, 'flow');
+      await show(page, mobile, 'flow');
+      const viewportTransform = () =>
+        page.locator('.x6-graph-svg-viewport').evaluate((node) => {
+          const matrix = new DOMMatrix(node.getAttribute('transform')!);
+          return { scale: matrix.a, x: matrix.e, y: matrix.f };
+        });
+      expect((await viewportTransform()).scale).toBeGreaterThanOrEqual(0.89);
+      await seek(page, 4);
+      await page
+        .getByRole('button', { name: 'Expand method B.work', exact: true })
+        .click();
+      const fit = page.getByRole('button', {
+        name: 'Fit diagram',
+        exact: true,
+      });
+      const step = page.getByRole('button', {
+        name: 'Go to source step 5',
+        exact: true,
+      });
+      await fit.click();
+      const hitTarget = () =>
+        step.evaluate((button) => {
+          const box = button.getBoundingClientRect();
+          const surface = document
+            .querySelector('.diagram-surface')!
+            .getBoundingClientRect();
+          const x = box.left + box.width / 2;
+          const y = box.top + box.height / 2;
+          const hit = document.elementFromPoint(x, y);
+          const dock = document
+            .querySelector('.playback-dock')
+            ?.getBoundingClientRect();
+          return {
+            reachable: hit === button || button.contains(hit),
+            contained:
+              box.left >= surface.left + 2 &&
+              box.right <= surface.right - 2 &&
+              box.top >= surface.top + 2 &&
+              box.bottom <= surface.bottom - 2,
+            underDock: Boolean(
+              dock &&
+              x >= dock.left &&
+              x < dock.right &&
+              y >= dock.top &&
+              y < dock.bottom,
+            ),
+            x,
+            y,
+          };
+        });
+      await expect.poll(hitTarget).toMatchObject({
+        reachable: true,
+        contained: true,
+        underDock: false,
+      });
+      const first = await hitTarget();
+      const firstTransform = await viewportTransform();
+      await fit.click();
+      const second = await hitTarget();
+      const secondTransform = await viewportTransform();
+      expect(Math.abs(second.x - first.x)).toBeLessThan(1);
+      expect(Math.abs(second.y - first.y)).toBeLessThan(1);
+      expect(
+        Math.abs(secondTransform.scale - firstTransform.scale),
+      ).toBeLessThan(0.0001);
+      expect(Math.abs(secondTransform.x - firstTransform.x)).toBeLessThan(1);
+      expect(Math.abs(secondTransform.y - firstTransform.y)).toBeLessThan(1);
+      await expect(page.locator('#progress')).toHaveText('4 / 8');
+      await step.click();
+      await expect(page.locator('#progress')).toHaveText('5 / 8');
+      await expect(page).toHaveURL(/step=5/);
+      await show(page, mobile, 'code');
+      await expect(page.locator('.code-row[data-line="8"]')).toHaveAttribute(
+        'aria-current',
+        'location',
+      );
+    });
+    test('explicit Fit retains expanded Values, breakpoint, dock and keyboard source access', async ({
+      page,
+    }) => {
+      await open(page, 'flow');
+      await show(page, mobile, 'flow');
+      await seek(page, 4);
+      await show(page, mobile, 'state');
+      await page.locator('#breakpoint').click();
+      await show(page, mobile, 'flow');
+      await page
+        .getByRole('button', { name: 'Expand method B.work', exact: true })
+        .click();
+      const values = page.locator(
+        '.diagram-card[data-call-id="b"]:not([data-parent-id])',
+      );
+      await values.locator('.diagram-values-summary').focus();
+      await page.keyboard.press('Enter');
+      await expect(values.locator('.diagram-value')).toBeVisible();
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+      const fit = page.getByRole('button', {
+        name: 'Fit diagram',
+        exact: true,
+      });
+      const step = page.getByRole('button', {
+        name: 'Go to source step 5',
+        exact: true,
+      });
+      await fit.click();
+      await expect(page.locator('#progress')).toHaveText('4 / 8');
+      await expect(values.locator('.diagram-value')).toBeVisible();
+      await show(page, mobile, 'state');
+      await expect(page.locator('#breakpoint')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await show(page, mobile, 'flow');
+      await expect(page.locator('#previous')).toBeEnabled();
+      await page.locator('#previous').click();
+      await expect(page.locator('#progress')).toHaveText('3 / 8');
+      await page.locator('#next').click();
+      await expect(page.locator('#progress')).toHaveText('4 / 8');
+      await fit.click();
+      await step.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('#progress')).toHaveText('5 / 8');
+    });
     test('Values toggle preserves camera after close and remains pointer reachable', async ({
       page,
     }) => {
