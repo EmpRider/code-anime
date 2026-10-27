@@ -289,6 +289,98 @@ for (const mobile of [false, true]) {
       reducedMotion: 'reduce',
       hasTouch: mobile,
     });
+    test('Values toggle preserves camera after close and remains pointer reachable', async ({
+      page,
+    }) => {
+      await open(page, 'flow');
+      await show(page, mobile, 'flow');
+      await seek(page, 4);
+      const values = page.locator(
+        '.diagram-card[data-call-id="b"]:not([data-parent-id])',
+      );
+      const summary = values.locator('.diagram-values-summary');
+      const content = values.locator('.diagram-value');
+      const transform = () =>
+        page.locator('.x6-graph-svg-viewport').getAttribute('transform');
+      const settleFrames = () =>
+        page.evaluate(
+          () =>
+            new Promise<void>((resolve) =>
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => resolve()),
+              ),
+            ),
+        );
+      const expectPointerReachable = async () => {
+        await expect
+          .poll(() =>
+            summary.evaluate((target) => {
+              const bounds = target.getBoundingClientRect();
+              const x = bounds.left + bounds.width / 2;
+              const y = bounds.top + bounds.height / 2;
+              const hit = document.elementFromPoint(x, y);
+              return {
+                insideViewport:
+                  x >= 0 &&
+                  x < window.innerWidth &&
+                  y >= 0 &&
+                  y < window.innerHeight,
+                reachable: hit === target || target.contains(hit),
+              };
+            }),
+          )
+          .toMatchObject({ insideViewport: true, reachable: true });
+      };
+
+      await summary.focus();
+      await page.keyboard.press('Enter');
+      await expect(content).toBeVisible();
+      await settleFrames();
+      const beforeKeyboardCollapse = await transform();
+      await summary.focus();
+      await page.keyboard.press('Enter');
+      await expect(content).toBeHidden();
+      await settleFrames();
+      expect(await transform()).toBe(beforeKeyboardCollapse);
+
+      await summary.focus();
+      await page.keyboard.press('Enter');
+      await expect(content).toBeVisible();
+      await settleFrames();
+      await expectPointerReachable();
+      const beforePointerCollapse = await transform();
+      await summary.click();
+      await expect(content).toBeHidden();
+      await settleFrames();
+      expect(await transform()).toBe(beforePointerCollapse);
+
+      await page.evaluate(() => {
+        // Re-query on each click: the X6 card is replaced by render().
+        for (let index = 0; index < 3; index++) {
+          const target = document.querySelector<HTMLElement>(
+            '.diagram-card[data-call-id="b"]:not([data-parent-id]) .diagram-values-summary',
+          );
+          if (!target) throw new Error('Missing Values control');
+          target.click();
+        }
+      });
+      await expect(content).toBeVisible();
+      await settleFrames();
+      await expectPointerReachable();
+      const beforeRapidCollapse = await transform();
+      await settleFrames();
+      expect(await transform()).toBe(beforeRapidCollapse);
+      await summary.evaluate((target) => (target as HTMLElement).click());
+      expect(await transform()).toBe(beforeRapidCollapse);
+      await expect(content).toBeHidden();
+      await settleFrames();
+      expect(await transform()).toBe(beforeRapidCollapse);
+
+      await page.locator('#next').click();
+      await expect(page.locator('#progress')).toHaveText('5 / 8');
+      await page.locator('#previous').click();
+      await expect(page.locator('#progress')).toHaveText('4 / 8');
+    });
     test('vanilla player renders all views without React assets', async ({
       page,
     }, info) => {
