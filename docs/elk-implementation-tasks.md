@@ -8,7 +8,7 @@ code must never execute to construct animations.
 | ---- | ------------------------------------------------------------------ | -------------------------------- | ---------------------------------------------------------- |
 | T0   | Restore mandatory formatting CI at the authored/generated boundary | Approved formatting remedy       | DONE — delivered as f2b5f10; remote branch verified        |
 | T0a  | Format newly imported ELK plan and task-tracker docs to restore CI | T0 delivery; two-file CI failure | DONE — delivered as b5a08a67 and ffd490bb; remote verified |
-| B0a  | Restore Values disclosure pointer and viewport reachability        | T0a; browser RED baseline        | READY — defect reproduced in CI; fix and GREEN pending     |
+| B0a  | Restore Values disclosure pointer and viewport reachability        | T0a; browser RED baseline        | DONE — focused desktop/mobile Chromium GREEN; full CI RED  |
 | B0b  | Restore or prove equivalent map navigation and continuation        | B0a; behavior-contract evidence  | WAITING — user-visible navigation acceptance pending       |
 | B0c  | Align stale browser assertions with truthful mock-flow behavior    | B0b; typed-edge/step evidence    | WAITING — no expectation-only test changes authorized      |
 | T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | PAUSED — actionable browser failures under AGENTS.md       |
@@ -87,6 +87,21 @@ code must never execute to construct animations.
   bounds/hit-testing and pointer/keyboard RED→GREEN for expand and collapse.
   Preserve playable dock controls, pan/zoom, selection and cursor. Never use
   force-click, blanket `pointer-events: none`, or a test skip as a remedy.
+- **B0a focused acceptance verified:** The initial candidate at `4bd022de`
+  fixed the desktop Values pointer target but introduced a mobile camera pan on
+  keyboard collapse. A focused Council amendment approved opening-only
+  reachability adjustment with a monotonic revision guard against stale
+  animation-frame callbacks, including rapid open/close/reopen. The corrected
+  generated player bundle was delivered as
+  `346cb20e780d60fd31d60c58fbad57114e0bd49f`, its authored source as
+  `833af2d1f0e1a1bc1ecdfaf2f459274e09993e1c`, and the focused browser
+  regression tests as `17c5632680c254d051f2de78bf3af51b18217c8d`.
+  Final-head [Actions run 40478955531](https://github.com/EmpRider/code-anime/actions/runs/40478955531)
+  confirmed both new desktop and mobile `Values toggle preserves camera after
+close and remains pointer reachable` cases **passed**: unforced pointer and
+  keyboard disclosure, viewport/camera stability on collapse, rapid toggle
+  protection, and playable dock controls. All four Node/check matrix jobs
+  passed. This verifies **B0a's focused acceptance only**, not full browser CI.
 - **B0b — Map navigation/recovery:** Prove an accessible class/owner→method→
   invocation path, distinct call IDs, correct returns and source, cursor and
   breakpoint preservation, reload/URL and continuation. Repair missing
@@ -99,7 +114,7 @@ code must never execute to construct animations.
 - **Exit gate:** Each slice needs focused RED→GREEN browser evidence,
   independent review, full relevant Node/build/package checks and its own
   descriptive verified GitHub delivery. The B0 gate closes only on applicable
-  full browser acceptance (39/39 under the current suite) and successful CI.
+  full browser acceptance (41/41 under the current suite) and successful CI.
   T1/T3/T7 remain paused until then or explicit owner override of MVP-first.
 
 ## Role owners and acceptance gates
@@ -126,12 +141,16 @@ All tasks require independent review; PM coordinates delivery after verification
 
 ## Open gates
 
-- B0a/B0b/B0c are not implemented or verified. T1/T3/T7 are blocked by the
-  actionable browser MVP gate; T1–T9 are not implemented or verified.
+- B0a's narrow Values desktop/mobile acceptance is verified, but B0b/B0c and
+  the full browser MVP gate remain RED. T1/T3/T7 are blocked by that actionable
+  gate; T1–T9 are not implemented or verified.
 - Local browser verification is blocked by the unavailable Playwright browser
-  binary. GitHub Actions browser run `40473530665` at `ffd490bb` actually ran:
-  **29 passed, 10 failed**, while all four Node/check matrix jobs succeeded.
-  The browser failures remain a release blocker; no browser pass is claimed.
+  binary. Final-head GitHub Actions browser run `40478955531` at `17c56326`
+  actually ran **41 tests: 31 passed, 10 failed**. Its two new focused B0a
+  cases passed on desktop/mobile; the old full-map cases and eight other
+  browser tests remain RED. The `Fit diagram` → source Step 5 offscreen target
+  is assigned to B0b for diagnosis, not claimed fixed by B0a. All four Node
+  matrix jobs passed, but full browser CI is a release blocker.
 - Verify ELK version, license notices, package inclusion, and obtain human public
   distribution sign-off before distributing the proposed ELK Worker.
 - Actual Worker/CSP, nested geometry, async/player parity, desktop interaction,
