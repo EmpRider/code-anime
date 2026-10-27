@@ -26826,7 +26826,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 		let t = p === "vertical" ? "Horizontal layout" : "Vertical layout";
 		m.title = t, m.setAttribute("aria-label", t), h.style.transform = p === "vertical" ? "" : "rotate(90deg)", e.dataset.direction = p;
 	}
-	g(), d.append(m, f("−", "Zoom out", () => Se(-.15)), f("Fit", "Fit diagram", () => xe()), f("+", "Zoom in", () => Se(.15)));
+	g(), d.append(m, f("−", "Zoom out", () => Se(-.15)), f("Fit", "Fit diagram", () => xe({ full: !0 })), f("+", "Zoom in", () => Se(.15)));
 	let _ = $("div", "", "diagram-pan-buttons");
 	_.setAttribute("role", "group"), _.setAttribute("aria-label", "Pan diagram");
 	for (let [e, t, n] of [
@@ -26959,19 +26959,28 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 	}
 	let be = $("div", "", "diagram-groups");
 	i.append(be);
-	function xe() {
-		if (!re && c.clientWidth && c.clientHeight && y.getNodes().length && (y.resize(c.clientWidth, c.clientHeight), y.zoomToFit({
-			padding: 24,
-			minScale: .9,
-			maxScale: 1
-		}), y.zoom() <= .9)) {
-			let e = [...M.values()].find((e) => e.getData().control === "loop") ?? [...M.values()][0];
-			if (e) {
-				y.centerCell(e);
-				let t = M.get(e.getData().parentId);
-				if (t) {
-					let n = t.getBBox(), r = e.getBBox();
-					n.width * y.zoom() <= c.clientWidth - 48 && te((r.center.x - n.center.x) * y.zoom(), 0);
+	function xe({ full: e = !1 } = {}) {
+		if (!re && c.clientWidth && c.clientHeight && y.getNodes().length) {
+			if (y.resize(c.clientWidth, c.clientHeight), e) {
+				y.zoomToFit({
+					padding: 24,
+					maxScale: 1
+				});
+				return;
+			}
+			if (y.zoomToFit({
+				padding: 24,
+				minScale: .9,
+				maxScale: 1
+			}), y.zoom() <= .9) {
+				let e = [...M.values()].find((e) => e.getData().control === "loop") ?? [...M.values()][0];
+				if (e) {
+					y.centerCell(e);
+					let t = M.get(e.getData().parentId);
+					if (t) {
+						let n = t.getBBox(), r = e.getBBox();
+						n.width * y.zoom() <= c.clientWidth - 48 && te((r.center.x - n.center.x) * y.zoom(), 0);
+					}
 				}
 			}
 		}
