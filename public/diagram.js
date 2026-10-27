@@ -67,16 +67,31 @@ Shape.HTML.register({
     const header = element('div', '', 'diagram-card-header');
     header.append(
       element('span', String(data.index).padStart(2, '0'), 'diagram-step'),
-      element('span', data.kind, 'diagram-kind'),
+      element('span', data.simulated ?? data.kind, 'diagram-kind'),
       element(
         'span',
         data.active ? `Current · ${data.certainty}` : data.certainty,
         'diagram-state',
       ),
     );
+    if (data.simulated) {
+      const identity = header.querySelector('.diagram-kind');
+      identity.title = data.simulated;
+      Object.assign(identity.style, {
+        minWidth: '0',
+        flex: '1',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        textTransform: 'none',
+      });
+      header.querySelector('.diagram-step').style.flexShrink = '0';
+      header.querySelector('.diagram-state').style.flexShrink = '0';
+    }
     const name = element('button', data.label, 'diagram-name');
     name.type = 'button';
     name.title = data.code ?? data.symbol;
+    if (data.simulated) name.style.whiteSpace = 'nowrap';
     name.setAttribute(
       'aria-label',
       data.expandLabel ?? 'Expand method ' + data.symbol,
@@ -927,6 +942,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
           }
           const index = item.index ?? item.node.indices[0];
           const event = events[index - 1];
+          const step = card.steps.find((step) => step.index === index);
           innerCards.push({
             id: ids.get(item.id),
             parentId: card.id,
@@ -939,7 +955,11 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
             level: 'step',
             kind: event.kind,
             control: item.control,
-            label: item.control ? item.node.title : event.label,
+            label: item.control
+              ? item.node.title
+              : (step?.label ?? event.label),
+            code: step?.code,
+            simulated: item.control ? undefined : `Simulated: ${event.label}`,
             x: item.x,
             layoutY: item.y,
             width: item.width,

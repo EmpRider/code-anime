@@ -716,7 +716,7 @@ for (const mobile of [false, true]) {
         {
           ...original[1]!,
           id: 'call-again',
-          source: { file: 'demo.ts', line: 4, endLine: 4 },
+          source: { file: 'demo.ts', line: 3, endLine: 3 },
         },
         {
           ...original[2]!,
@@ -796,6 +796,16 @@ for (const mobile of [false, true]) {
       await page.locator('#timeline').fill('8');
       await expect(page.locator('#progress')).toHaveText('8 / 9');
       await expect(page.locator('#source-line')).toHaveText('L8');
+      const repeatedReturn = page.locator(
+        '.diagram-card[data-parent-id][data-step="8"][data-call-id="b-again"]',
+      );
+      await expect(repeatedReturn.locator('.diagram-name')).toContainText(
+        'return value;',
+      );
+      await expect(repeatedReturn.locator('.diagram-kind')).toHaveText(
+        'Simulated: return B.work',
+      );
+      const repeatedNodeId = await repeatedReturn.getAttribute('data-node-id');
       await expect(
         page.locator('.diagram-card:not([data-parent-id])'),
       ).toHaveCount(2);
@@ -813,6 +823,49 @@ for (const mobile of [false, true]) {
       }
       await picker.selectOption('b');
       await expect(page.locator('#progress')).toHaveText('3 / 9');
+      const originalReturn = page.locator(
+        '.diagram-card[data-parent-id][data-step="5"][data-call-id="b"]',
+      );
+      await expect(originalReturn.locator('.diagram-name')).toContainText(
+        'return value;',
+      );
+      await expect(originalReturn.locator('.diagram-kind')).toHaveText(
+        'Simulated: return B.work',
+      );
+      expect(await originalReturn.getAttribute('data-node-id')).not.toBe(
+        repeatedNodeId,
+      );
+      await page
+        .getByRole('button', { name: 'Expand method A.main', exact: true })
+        .focus();
+      await page.keyboard.press('Enter');
+      const originalCall = page.locator(
+        '.diagram-card[data-parent-id][data-step="2"]',
+      );
+      const repeatedCall = page.locator(
+        '.diagram-card[data-parent-id][data-step="6"]',
+      );
+      for (const call of [originalCall, repeatedCall]) {
+        await expect(call.locator('.diagram-name')).toContainText('B.work();');
+        await expect(call.locator('.diagram-kind')).toHaveText(
+          'Simulated: call A.main',
+        );
+        await expect(call.locator('.diagram-location')).toHaveText('demo.ts:3');
+      }
+      expect(await originalCall.getAttribute('data-node-id')).not.toBe(
+        await repeatedCall.getAttribute('data-node-id'),
+      );
+      for (const [invocation, call] of [
+        ['b', originalCall],
+        ['b-again', repeatedCall],
+      ] as const) {
+        const callNode = await call.getAttribute('data-node-id');
+        await expect(
+          page.locator(
+            `.x6-edge[data-edge-kind="call"][aria-label^="Call ${invocation}:"]`,
+          ),
+        ).toHaveAttribute('data-source-node', callNode!);
+      }
       await page.goto(`${baseUrl}/flow/${id}`);
       await show(page, mobile, 'flow');
       await expect(
@@ -1697,7 +1750,10 @@ for (const mobile of [false, true]) {
       );
       await expect(inner).toHaveCount(2);
       await expect(inner.first().locator('.diagram-name')).toContainText(
-        'assign B.work',
+        'const value = 2;',
+      );
+      await expect(inner.first().locator('.diagram-kind')).toHaveText(
+        'Simulated: assign B.work',
       );
       await expect(inner.locator('.diagram-kind')).not.toContainText([
         'enter',
@@ -1787,6 +1843,9 @@ for (const mobile of [false, true]) {
       await expect(callingStep).toHaveCount(1);
       await expect(callingStep.locator('.diagram-name')).toContainText(
         'B.work();',
+      );
+      await expect(callingStep.locator('.diagram-kind')).toHaveText(
+        'Simulated: call A.main',
       );
       await expect(
         page.locator(
@@ -2473,6 +2532,106 @@ for (const mobile of [false, true]) {
         await show(page, mobile, 'flow');
       }
     });
+    for (const evidence of [
+      'missing',
+      'out-of-range',
+      'markup-long',
+    ] as const) {
+      test(`expanded source provenance handles ${evidence} evidence safely`, async ({
+        page,
+      }) => {
+        const prepared = structuredClone(flow);
+        const literal =
+          '<img src=x onerror="alert(1)"> ' + 'long source '.repeat(80);
+        const simulated =
+          'assign B.work ' + 'long simulated identity '.repeat(60);
+        if (evidence === 'markup-long')
+          prepared.trace!.events[3]!.label = simulated;
+        if (evidence === 'missing') prepared.trace!.sourceFiles = {};
+        else if (evidence === 'out-of-range')
+          Object.assign(prepared.trace!.events[3]!.source!, {
+            line: 9999,
+            endLine: 9999,
+          });
+        else
+          prepared.trace!.sourceFiles!['demo.ts'] =
+            prepared.trace!.sourceFiles!['demo.ts']!.replace(
+              '    const value = 2;',
+              literal,
+            );
+        await page.route(`**/api/flow/${id}`, (route) =>
+          route.fulfill({ json: prepared }),
+        );
+        await open(page, 'flow');
+        await show(page, mobile, 'flow');
+        await seek(page, 4);
+        await page
+          .getByRole('button', { name: 'Expand method B.work', exact: true })
+          .focus();
+        await page.keyboard.press('Enter');
+        const card = page.locator(
+          '.diagram-card[data-parent-id][data-step="4"]',
+        );
+        const name = card.locator('.diagram-name');
+        await expect(name).toContainText(
+          evidence === 'markup-long' ? literal : 'assign B.work',
+        );
+        await expect(card.locator('.diagram-kind')).toHaveText(
+          evidence === 'markup-long'
+            ? `Simulated: ${simulated}`
+            : 'Simulated: assign B.work',
+        );
+        await expect(card.locator('img')).toHaveCount(0);
+        if (evidence === 'markup-long') {
+          await expect(card.locator('.diagram-kind')).toHaveAttribute(
+            'title',
+            `Simulated: ${simulated}`,
+          );
+          await expect(card.locator('.diagram-kind')).toHaveCSS(
+            'text-overflow',
+            'ellipsis',
+          );
+          await expect(card.locator('.diagram-kind')).toHaveCSS(
+            'white-space',
+            'nowrap',
+          );
+          await expect(name).toHaveAttribute('title', literal);
+          await expect(name).toHaveCSS('white-space', 'nowrap');
+          await expect(name).toHaveCSS('text-overflow', 'ellipsis');
+        }
+        await card.locator('summary').focus();
+        await page.keyboard.press('Enter');
+        await expect(card.locator('.diagram-value')).toContainText('2');
+        expect(
+          await card.evaluate((el) => el.scrollHeight <= el.clientHeight + 1),
+        ).toBe(true);
+        expect(
+          await card.evaluate((el) => {
+            const bounds = el.getBoundingClientRect();
+            return [...el.querySelectorAll('summary, .diagram-seek')].every(
+              (control) => {
+                const target = control.getBoundingClientRect();
+                return (
+                  target.width > 0 &&
+                  target.height > 0 &&
+                  target.top >= bounds.top &&
+                  target.bottom <= bounds.bottom + 1
+                );
+              },
+            );
+          }),
+        ).toBe(true);
+        await name.focus();
+        await page.keyboard.press('Enter');
+        await expect(page.locator('#progress')).toHaveText('4 / 8');
+        await expect(card).toHaveAttribute('data-call-id', 'b');
+        await expect(card.locator('.diagram-state')).toContainText('mock');
+        await expect(card.locator('.diagram-location')).toHaveText(
+          evidence === 'out-of-range' ? 'demo.ts:9999' : 'demo.ts:7',
+        );
+      });
+    }
+
     test('recursive drilldown keeps invocation identity and restores each parent', async ({
       page,
     }) => {

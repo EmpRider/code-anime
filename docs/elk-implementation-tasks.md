@@ -13,7 +13,7 @@ code must never execute to construct animations.
 | B0c  | Preserve truthful typed call/return ancestry                       | B0b; mock/source identity        | IMPLEMENTED_CANDIDATE — browser gate RED                   |
 | B0d  | True Fit and reachable source-step navigation                      | B0b; B0e, B0g UX/geometry gates  | IMPLEMENTED_CANDIDATE — browser gate RED                   |
 | B0e  | Preserve overview Fit; focus/zoom then readable step navigation    | B0d; owner choice approved       | IN_PROGRESS — Chromium gate pending                        |
-| B0f  | Show literal source first, explicitly simulated event second       | B0c; B0e commit; owner approved  | READY_AFTER_B0e — provenance/safety gates                  |
+| B0f  | Show literal source first, explicitly simulated event second       | B0c; B0e commit; owner approved  | IN_PROGRESS — source patch; Chromium gate pending          |
 | B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | IN_PROGRESS — test patch; Chromium gate pending            |
 | B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IN_PROGRESS — test-only patch; Chromium gate pending       |
 | B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DONE — DIAGNOSTIC ONLY; T7 bug still open                  |
@@ -166,6 +166,42 @@ release, publish or remove this task ledger without owner authorization.
   **T7 remains PAUSED/WAITING_ON_OWNER** for remedial design approval.
 
 ### Owner-resolved B0e/B0f contracts — implementation gate
+
+#### B0f implementation evidence — 2026-10-27
+
+- Implementer: `/root/pm/tl/b0f_implementer_v2`; independent reviewer:
+  `/root/pm/tl/b0f_review`. Base: B0e progress commit
+  `e4e078263d5732c38f009603250f65601656c370`.
+- Root cause: semantic expanded leaves selected `event.label`, bypassing the
+  source-first labels already prepared by `createDrilldown`. Reuse those labels
+  by replay index; preserve control titles, event objects, call IDs, typed edges,
+  source locations, Values and seek handlers. Missing/out-of-range source retains
+  the event-label fallback.
+- Primary source text remains in the existing `textContent` sink. The existing
+  header kind slot now shows `Simulated: ${event.label}` for semantic leaves.
+  Header and primary text use ellipsis with full tooltips; no new height band,
+  dependency, analyzed-code execution or ELK change.
+- Tests were edited before production: existing desktop/mobile source/mock
+  assertions strengthened; six missing/out-of-range/markup-looking long-source
+  cases added. Shared-return tests assert identical source text across distinct
+  invocation IDs and node IDs. Existing cursor, Values and typed-return checks
+  remain. Prior baseline has two genuine B0f source-label RED cases; new cases
+  have not achieved a local behavior RED/GREEN cycle.
+- `npm run test:browser -- --grep 'expanded source provenance' --reporter=line`
+  first hit sandbox `listen EPERM 127.0.0.1`; approved elevated retry reached
+  Playwright but all six cases failed before execution because
+  `chromium_headless_shell-1248` is not installed. Browser behavior, safe-text
+  rendering and overflow remain **UNVERIFIED** pending exact-head Chromium CI.
+- `npm run check` passed: static scope guard, typecheck, 187 Node tests
+  (185 passed, 2 skipped, 0 failed), build and repository formatting check.
+  The build regenerated tracked `public/diagram/diagram.js`; integration
+  explicitly requested retaining that synchronized distribution artifact.
+  `git diff --check` passed. Long simulated labels also have header
+  ellipsis/title assertions; both repeated call sites now use `demo.ts:3`
+  with distinct call-node IDs and `b`/`b-again` typed call routes. Independent
+  review and final browser evidence remain pending.
+  Status remains **IN_PROGRESS**, not DONE. No remote write is performed by the
+  implementer; task-specific delivery and exact-head CI belong to integration.
 
 The owner explicitly selected the following options after the Council's
 five-advisor, five-peer, EDO challenge/rebuttal review. These **authorize the

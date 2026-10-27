@@ -26743,9 +26743,19 @@ SS.register({
 		let n = $("article", "", "diagram-card" + (t.active ? " is-active" : ""));
 		n.dataset.nodeId = t.id, n.dataset.controlType = t.control ?? t.kind, t.control && n.classList.add("diagram-control"), n.translate = !1, n.dataset.step = t.index, n.dataset.callId = t.callId ?? "", t.parentId && (n.dataset.parentId = t.parentId), t.expanded && !t.parentId && n.classList.add("diagram-expanded-method"), t.active && n.setAttribute("aria-current", "step");
 		let r = $("div", "", "diagram-card-header");
-		r.append($("span", String(t.index).padStart(2, "0"), "diagram-step"), $("span", t.kind, "diagram-kind"), $("span", t.active ? `Current · ${t.certainty}` : t.certainty, "diagram-state"));
+		if (r.append($("span", String(t.index).padStart(2, "0"), "diagram-step"), $("span", t.simulated ?? t.kind, "diagram-kind"), $("span", t.active ? `Current · ${t.certainty}` : t.certainty, "diagram-state")), t.simulated) {
+			let e = r.querySelector(".diagram-kind");
+			e.title = t.simulated, Object.assign(e.style, {
+				minWidth: "0",
+				flex: "1",
+				whiteSpace: "nowrap",
+				overflow: "hidden",
+				textOverflow: "ellipsis",
+				textTransform: "none"
+			}), r.querySelector(".diagram-step").style.flexShrink = "0", r.querySelector(".diagram-state").style.flexShrink = "0";
+		}
 		let i = $("button", t.label, "diagram-name");
-		i.type = "button", i.title = t.code ?? t.symbol, i.setAttribute("aria-label", t.expandLabel ?? "Expand method " + t.symbol), i.onclick = () => t.onExpand(t), t.expandable !== !1 && i.setAttribute("aria-expanded", String(!!t.expanded));
+		i.type = "button", i.title = t.code ?? t.symbol, t.simulated && (i.style.whiteSpace = "nowrap"), i.setAttribute("aria-label", t.expandLabel ?? "Expand method " + t.symbol), i.onclick = () => t.onExpand(t), t.expandable !== !1 && i.setAttribute("aria-expanded", String(!!t.expanded));
 		let a = t.source ? `${t.source.file}:${t.source.line}` : t.group ?? "Prepared flow", o = $("div", a, "diagram-location");
 		o.title = a;
 		let s = $("details", "", "diagram-values");
@@ -27152,7 +27162,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 						});
 						continue;
 					}
-					let i = t.index ?? t.node.indices[0], o = x[i - 1];
+					let i = t.index ?? t.node.indices[0], o = x[i - 1], s = e.steps.find((e) => e.index === i);
 					Fe.push({
 						id: a.get(t.id),
 						parentId: e.id,
@@ -27165,7 +27175,9 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 						level: "step",
 						kind: o.kind,
 						control: t.control,
-						label: t.control ? t.node.title : o.label,
+						label: t.control ? t.node.title : s?.label ?? o.label,
+						code: s?.code,
+						simulated: t.control ? void 0 : `Simulated: ${o.label}`,
 						x: t.x,
 						layoutY: t.y,
 						width: t.width,
