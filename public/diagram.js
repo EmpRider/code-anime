@@ -433,11 +433,55 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
   let semantic;
   const openValues = new Set();
   const valueHeight = (id) => (openValues.has(id) ? 160 : 0);
+  function keepValuesReachable(id) {
+    const cell = nodeCells.get(id);
+    const summary =
+      cell &&
+      graph
+        .findViewByCell(cell)
+        ?.container.querySelector('.diagram-values-summary');
+    if (!summary) return;
+    const bounds = summary.getBoundingClientRect();
+    const viewport = surface.getBoundingClientRect();
+    const pad = 12;
+    const left = viewport.left + pad;
+    const right = viewport.right - pad;
+    const top = viewport.top + pad;
+    let bottom = viewport.bottom - pad;
+    const dock = document
+      .querySelector('.playback-dock')
+      ?.getBoundingClientRect();
+    if (
+      dock &&
+      dock.top < bottom &&
+      dock.bottom > top &&
+      dock.left < right &&
+      dock.right > left
+    )
+      bottom = Math.min(bottom, dock.top - pad);
+    if (bottom <= top || right <= left) return;
+    const dx =
+      bounds.left < left
+        ? left - bounds.left
+        : bounds.right > right
+          ? right - bounds.right
+          : 0;
+    const dy =
+      bounds.top < top
+        ? top - bounds.top
+        : bounds.bottom > bottom
+          ? bottom - bounds.bottom
+          : 0;
+    if (dx || dy) pan(dx, dy);
+  }
   const onValues = (id) => {
     onPause?.();
     if (openValues.has(id)) openValues.delete(id);
     else openValues.add(id);
     render(options, false);
+    requestAnimationFrame(() => {
+      if (!disposed) keepValuesReachable(id);
+    });
   };
   let drilldown,
     scope = null,
