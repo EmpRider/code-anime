@@ -2041,12 +2041,33 @@ for (const mobile of [false, true]) {
       await expect(page.locator('#progress')).toHaveText('4 / 8');
       expect(await scale()).toBeCloseTo(beforeScale);
       await page.locator('#next').click();
-      await page
-        .getByRole('button', { name: 'Collapse expanded methods', exact: true })
-        .click();
+      await expect(page.locator('.diagram-expanded-method')).toHaveCount(2);
+      expect(
+        await page.locator('.diagram-card[data-parent-id]').count(),
+      ).toBeGreaterThan(0);
+      // Collapse method interiors by keyboard; the grouped full map stays
+      // grouped, and focus must recover when this button is removed.
+      const collapseMethods = page.getByRole('button', {
+        name: 'Collapse expanded methods',
+        exact: true,
+      });
+      await collapseMethods.focus();
+      await page.keyboard.press('Enter');
       await expect(page.locator('.diagram-card[data-parent-id]')).toHaveCount(
         0,
       );
+      await expect(page.locator('.diagram-expanded-method')).toHaveCount(0);
+      await expect(
+        page.locator('.diagram-card:not([data-parent-id])'),
+      ).toHaveCount(2);
+      for (const callId of ['a', 'b']) {
+        await expect(
+          page.locator(
+            `.diagram-card[data-call-id="${callId}"]:not([data-parent-id]) .diagram-name`,
+          ),
+        ).toHaveAttribute('aria-expanded', 'false');
+      }
+      await expect(collapseMethods).toHaveCount(0);
       await expect(page.locator('.x6-edge[data-edge-kind="call"]')).toHaveCount(
         1,
       );
@@ -2060,9 +2081,104 @@ for (const mobile of [false, true]) {
       await expect(returnEdge).toHaveAttribute('data-source-node', calleeId);
       await expect(returnEdge).toHaveAttribute('data-target-node', callerId);
       await expect(page.locator('#progress')).toHaveText('5 / 8');
-      await expect(page.locator('.diagram-boundary')).toHaveCount(0);
+      // Mock-trace file/owner groups outlive method expansion. Counts alone
+      // could pass with two duplicate or incorrectly nested owner frames.
+      const fileBoundary = page.locator('.diagram-boundary-file');
+      const ownerBoundaries = page.locator('.diagram-boundary-owner');
+      await expect(fileBoundary).toHaveCount(1);
+      await expect(fileBoundary).toHaveAttribute('aria-label', 'file: demo.ts');
+      await expect(ownerBoundaries).toHaveCount(2);
+      expect(
+        await ownerBoundaries.evaluateAll((elements) =>
+          elements.map((element) => element.getAttribute('aria-label')).sort(),
+        ),
+      ).toEqual(['owner: A', 'owner: B']);
+      await expect(async () => {
+        const fileBounds = (await fileBoundary.boundingBox())!;
+        for (const [ownerName, callId] of [
+          ['A', 'a'],
+          ['B', 'b'],
+        ]) {
+          const owner = page.locator(
+            `.diagram-boundary-owner[aria-label="owner: ${ownerName}"]`,
+          );
+          const method = page.locator(
+            `.diagram-card[data-call-id="${callId}"]:not([data-parent-id])`,
+          );
+          const ownerBounds = (await owner.boundingBox())!;
+          const methodBounds = (await method.boundingBox())!;
+          for (const [outer, innerBounds] of [
+            [fileBounds, ownerBounds],
+            [ownerBounds, methodBounds],
+          ] as const) {
+            expect(innerBounds.x).toBeGreaterThan(outer.x);
+            expect(innerBounds.y).toBeGreaterThan(outer.y);
+            expect(innerBounds.x + innerBounds.width).toBeLessThan(
+              outer.x + outer.width,
+            );
+            expect(innerBounds.y + innerBounds.height).toBeLessThan(
+              outer.y + outer.height,
+            );
+          }
+        }
+      }).toPass();
       await expect(page.locator('.diagram-selection')).toBeHidden();
       await expect(page.locator('.diagram-context')).toBeHidden();
+      const focusIsUsable = () =>
+        page.evaluate(() => {
+          const active = document.activeElement;
+          if (!(active instanceof HTMLElement)) return false;
+          const bounds = active.getBoundingClientRect();
+          const style = getComputedStyle(active);
+          return (
+            active.isConnected &&
+            active.matches(
+              'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])',
+            ) &&
+            !active.matches('[aria-label="Collapse expanded methods"]') &&
+            !active.closest('.diagram-card[data-parent-id]') &&
+            style.visibility !== 'hidden' &&
+            style.display !== 'none' &&
+            bounds.width > 0 &&
+            bounds.height > 0
+          );
+        });
+      expect(await focusIsUsable()).toBe(true);
+      await page.keyboard.press('Tab');
+      expect(await focusIsUsable()).toBe(true);
+      await page.keyboard.press('Shift+Tab');
+      expect(await focusIsUsable()).toBe(true);
+
+      // Negative contrast: a true owner-group collapse removes B and its
+      // return, whereas method-only collapse must preserve both.
+      await page
+        .getByRole('button', { name: 'Toggle group B', exact: true })
+        .click();
+      await expect(ownerBoundaries).toHaveCount(1);
+      await expect(
+        page.locator('.diagram-card[data-call-id="b"]:not([data-parent-id])'),
+      ).toHaveCount(0);
+      await expect(returnEdge).toHaveCount(0);
+      await page
+        .getByRole('button', { name: 'Toggle group B', exact: true })
+        .click();
+      await expect(ownerBoundaries).toHaveCount(2);
+      await expect(returnEdge).toHaveCount(1);
+      await expect(page.locator('.diagram-card[data-parent-id]')).toHaveCount(
+        0,
+      );
+      const expandB = page.getByRole('button', {
+        name: 'Expand method B.work',
+        exact: true,
+      });
+      await expandB.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('.diagram-expanded-method')).toHaveCount(1);
+      expect(
+        await page.locator('.diagram-card[data-parent-id]').count(),
+      ).toBeGreaterThan(0);
+      await expect(fileBoundary).toHaveCount(1);
+      await expect(ownerBoundaries).toHaveCount(2);
       expect(errors).toEqual([]);
     });
     test('load recovery keeps help available and restores URL context', async ({
