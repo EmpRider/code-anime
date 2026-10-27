@@ -250,12 +250,12 @@ test.afterAll(async () => {
   server.closeAllConnections();
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
-async function open(page: Page, route: string) {
+async function open(page: Page, route: string, eventCount = events.length) {
   await page.goto(`${baseUrl}/${route}/${id}?diagram=connections`);
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await expect(page.locator('#title')).toHaveText('A.main');
-  await expect(page.locator('#progress')).toHaveText('0 / 8');
+  await expect(page.locator('#progress')).toHaveText(`0 / ${eventCount}`);
 }
 async function seek(page: Page, cursor: number) {
   await page.locator('#timeline').fill(String(cursor));
@@ -2246,8 +2246,15 @@ for (const mobile of [false, true]) {
       await open(page, 'flow');
       await show(page, mobile, 'flow');
       if (!mobile) await page.setViewportSize({ width: 2400, height: 1000 });
-      const assertOrderedLayout = async (level: 'overview' | 'class') => {
+      const assertOrderedLayout = async (
+        level: 'overview' | 'class',
+        axis: 'vertical' | 'horizontal',
+      ) => {
         const cards = page.locator('.diagram-card');
+        await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+          'data-direction',
+          axis,
+        );
         if (level === 'overview') {
           // Repeated B.work invocations share one method card, not one route.
           await expect(
@@ -2288,21 +2295,27 @@ for (const mobile of [false, true]) {
           const second = await cards.nth(1).boundingBox();
           expect(first).not.toBeNull();
           expect(second).not.toBeNull();
-          if (mobile) {
-            expect(second!.y).toBeGreaterThan(first!.y + first!.height);
-            expect(Math.abs(second!.x - first!.x)).toBeLessThan(2);
-          } else {
-            expect(second!.x).toBeGreaterThan(first!.x + first!.width);
-            expect(Math.abs(second!.y - first!.y)).toBeLessThan(2);
-          }
+          const xSeparated = second!.x >= first!.x + first!.width - 1;
+          const ySeparated = second!.y >= first!.y + first!.height - 1;
+          // Prepared siblings may not overlap in either layout, even if a
+          // horizontal file group wraps into a new row on a narrow viewport.
+          expect(xSeparated || ySeparated).toBe(true);
+          if (axis === 'vertical') expect(ySeparated).toBe(true);
+          if (axis === 'horizontal' && !mobile) expect(xSeparated).toBe(true);
         }).toPass();
       };
-      await assertOrderedLayout('overview');
+      // Viewport width does not choose the graph direction: new sessions use
+      // top-to-bottom until the accessible orientation control is activated.
+      await assertOrderedLayout('overview', 'vertical');
+      await page
+        .getByRole('button', { name: 'Horizontal layout', exact: true })
+        .click();
+      await assertOrderedLayout('overview', 'horizontal');
       await page
         .getByRole('button', { name: 'Open class B details', exact: true })
         .click();
       await expect(page.locator('.diagram-heading > strong')).toHaveText('B');
-      await assertOrderedLayout('class');
+      await assertOrderedLayout('class', 'horizontal');
       await seek(page, 4);
       await expect(page.locator('.diagram-card.is-active')).toHaveCount(1);
       await expect(page.locator('.diagram-card.is-active')).toHaveAttribute(
@@ -2332,7 +2345,7 @@ for (const mobile of [false, true]) {
         .getByRole('button', { name: 'Collapse diagram level', exact: true })
         .click();
       await expect(page.locator('.diagram-heading > strong')).toHaveText('B');
-      await assertOrderedLayout('class');
+      await assertOrderedLayout('class', 'horizontal');
       await expect(page.locator('.diagram-card.is-active')).toHaveAttribute(
         'data-call-id',
         'b',
@@ -2375,7 +2388,7 @@ for (const mobile of [false, true]) {
       await page.route(`**/api/flow/${id}`, (route) =>
         route.fulfill({ json: siblings }),
       );
-      await open(page, 'flow');
+      await open(page, 'flow', siblingEvents.length);
       await show(page, mobile, 'flow');
       await expect(page.locator('.x6-edge[data-edge-kind="call"]')).toHaveCount(
         2,
