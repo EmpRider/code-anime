@@ -74,7 +74,6 @@ until the project owner explicitly changes this rule:
    console examples, and a single reversible playback cursor. Playback and UI
    inspection use prepared data and never invoke fresh AI analysis.
 
-
 The **Node.js server process and localhost web player** are infrastructure and
 remain necessary. They must never execute the analyzed user's application.
 Tests may execute Code Anime's own code, fake providers, and synthetic fixtures,
