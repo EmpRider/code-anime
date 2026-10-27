@@ -1873,6 +1873,98 @@ for (const mobile of [false, true]) {
       expect(routes.every((route) => route.length > 20)).toBe(true);
       await page.screenshot({ path: info.outputPath('fanout-routes.png') });
     });
+    test('typed call and return routes use prepared invocation ancestry, not edge count', async ({
+      page,
+    }) => {
+      await open(page, 'flow');
+      await show(page, mobile, 'flow');
+      const caller = page.locator(
+        '.diagram-card[data-call-id="a"]:not([data-parent-id])',
+      );
+      const callee = page.locator(
+        '.diagram-card[data-call-id="b"]:not([data-parent-id])',
+      );
+      const callerId = await caller.getAttribute('data-node-id');
+      const calleeId = await callee.getAttribute('data-node-id');
+      expect(callerId).toBeTruthy();
+      expect(calleeId).toBeTruthy();
+      const call = page.locator('.x6-edge[data-edge-kind="call"]');
+      const preparedReturn = page.locator('.x6-edge[data-edge-kind="return"]');
+      await expect(call).toHaveCount(1);
+      await expect(preparedReturn).toHaveCount(1);
+      await expect(call).toHaveAttribute('data-source-node', callerId!);
+      await expect(call).toHaveAttribute('data-target-node', calleeId!);
+      await expect(call).toHaveAttribute('aria-label', /Call b:.*step 2/);
+      await expect(preparedReturn).toHaveAttribute(
+        'data-source-node',
+        calleeId!,
+      );
+      await expect(preparedReturn).toHaveAttribute(
+        'data-target-node',
+        callerId!,
+      );
+      await expect(preparedReturn).toHaveAttribute(
+        'aria-label',
+        /Prepared simulated return at step 5: b to a/,
+      );
+
+      // Contradictory return ancestry is not evidence for a prepared arrow.
+      const conflicted = flowSchema.parse({
+        ...flow,
+        trace: {
+          ...flow.trace!,
+          events: events.map((event, index) =>
+            index === 4 ? { ...event, parentCallId: 'wrong-parent' } : event,
+          ),
+        },
+      });
+      await page.route(`**/api/flow/${id}`, (route) =>
+        route.fulfill({ json: conflicted }),
+      );
+      await page.reload();
+      await show(page, mobile, 'flow');
+      await expect(call).toHaveCount(1);
+      await expect(preparedReturn).toHaveCount(0);
+      await expect(page.locator('#progress')).toHaveText('0 / 8');
+    });
+    test('map scope pages preserve source-step access and every prepared cursor', async ({
+      page,
+    }) => {
+      await open(page, 'flow');
+      await show(page, mobile, 'flow');
+      await page
+        .getByRole('button', { name: 'Open class A details', exact: true })
+        .click();
+      await page
+        .getByRole('button', { name: 'Expand method A.main', exact: true })
+        .click();
+      await expect(page.locator('.diagram-pages')).toContainText('1–3 / 4');
+      await expect(page.locator('.diagram-card')).toHaveCount(3);
+      await expect(
+        page.locator('.x6-edge[data-edge-kind="step-order"]'),
+      ).toHaveCount(2);
+      await expect(page.locator('.x6-edge[data-edge-kind="call"]')).toHaveCount(
+        0,
+      );
+      await page
+        .getByRole('button', { name: 'Next diagram page', exact: true })
+        .click();
+      await expect(page.locator('.diagram-pages')).toContainText('4–4 / 4');
+      await page
+        .getByRole('button', { name: 'Go to source step 8', exact: true })
+        .click();
+      await expect(page.locator('#progress')).toHaveText('8 / 8');
+      for (let index = 1; index <= events.length; index++) {
+        await seek(page, index);
+        await show(page, mobile, 'code');
+        await expect(
+          page.locator(
+            `.code-row[data-line="${events[index - 1]!.source.line}"]`,
+          ),
+        ).toHaveAttribute('aria-current', 'location');
+        await show(page, mobile, 'flow');
+      }
+    });
     test('recursive drilldown keeps invocation identity and restores each parent', async ({
       page,
     }) => {
@@ -1914,11 +2006,43 @@ for (const mobile of [false, true]) {
       await open(page, 'flow');
       await show(page, mobile, 'flow');
       if (!mobile) await page.setViewportSize({ width: 2400, height: 1000 });
-      const assertOrderedLayout = async () => {
+      const assertOrderedLayout = async (level: 'overview' | 'class') => {
         const cards = page.locator('.diagram-card');
-        await expect(page.locator('.x6-edge')).toHaveCount(
-          (await cards.count()) - 1,
-        );
+        if (level === 'overview') {
+          // Repeated B.work invocations share one method card, not one route.
+          await expect(
+            page.locator('.x6-edge[data-edge-kind="call"]'),
+          ).toHaveCount(2);
+          await expect(
+            page.locator('.x6-edge[data-edge-kind="return"]'),
+          ).toHaveCount(2);
+          for (const invocationId of ['b', 'c']) {
+            await expect(
+              page.locator(
+                `.x6-edge[data-edge-kind="call"][aria-label^="Call ${invocationId}:"]`,
+              ),
+            ).toHaveCount(1);
+            await expect(
+              page.locator(
+                `.x6-edge[data-edge-kind="return"][aria-label*="${invocationId} to ${invocationId === 'c' ? 'b' : 'a'}"]`,
+              ),
+            ).toHaveCount(1);
+          }
+        } else {
+          // Scoped method ordering is explicitly not a prepared call route.
+          await expect(
+            page.locator('.x6-edge[data-edge-kind="first-appearance"]'),
+          ).toHaveCount((await cards.count()) - 1);
+          await expect(
+            page.locator('.x6-edge[data-edge-kind="call"]'),
+          ).toHaveCount(0);
+          await expect(
+            page.locator('.x6-edge[data-edge-kind="return"]'),
+          ).toHaveCount(0);
+          await expect(
+            page.locator('.x6-edge[data-edge-kind="first-appearance"]'),
+          ).toHaveAttribute('aria-label', /First appearance order—not a call/);
+        }
         await expect(async () => {
           const first = await cards.nth(0).boundingBox();
           const second = await cards.nth(1).boundingBox();
@@ -1933,12 +2057,12 @@ for (const mobile of [false, true]) {
           }
         }).toPass();
       };
-      await assertOrderedLayout();
+      await assertOrderedLayout('overview');
       await page
         .getByRole('button', { name: 'Open class B details', exact: true })
         .click();
       await expect(page.locator('.diagram-heading > strong')).toHaveText('B');
-      await assertOrderedLayout();
+      await assertOrderedLayout('class');
       await seek(page, 4);
       await expect(page.locator('.diagram-card.is-active')).toHaveCount(1);
       await expect(page.locator('.diagram-card.is-active')).toHaveAttribute(
@@ -1968,10 +2092,85 @@ for (const mobile of [false, true]) {
         .getByRole('button', { name: 'Collapse diagram level', exact: true })
         .click();
       await expect(page.locator('.diagram-heading > strong')).toHaveText('B');
-      await assertOrderedLayout();
+      await assertOrderedLayout('class');
       await expect(page.locator('.diagram-card.is-active')).toHaveAttribute(
         'data-call-id',
         'b',
+      );
+    });
+    test('sibling methods keep two real parent calls without inventing a sibling call', async ({
+      page,
+    }) => {
+      const siblingEvents = [
+        events[0]!,
+        events[1]!,
+        events[2]!,
+        events[4]!,
+        {
+          ...events[2]!,
+          id: 'sibling-enter',
+          callId: 'c',
+          parentCallId: 'a',
+          stack: ['a', 'c'],
+        },
+        {
+          ...events[4]!,
+          id: 'sibling-return',
+          callId: 'c',
+          parentCallId: 'a',
+          stack: ['a'],
+        },
+        events[7]!,
+      ];
+      const siblings = flowSchema.parse({
+        ...flow,
+        trace: { ...flow.trace!, events: siblingEvents },
+        steps: siblingEvents.map((event) => ({
+          from: event.symbolId,
+          to: event.symbolId,
+          dtoName: event.label,
+          dtoFields: {},
+        })),
+      });
+      await page.route(`**/api/flow/${id}`, (route) =>
+        route.fulfill({ json: siblings }),
+      );
+      await open(page, 'flow');
+      await show(page, mobile, 'flow');
+      await expect(page.locator('.x6-edge[data-edge-kind="call"]')).toHaveCount(
+        2,
+      );
+      await expect(
+        page.locator('.x6-edge[data-edge-kind="return"]'),
+      ).toHaveCount(2);
+      for (const callId of ['b', 'c']) {
+        await expect(
+          page.locator(
+            `.x6-edge[data-edge-kind="return"][aria-label*="${callId} to a"]`,
+          ),
+        ).toHaveCount(1);
+      }
+      await page
+        .getByRole('button', { name: 'Open class B details', exact: true })
+        .click();
+      await expect(page.locator('.diagram-card')).toHaveCount(2);
+      await expect(page.locator('.x6-edge[data-edge-kind="call"]')).toHaveCount(
+        0,
+      );
+      await expect(
+        page.locator('.x6-edge[data-edge-kind="return"]'),
+      ).toHaveCount(0);
+      const ordered = page.locator(
+        '.x6-edge[data-edge-kind="first-appearance"]',
+      );
+      await expect(ordered).toHaveCount(1);
+      await expect(ordered).toHaveAttribute(
+        'aria-label',
+        /First appearance order—not a call/,
+      );
+      await expect(ordered.locator('path[marker-end]')).toHaveAttribute(
+        'stroke-dasharray',
+        /5[ ,]+7/,
       );
     });
     test('player controls perform the expected actions', async ({ page }) => {
@@ -2101,58 +2300,81 @@ test('X6 views preserve source playback, paging, inspection and zoom', async ({
       errors.push(message.text());
   });
   await open(page, 'flow');
+  await expect(page.locator('.diagram-card')).toHaveCount(2);
+  await expect(page.locator('.diagram-pages')).toContainText(
+    '2 visible · drag to pan',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Next diagram page', exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole('button', { name: 'Open class A details', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Expand method A.main', exact: true })
+    .click();
+  await expect(page.locator('.diagram-pages')).toContainText('1–3 / 4');
   await expect(page.locator('.diagram-card')).toHaveCount(3);
-  await page.getByRole('button', { name: 'Next diagram page' }).click();
-  await expect(page.locator('.diagram-pages')).toContainText('4–6 / 7');
+  await page
+    .getByRole('button', { name: 'Next diagram page', exact: true })
+    .click();
+  await expect(page.locator('.diagram-pages')).toContainText('4–4 / 4');
   await expect(
     page.getByRole('button', { name: 'Next diagram page' }),
-  ).toBeFocused();
+  ).toBeDisabled();
   await page.getByRole('button', { name: 'Previous diagram page' }).click();
-  await expect(page.locator('.diagram-card[data-step="2"]')).toHaveCount(0);
+  await expect(page.locator('.diagram-card[data-step="8"]')).toHaveCount(0);
+  await expect(page.locator('.diagram-pages')).toContainText('1–3 / 4');
   await page
-    .getByRole('button', { name: 'Go to step 4 ›', exact: true })
+    .getByRole('button', { name: 'Next diagram page', exact: true })
     .click();
-  await expect(page.locator('#progress')).toHaveText('4 / 8');
-  await expect(
-    page.getByRole('button', { name: 'Go to step 4 ›', exact: true }),
-  ).toBeFocused();
+  await page
+    .getByRole('button', { name: 'Go to source step 8', exact: true })
+    .click();
+  await expect(page.locator('#progress')).toHaveText('8 / 8');
+  await expect(page.locator('.code-row[data-line="5"]')).toHaveAttribute(
+    'aria-current',
+    'location',
+  );
+  await page
+    .getByRole('button', { name: 'Show all prepared steps', exact: true })
+    .click();
+  await expect(page.locator('.diagram-heading > strong')).toHaveText(
+    'Execution path',
+  );
+  await seek(page, 4);
+  await expect(page).toHaveURL(/view=map&step=4/);
   await expect(page.locator('.diagram-card.is-active')).toContainText('value');
   await expect(page.locator('.code-row[data-line="7"]')).toHaveAttribute(
     'aria-current',
     'location',
   );
-  for (const mode of ['focus', 'map']) {
-    await expect(page.locator('.diagram-card')).toHaveCount(2);
-    await expect(page.locator('.x6-edge[data-edge-kind="call"]')).toHaveCount(
-      1,
-    );
-    await expect(page.locator('.x6-edge[data-edge-kind="return"]')).toHaveCount(
-      mode === 'map' ? 1 : 0,
-    );
-    await expect(page.locator('.diagram-card.is-active')).toContainText('work');
-    await expect(
-      page.locator('.diagram-card.is-active .diagram-location'),
-    ).toHaveText('demo.ts:7');
-    await page
-      .getByRole('button', { name: 'Inspect method B.work', exact: true })
-      .click();
-    await expect(page.locator('#method-details')).toBeVisible();
-    await page
-      .getByRole('button', { name: 'Inspect selected node', exact: true })
-      .click();
-    await expect(page.locator('#method-details')).toBeHidden();
-    const transform = await page
-      .locator('.x6-graph-svg-viewport')
-      .getAttribute('transform');
-    await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
-    await expect(page.locator('.x6-graph-svg-viewport')).not.toHaveAttribute(
-      'transform',
-      transform ?? '',
-    );
-    await page
-      .getByRole('button', { name: 'Fit diagram', exact: true })
-      .click();
-  }
+  await expect(page.locator('.diagram-card')).toHaveCount(2);
+  await expect(page.locator('.x6-edge[data-edge-kind="call"]')).toHaveCount(1);
+  await expect(page.locator('.x6-edge[data-edge-kind="return"]')).toHaveCount(
+    1,
+  );
+  await expect(page.locator('.diagram-card.is-active')).toContainText('work');
+  await expect(
+    page.locator('.diagram-card.is-active .diagram-location'),
+  ).toHaveText('demo.ts:7');
+  await page
+    .getByRole('button', { name: 'Inspect method B.work', exact: true })
+    .click();
+  await expect(page.locator('#method-details')).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Inspect selected node', exact: true })
+    .click();
+  await expect(page.locator('#method-details')).toBeHidden();
+  const transform = await page
+    .locator('.x6-graph-svg-viewport')
+    .getAttribute('transform');
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await expect(page.locator('.x6-graph-svg-viewport')).not.toHaveAttribute(
+    'transform',
+    transform ?? '',
+  );
+  await page.getByRole('button', { name: 'Fit diagram', exact: true }).click();
   await page
     .getByRole('button', { name: 'Toggle group B', exact: true })
     .click();
