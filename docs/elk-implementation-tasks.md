@@ -25,7 +25,7 @@ code must never execute to construct animations.
 | T4   | Nested ELK geometry and robust Worker protocol                     | T2, T3                           | Pending                                                    |
 | T5   | X6 compound frames, arrows, and existing HTML controls             | T4                               | Pending                                                    |
 | T6   | Async race safety and full player-state preservation               | T5                               | Pending                                                    |
-| T7   | Isolate orientation/panel preference keys with migration           | B0 MVP browser gate              | PAUSED — wider MVP/revised-plan gate review                |
+| T7   | Isolate orientation/panel preference keys with migration           | B0i; B0 browser gate GREEN       | IN_PROGRESS — storage RED verification preflight           |
 | T8   | PC-only compact visual clarity and accessibility                   | T6                               | Pending                                                    |
 | T9   | Full mock-trace, performance, and package acceptance               | T1–T8                            | Pending                                                    |
 
@@ -336,6 +336,52 @@ release, publish or remove this task ledger without owner authorization.
   diagnostic**, contingent on this separate status commit being pushed and
   verified. No storage migration or browser UI acceptance has been performed;
   **T7 remains PAUSED/WAITING_ON_OWNER** for remedial design approval.
+
+### T7 — source-proven orientation/panel preference collision, 2026-10-28
+
+- **Task owner / dependencies:** Preference-storage specialist with
+  independent browser QA and Council; B0i diagnostic completed, B0k
+  browser CI now green at
+  [Actions #40602271424](https://github.com/EmpRider/code-anime/actions/runs/40602271424)
+  (63/63 Chromium, four Node/check/package jobs). This is scoped
+  MVP preference preservation, not approval of unrelated ELK features.
+- **Observed RED mechanism, browser reproduction pending:**
+  `public/diagram.js:283–297` reads/writes raw `horizontal|vertical`
+  under `code-anime-layout`, while `public/player.js:3050–3077`
+  reads/writes JSON panel preferences under the same key. B0i's isolated
+  production-slice Node VM showed both last-writer-wins loss orders, but
+  a real Chromium regression must independently prove both. Impact:
+  P2 persistence candidate; not runtime user-code execution or data loss.
+- **Council scope:** The reviewed Task 7 plan explicitly specifies
+  ONE new key, `code-anime-diagram-orientation`. Focused QA and Devil
+  challenges/rebuttals accepted that contract over a broader two-new-key
+  schema. Keep `code-anime-layout` as panel JSON and
+  `public/player.js` unchanged unless a real RED counterexample requires
+  a newly reviewed issue. The
+  [T7 Council EDO decision](t7-preference-council-edo-2026-10-27.md) records
+  the evidence, dissent, and typed legacy migration. A missing dedicated key
+  may migrate only an
+  exact legacy raw `vertical`/`horizontal` enum into it, best effort;
+  never delete or overwrite legacy JSON. A valid dedicated key takes
+  precedence; corruption and unavailable/throwing storage fail safely.
+- **Implementation owner / files:** Tests
+  `tests/browser/player.spec.ts`, authored
+  `public/diagram.js`, generated
+  `public/diagram/diagram.js` only if the build regenerates that artifact.
+  No application runtime instrumentation or new dependency.
+- **RED → GREEN acceptance:** Both orders, orientation→workspace-panel
+  and workspace-panel→orientation, must persist together across two
+  reloads with real keyboard-driven controls and source/flow continuity.
+  Verify legacy raw orientation migration, valid legacy panel JSON,
+  dedicated-key precedence, corrupted/partial/null values, throwing
+  `localStorage`, and divider `aria-valuenow` values after reload.
+  Negative controls must detect either component overwriting the other's
+  key. Run focused desktop Chromium RED before source fix, then real
+  browser GREEN, full suite, Node/check/package, authored/generated
+  parity and independent code review at the exact pushed HEAD.
+- **Delivery gate:** GitHub task ledger and Council decision pushed/verified
+  before any T7 test or source change. Keep T7 IN_PROGRESS until
+  exact-head acceptance; do not infer T1–T9 or public Worker signoff.
 
 ### Owner-resolved B0e/B0f contracts — implementation gate
 
