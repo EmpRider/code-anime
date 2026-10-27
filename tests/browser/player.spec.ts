@@ -3189,6 +3189,244 @@ test('layout persists, source pages navigate, export downloads, errors display',
   );
   await expect(page.locator('#play')).toBeDisabled();
 });
+test('T7 panel then orientation persist independently across reloads', async ({
+  page,
+}) => {
+  await open(page, 'flow');
+  await page.locator('#toggle-inspector').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#toggle-inspector')).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await page.locator('#workspace-divider').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#workspace-divider')).toHaveAttribute(
+    'aria-valuenow',
+    '240',
+  );
+  const panelJson = await page.evaluate(() =>
+    localStorage.getItem('code-anime-layout'),
+  );
+  expect(JSON.parse(panelJson!).inspector).toBe(true);
+  await page
+    .getByRole('button', { name: 'Horizontal layout', exact: true })
+    .focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+    'data-direction',
+    'horizontal',
+  );
+  expect(
+    await page.evaluate(() => localStorage.getItem('code-anime-layout')),
+  ).toBe(panelJson);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await page.reload();
+    await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+      'data-direction',
+      'horizontal',
+    );
+    await expect(page.locator('#toggle-inspector')).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await expect(page.locator('#workspace-divider')).toHaveAttribute(
+      'aria-valuenow',
+      '240',
+    );
+  }
+});
+
+test('T7 orientation then panel persist independently across reloads', async ({
+  page,
+}) => {
+  await open(page, 'flow');
+  await page
+    .getByRole('button', { name: 'Horizontal layout', exact: true })
+    .focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+    'data-direction',
+    'horizontal',
+  );
+  await page.locator('#toggle-inspector').focus();
+  await page.keyboard.press('Enter');
+  await page.locator('#source-flow-divider').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#source-flow-divider')).toHaveAttribute(
+    'aria-valuenow',
+    '60',
+  );
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem('code-anime-diagram-orientation'),
+    ),
+  ).toBe('horizontal');
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await page.reload();
+    await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+      'data-direction',
+      'horizontal',
+    );
+    await expect(page.locator('#toggle-inspector')).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await expect(page.locator('#source-flow-divider')).toHaveAttribute(
+      'aria-valuenow',
+      '60',
+    );
+  }
+});
+
+test('T7 legacy raw horizontal migrates once without altering old storage', async ({
+  page,
+}) => {
+  await open(page, 'flow');
+  await page.evaluate(() =>
+    localStorage.setItem('code-anime-layout', 'horizontal'),
+  );
+  await page.reload();
+  await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+    'data-direction',
+    'horizontal',
+  );
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem('code-anime-diagram-orientation'),
+    ),
+  ).toBe('horizontal');
+  expect(
+    await page.evaluate(() => localStorage.getItem('code-anime-layout')),
+  ).toBe('horizontal');
+  await page.evaluate(() =>
+    localStorage.setItem('code-anime-layout', 'vertical'),
+  );
+  await page.reload();
+  await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+    'data-direction',
+    'horizontal',
+  );
+});
+
+test('T7 valid legacy panel JSON survives an orientation change', async ({
+  page,
+}) => {
+  await open(page, 'flow');
+  const panelJson = JSON.stringify({
+    inspector: true,
+    timeline: true,
+    traceWidth: 240,
+    console: false,
+    diagram: true,
+    sourceShare: 60,
+  });
+  await page.evaluate(
+    (value) => localStorage.setItem('code-anime-layout', value),
+    panelJson,
+  );
+  await page.reload();
+  await expect(page.locator('#toggle-inspector')).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await expect(page.locator('#workspace-divider')).toHaveAttribute(
+    'aria-valuenow',
+    '240',
+  );
+  await page
+    .getByRole('button', { name: 'Horizontal layout', exact: true })
+    .click();
+  expect(
+    await page.evaluate(() => localStorage.getItem('code-anime-layout')),
+  ).toBe(panelJson);
+  await page.reload();
+  await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+    'data-direction',
+    'horizontal',
+  );
+  await expect(page.locator('#source-flow-divider')).toHaveAttribute(
+    'aria-valuenow',
+    '60',
+  );
+});
+
+test('T7 corrupt and conflicting orientation storage safely uses the dedicated key', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await open(page, 'flow');
+  await page.evaluate(() => {
+    localStorage.setItem('code-anime-layout', 'horizontal');
+    localStorage.setItem('code-anime-diagram-orientation', 'diagonal');
+  });
+  await page.reload();
+  await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+    'data-direction',
+    'vertical',
+  );
+  await page.evaluate(() => {
+    localStorage.setItem('code-anime-diagram-orientation', 'horizontal');
+    localStorage.setItem('code-anime-layout', '{broken');
+  });
+  await page.reload();
+  await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+    'data-direction',
+    'horizontal',
+  );
+  await expect(page.locator('#toggle-inspector')).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  expect(errors).toEqual([]);
+});
+
+test('T7 storage SecurityError preserves in-memory orientation controls', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    const get = Storage.prototype.getItem;
+    const set = Storage.prototype.setItem;
+    (window as Window & { t7Writes?: number }).t7Writes = 0;
+    Storage.prototype.getItem = function (key) {
+      if (key === 'code-anime-diagram-orientation')
+        throw new DOMException('Storage disabled', 'SecurityError');
+      return get.call(this, key);
+    };
+    Storage.prototype.setItem = function (key, value) {
+      if (key === 'code-anime-diagram-orientation') {
+        const state = window as Window & { t7Writes?: number };
+        state.t7Writes = (state.t7Writes ?? 0) + 1;
+        throw new DOMException('Storage disabled', 'SecurityError');
+      }
+      return set.call(this, key, value);
+    };
+  });
+  await open(page, 'flow');
+  await page
+    .getByRole('button', { name: 'Horizontal layout', exact: true })
+    .focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+    'data-direction',
+    'horizontal',
+  );
+  expect(
+    await page.evaluate(
+      () => (window as Window & { t7Writes?: number }).t7Writes ?? 0,
+    ),
+  ).toBeGreaterThan(0);
+  await page.reload();
+  await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+    'data-direction',
+    'vertical',
+  );
+  expect(errors).toEqual([]);
+});
+
 test('X6 views preserve source playback, paging, inspection and zoom', async ({
   page,
 }) => {
