@@ -662,7 +662,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
     const functionGraph = groupFunctionInvocations(entries, events);
     const activeFunctionId = functionGraph.byCall.get(activeId);
     navigation.replaceChildren();
-    if (events.length && mode === 'map') {
+    if (events.length && mode === 'map' && !scope) {
       if (expanded.size)
         navigation.append(
           button('Collapse methods', 'Collapse expanded methods', () => {
@@ -673,11 +673,12 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
           }),
         );
     } else if (events.length) {
-      navigation.append(
-        button('Classes', 'Show class-level diagram', () =>
-          changeScope({ kind: 'classes' }, true),
-        ),
-      );
+      if (mode !== 'map')
+        navigation.append(
+          button('Classes', 'Show class-level diagram', () =>
+            changeScope({ kind: 'classes' }, true),
+          ),
+        );
       if (scope) {
         navigation.append(
           button('↑ Collapse', 'Collapse diagram level', () => {
@@ -761,6 +762,8 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
       if (cursor > 0 && !scopedCards.some((card) => card.active))
         subtitle.textContent += ' · cursor outside this scope';
     } else {
+      title.textContent = 'Execution path';
+      subtitle.textContent = 'Prepared steps · not runtime execution';
       cards = functionGraph.functions
         .filter((item) => !collapsed.has(item.invocations[0].className))
         .map((item) => {
@@ -817,7 +820,8 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
         .filter((edge) => ids.has(edge.source) && ids.has(edge.target))
         .map((edge) => [edge.source, edge.target, edge.callId]);
     }
-    if (!scope && mode === 'map' && (signature === '' || oldMode !== mode)) {
+    if (scope) groups.replaceChildren();
+    else if (mode === 'map' && (signature === '' || oldMode !== mode)) {
       groups.replaceChildren();
       for (const name of new Set(entries.map((entry) => entry.className))) {
         const toggle = button(name, 'Toggle group ' + name, () => {
@@ -827,7 +831,12 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
           render(options);
         });
         toggle.setAttribute('aria-pressed', String(!collapsed.has(name)));
-        groups.append(toggle);
+        groups.append(
+          toggle,
+          button('›', 'Open class ' + name + ' details', () =>
+            changeScope({ kind: 'class', id: name }),
+          ),
+        );
       }
     }
     const grouped = mode === 'map' && !scope;
