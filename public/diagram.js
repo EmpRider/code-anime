@@ -282,15 +282,32 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
     node.onclick = action;
     return node;
   };
+  const orientationKey = 'code-anime-diagram-orientation';
   let direction = 'vertical';
   try {
-    if (localStorage.getItem('code-anime-layout') === 'horizontal')
-      direction = 'horizontal';
-  } catch {}
+    const savedDirection = localStorage.getItem(orientationKey);
+    if (savedDirection === 'vertical' || savedDirection === 'horizontal') {
+      direction = savedDirection;
+    } else if (savedDirection === null) {
+      // Only a raw legacy orientation can migrate. The player owns JSON
+      // panel preferences under code-anime-layout; never modify that key.
+      const legacyDirection = localStorage.getItem('code-anime-layout');
+      if (legacyDirection === 'vertical' || legacyDirection === 'horizontal') {
+        direction = legacyDirection;
+        try {
+          localStorage.setItem(orientationKey, direction);
+        } catch {
+          // Orientation still works in memory when storage is unavailable.
+        }
+      }
+    }
+  } catch {
+    // Storage reads are optional; keep the default orientation.
+  }
   const orientation = button('', '', () => {
     direction = direction === 'vertical' ? 'horizontal' : 'vertical';
     try {
-      localStorage.setItem('code-anime-layout', direction);
+      localStorage.setItem(orientationKey, direction);
     } catch {}
     updateOrientation();
     signature = '';
