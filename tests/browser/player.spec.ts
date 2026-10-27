@@ -2045,6 +2045,20 @@ for (const mobile of [false, true]) {
       expect(
         await page.locator('.diagram-card[data-parent-id]').count(),
       ).toBeGreaterThan(0);
+      const bMethod = page.locator(
+        '.diagram-card[data-call-id="b"]:not([data-parent-id])',
+      );
+      // The button appends an action cue after its primary label; selection
+      // actions display only the underlying prepared card label.
+      const selectedMethodLabel = await bMethod
+        .locator('.diagram-name')
+        .evaluate((el) => el.firstChild?.textContent?.trim() ?? '');
+      const selectionActions = page.locator('.diagram-selection');
+      // The preceding method expansion selected surviving outer method B.
+      await expect(selectionActions).toBeVisible();
+      await expect(selectionActions.locator('span').first()).toHaveText(
+        selectedMethodLabel,
+      );
       // Collapse method interiors by keyboard; the grouped full map stays
       // grouped, and focus must recover when this button is removed.
       const collapseMethods = page.getByRole('button', {
@@ -2122,7 +2136,26 @@ for (const mobile of [false, true]) {
           }
         }
       }).toPass();
-      await expect(page.locator('.diagram-selection')).toBeHidden();
+      // The selected outer B method still exists: its inspector must survive
+      // collapsing only its children, unlike a removed inner step.
+      await expect(selectionActions).toBeVisible();
+      await expect(selectionActions.locator('span').first()).toHaveText(
+        selectedMethodLabel,
+      );
+      for (const name of [
+        'Read selected node',
+        'Open selected node',
+        'Toggle selected node values',
+        'Inspect selected node',
+        'Close selected node actions',
+      ]) {
+        await expect(
+          selectionActions.getByRole('button', { name, exact: true }),
+        ).toBeVisible();
+      }
+      await expect(
+        page.locator('.x6-edge[data-selected-pair="true"]'),
+      ).toHaveCount(2);
       await expect(page.locator('.diagram-context')).toBeHidden();
       const focusIsUsable = () =>
         page.evaluate(() => {
@@ -2159,11 +2192,16 @@ for (const mobile of [false, true]) {
         page.locator('.diagram-card[data-call-id="b"]:not([data-parent-id])'),
       ).toHaveCount(0);
       await expect(returnEdge).toHaveCount(0);
+      await expect(selectionActions).toBeHidden();
+      await expect(
+        page.locator('.x6-edge[data-selected-pair="true"]'),
+      ).toHaveCount(0);
       await page
         .getByRole('button', { name: 'Toggle group B', exact: true })
         .click();
       await expect(ownerBoundaries).toHaveCount(2);
       await expect(returnEdge).toHaveCount(1);
+      await expect(selectionActions).toBeHidden();
       await expect(page.locator('.diagram-card[data-parent-id]')).toHaveCount(
         0,
       );
@@ -2177,8 +2215,44 @@ for (const mobile of [false, true]) {
       expect(
         await page.locator('.diagram-card[data-parent-id]').count(),
       ).toBeGreaterThan(0);
+      await expect(selectionActions).toBeVisible();
+      await expect(selectionActions.locator('span').first()).toHaveText(
+        selectedMethodLabel,
+      );
       await expect(fileBoundary).toHaveCount(1);
       await expect(ownerBoundaries).toHaveCount(2);
+
+      // Negative control: select an inner step by keyboard, then remove that
+      // step by collapsing methods. Its inspector must not survive.
+      const nestedName = page
+        .locator('.diagram-card[data-parent-id] .diagram-name')
+        .first();
+      const nestedLabel = await nestedName.evaluate(
+        (el) => el.firstChild?.textContent?.trim() ?? '',
+      );
+      await nestedName.focus();
+      await page.keyboard.press('Shift+Tab');
+      await page.keyboard.press('Tab');
+      await expect(nestedName).toBeFocused();
+      await expect(selectionActions.locator('span').first()).toHaveText(
+        nestedLabel,
+      );
+      const collapseAgain = page.getByRole('button', {
+        name: 'Collapse expanded methods',
+        exact: true,
+      });
+      await collapseAgain.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('.diagram-card[data-parent-id]')).toHaveCount(
+        0,
+      );
+      await expect(selectionActions).toBeHidden();
+      await expect(
+        page.locator('.x6-edge[data-selected-pair="true"]'),
+      ).toHaveCount(0);
+      await expect(fileBoundary).toHaveCount(1);
+      await expect(ownerBoundaries).toHaveCount(2);
+      expect(await focusIsUsable()).toBe(true);
       expect(errors).toEqual([]);
     });
     test('load recovery keeps help available and restores URL context', async ({
