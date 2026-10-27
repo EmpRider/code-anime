@@ -126,3 +126,5 @@ Run `npm run test:browser` for browser layout and interaction checks at desktop,
 `src/services/animation-builder.ts` owns incremental trace construction and snapshots; `src/services/simulation-service.ts` manages CodeGraph evidence receipts and AI trace validation; `src/analysis/` adapts the provider; `src/domain/` defines trace/flow schemas; `src/storage/` manages sessions; `src/mcp/` exposes tools; `public/` renders replay; `skills/code-anime/` supplies agent orchestration.
 
 [Architecture](docs/architecture.md) · [CodeGraph details](docs/analysis.md) · [Release instructions](docs/releasing.md) · [MIT license](LICENSE)
+
+test commit
