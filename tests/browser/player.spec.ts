@@ -1558,6 +1558,11 @@ for (const mobile of [false, true]) {
       await page.getByRole('button', { name: 'Retry loading flow' }).click();
       await expect(page.locator('#progress')).toHaveText('4 / 8');
       await expect(page).toHaveURL(/view=map&step=4/);
+      await show(page, mobile, 'flow');
+      if (mobile)
+        await expect(
+          page.locator('.mobile-views [data-mobile-view="flow"]'),
+        ).toHaveAttribute('aria-pressed', 'true');
       await expect(
         page.getByRole('button', { name: 'Expand method A.main', exact: true }),
       ).toBeVisible();
@@ -1608,10 +1613,37 @@ for (const mobile of [false, true]) {
       );
       await expect(page.locator('#progress')).toHaveText('4 / 8');
       await page
-        .getByRole('button', { name: 'Go to source step 2', exact: true })
+        .getByRole('button', { name: 'Go to source step 6', exact: true })
         .click();
-      await expect(page.locator('#progress')).toHaveText('2 / 8');
+      await expect(page.locator('#progress')).toHaveText('6 / 8');
       await show(page, mobile, 'code');
+      await expect(page.locator('.code-row[data-line="4"]')).toHaveAttribute(
+        'aria-current',
+        'location',
+      );
+      await seek(page, 4);
+      await show(page, mobile, 'flow');
+      await expect(
+        page.getByRole('button', { name: 'Expand method B.work', exact: true }),
+      ).toBeVisible();
+      await page
+        .getByRole('button', { name: 'Expand method B.work', exact: true })
+        .click();
+      await expect(page.locator('.diagram-heading > strong')).toHaveText(
+        'B.work · b',
+      );
+      await seek(page, 3);
+      await page
+        .getByRole('button', { name: 'Go to source step 4', exact: true })
+        .click();
+      await expect(page.locator('#progress')).toHaveText('4 / 8');
+      await show(page, mobile, 'code');
+      await expect(page.locator('.code-row[data-line="7"]')).toHaveAttribute(
+        'aria-current',
+        'location',
+      );
+      await seek(page, 2);
+      await expect(page.locator('#progress')).toHaveText('2 / 8');
       await expect(page.locator('.code-row[data-line="3"]')).toHaveAttribute(
         'aria-current',
         'location',
@@ -1626,8 +1658,23 @@ for (const mobile of [false, true]) {
       await page
         .getByRole('button', { name: 'Collapse diagram level', exact: true })
         .click();
+      await expect(page.locator('.diagram-heading > strong')).toHaveText(
+        'A.main · a',
+      );
+      await page
+        .getByRole('button', { name: 'Collapse diagram level', exact: true })
+        .click();
       await expect(page.locator('.diagram-heading > strong')).toHaveText('A');
       await expect(page.locator('#progress')).toHaveText('4 / 8');
+      await page
+        .getByRole('button', { name: 'Collapse diagram level', exact: true })
+        .click();
+      await expect(page.locator('.diagram-heading > strong')).toHaveText(
+        'Execution path',
+      );
+      await expect(page.locator('.x6-edge[data-edge-kind="call"]')).toHaveCount(
+        1,
+      );
     });
     test('routing disclosures expose congested connections without hover', async ({
       page,
@@ -1677,8 +1724,11 @@ for (const mobile of [false, true]) {
       await page
         .getByRole('button', { name: 'Open class A details', exact: true })
         .click();
-      await expect(page.locator('.diagram-heading > span')).toContainText(
-        'Method-level playback',
+      await expect(
+        page.locator('.diagram-heading > span:not(.diagram-control-legend)'),
+      ).toContainText('Method-level playback');
+      await expect(page.locator('.diagram-control-legend')).toContainText(
+        'Decision',
       );
       await page.locator('#next').click();
       await expect(page.locator('#progress')).toHaveText('1 / 8');
@@ -1735,9 +1785,9 @@ for (const mobile of [false, true]) {
       await page
         .getByRole('button', { name: 'Collapse diagram level', exact: true })
         .click();
-      await expect(page.locator('.diagram-heading > span')).toContainText(
-        'Method-level playback',
-      );
+      await expect(
+        page.locator('.diagram-heading > span:not(.diagram-control-legend)'),
+      ).toContainText('Method-level playback');
       await page
         .getByRole('button', { name: 'Collapse diagram level', exact: true })
         .click();
