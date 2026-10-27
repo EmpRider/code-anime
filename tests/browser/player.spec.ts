@@ -1204,8 +1204,28 @@ for (const mobile of [false, true]) {
         );
       }
       await page.screenshot({ path: info.outputPath('expanded-values.png') });
-      await inner.first().locator('summary').click();
+      const innerValues = inner.first().locator('summary');
+      await expect
+        .poll(() =>
+          innerValues.evaluate((summary) => {
+            const bounds = summary.getBoundingClientRect();
+            const x = bounds.left + bounds.width / 2;
+            const y = bounds.top + bounds.height / 2;
+            const hit = document.elementFromPoint(x, y);
+            return {
+              reachable: hit === summary || summary.contains(hit),
+              bounds: bounds.toJSON(),
+              hit: hit?.className?.toString() ?? hit?.tagName,
+            };
+          }),
+        )
+        .toMatchObject({ reachable: true });
+      await innerValues.click();
       await expect(inner.first().locator('.diagram-value')).toBeHidden();
+      await page.locator('#next').click();
+      await expect(page.locator('#progress')).toHaveText('5 / 8');
+      await page.locator('#previous').click();
+      await expect(page.locator('#progress')).toHaveText('4 / 8');
       await page
         .getByRole('button', { name: 'Fit diagram', exact: true })
         .click();
