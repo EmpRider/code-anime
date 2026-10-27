@@ -298,7 +298,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
   controls.append(
     orientation,
     button('−', 'Zoom out', () => zoom(-0.15)),
-    button('Fit', 'Fit diagram', () => fit()),
+    button('Fit', 'Fit diagram', () => fit({ full: true })),
     button('+', 'Zoom in', () => zoom(0.15)),
   );
   const panButtons = element('div', '', 'diagram-pan-buttons');
@@ -538,7 +538,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
   }
   const groups = element('div', '', 'diagram-groups');
   heading.append(groups);
-  function fit() {
+  function fit({ full = false } = {}) {
     if (
       !disposed &&
       surface.clientWidth &&
@@ -546,6 +546,11 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
       graph.getNodes().length
     ) {
       graph.resize(surface.clientWidth, surface.clientHeight);
+      // Explicit Fit includes the full map; automatic refits keep readable focus.
+      if (full) {
+        graph.zoomToFit({ padding: 24, maxScale: 1 });
+        return;
+      }
       graph.zoomToFit({ padding: 24, minScale: 0.9, maxScale: 1 });
       if (graph.zoom() <= 0.9) {
         const focus =
