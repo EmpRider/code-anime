@@ -267,6 +267,34 @@ scoped existing-MVP B0e and B0f fixes**, not the optional ELK redesign.
   result is claimed. Independent review and exact-head Chromium CI remain gates;
   no commit or remote delivery is claimed here.
 
+### B0e mobile cursor-follow test correction — 2026-10-27
+
+- **Status: IN_PROGRESS.** Isolated base HEAD
+  `3c0ced89eeb96846f046655c491c89f6b575848a`. Prior CI run `40549840023`
+  at `e4e078` passed this desktop case but timed out on mobile after 30 seconds.
+  The failed mobile screenshot showed cursor 6/8 with the decision centered.
+  **Hypothesis, not confirmed root cause:** after seeking 6, cursor-follow
+  (`public/diagram.js:1545–1572`) moves Step 5's source button offscreen.
+- Test-only correction uses the owner-approved `Read selected node` action
+  after seeking 6, before the unforced pointer source-button click. Both
+  Fit/Read cycles, actual Tab/Shift+Tab traversal, offscreen pan, whole-map
+  bounds, branch routes and keyboard source navigation remain. Read polls
+  require at least two labels with effective font sizes >=12px within three
+  seconds; the pointer phase also polls genuine contained/unobstructed geometry.
+  Named test steps identify each Fit/Read cycle and both source-navigation phases.
+  No production source, timeout increase or assertion deletion.
+- **Observed local checks:** `npm ci --ignore-scripts` completed. Restricted
+  `npm run check` passed scope/typecheck, then reported file-level failures in
+  `analysis.test.ts`, `builder.test.ts` and `provider.test.ts` (22 passed, 3
+  failed). Elevated `npm run check` passed scope/typecheck, all unit tests (187
+  total, 185 passed, 2 existing skips, 0 failed), build and whole-tree formatting.
+  Existing npm proxy and unresolved build-time layout-icon warnings remained.
+- **Browser UNVERIFIED:** focused restricted run stopped at localhost
+  `listen EPERM`; elevated desktop/mobile rerun reached browser launch, then both stopped
+  before assertions because `chromium_headless_shell-1248` is absent. No local
+  browser RED/GREEN or mutation result claimed. Independent review and exact-head
+  Chromium CI are still required; no commit/push or B0 completion claimed.
+
 ## T0 evidence
 
 - Baseline HEAD: `2a7f5cc3f6543d051f2e692c629ce1dfffad1652`; clean worktree.

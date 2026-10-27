@@ -1205,86 +1205,118 @@ for (const mobile of [false, true]) {
             );
           });
       for (let cycle = 0; cycle < 2; cycle++) {
-        if (cycle) {
-          await page
-            .getByRole('button', { name: 'Fit diagram', exact: true })
-            .click();
-        }
-        const surface = page.locator('.diagram-surface');
-        await surface.focus();
-        const surfaceBox = (await surface.boundingBox())!;
-        // Move the selected node out of view so zoom alone cannot satisfy Read.
-        for (let i = 0; i < Math.ceil(surfaceBox.width / 80) + 2; i++) {
-          await page.keyboard.press('ArrowLeft');
-        }
-        expect((await stepFive.boundingBox())!.x).toBeGreaterThan(
-          surfaceBox.x + surfaceBox.width,
-        );
-        const headingTabLimit =
-          (await page
-            .locator(
-              '.diagram-heading button, .diagram-heading select, .diagram-heading summary',
-            )
-            .count()) + 1;
-        let reachedRead = false;
-        for (let i = 0; i < headingTabLimit; i++) {
-          await page.keyboard.press('Shift+Tab');
-          if (await read.evaluate((node) => document.activeElement === node)) {
-            reachedRead = true;
-            break;
+        await test.step(`Fit/Read cycle ${cycle + 1}`, async () => {
+          if (cycle) {
+            await page
+              .getByRole('button', { name: 'Fit diagram', exact: true })
+              .click();
           }
-        }
-        expect(reachedRead).toBe(true);
-        await page.keyboard.press('Enter');
-        await expect
-          .poll(async () => Math.min(...(await readableFontSizes())))
-          .toBeGreaterThanOrEqual(12);
-        const centered = (await stepFive.boundingBox())!;
-        expect(
-          Math.abs(
-            centered.x +
-              centered.width / 2 -
-              (surfaceBox.x + surfaceBox.width / 2),
-          ),
-        ).toBeLessThanOrEqual(2);
-        expect(
-          Math.abs(
-            centered.y +
-              centered.height / 2 -
-              (surfaceBox.y + surfaceBox.height / 2),
-          ),
-        ).toBeLessThanOrEqual(2);
+          const surface = page.locator('.diagram-surface');
+          await surface.focus();
+          const surfaceBox = (await surface.boundingBox())!;
+          // Move the selected node out of view so zoom alone cannot satisfy Read.
+          for (let i = 0; i < Math.ceil(surfaceBox.width / 80) + 2; i++) {
+            await page.keyboard.press('ArrowLeft');
+          }
+          expect((await stepFive.boundingBox())!.x).toBeGreaterThan(
+            surfaceBox.x + surfaceBox.width,
+          );
+          const headingTabLimit =
+            (await page
+              .locator(
+                '.diagram-heading button, .diagram-heading select, .diagram-heading summary',
+              )
+              .count()) + 1;
+          let reachedRead = false;
+          for (let i = 0; i < headingTabLimit; i++) {
+            await page.keyboard.press('Shift+Tab');
+            if (
+              await read.evaluate((node) => document.activeElement === node)
+            ) {
+              reachedRead = true;
+              break;
+            }
+          }
+          expect(reachedRead).toBe(true);
+          await page.keyboard.press('Enter');
+          await expect
+            .poll(
+              async () => {
+                const sizes = await readableFontSizes();
+                return sizes.length >= 2 ? Math.min(...sizes) : 0;
+              },
+              { timeout: 3_000 },
+            )
+            .toBeGreaterThanOrEqual(12);
+          const centered = (await stepFive.boundingBox())!;
+          expect(
+            Math.abs(
+              centered.x +
+                centered.width / 2 -
+                (surfaceBox.x + surfaceBox.width / 2),
+            ),
+          ).toBeLessThanOrEqual(2);
+          expect(
+            Math.abs(
+              centered.y +
+                centered.height / 2 -
+                (surfaceBox.y + surfaceBox.height / 2),
+            ),
+          ).toBeLessThanOrEqual(2);
+        });
       }
       const sourceStep = stepFive.getByRole('button', {
         name: 'Go to source step 5',
         exact: true,
       });
-      const hit = await sourceStep.evaluate((button) => {
-        const box = button.getBoundingClientRect();
-        const surface = document
-          .querySelector('.diagram-surface')!
-          .getBoundingClientRect();
-        const x = box.left + box.width / 2;
-        const y = box.top + box.height / 2;
-        const target = document.elementFromPoint(x, y);
-        return {
-          contained:
-            box.left >= surface.left + 2 &&
-            box.right <= surface.right - 2 &&
-            box.top >= surface.top + 2 &&
-            box.bottom <= surface.bottom - 2,
-          unobstructed: target === button || button.contains(target),
-        };
+      const sourceHit = () =>
+        sourceStep.evaluate((button) => {
+          const box = button.getBoundingClientRect();
+          const surface = document
+            .querySelector('.diagram-surface')!
+            .getBoundingClientRect();
+          const x = box.left + box.width / 2;
+          const y = box.top + box.height / 2;
+          const target = document.elementFromPoint(x, y);
+          return {
+            contained:
+              box.left >= surface.left + 2 &&
+              box.right <= surface.right - 2 &&
+              box.top >= surface.top + 2 &&
+              box.bottom <= surface.bottom - 2,
+            unobstructed: target === button || button.contains(target),
+          };
+        });
+      expect(await sourceHit()).toEqual({
+        contained: true,
+        unobstructed: true,
       });
-      expect(hit).toEqual({ contained: true, unobstructed: true });
-      await sourceStep.focus();
-      await page.keyboard.press('Enter');
-      await expect(page.locator('#progress')).toHaveText('5 / 8');
-      await expect(page.locator('#source-line')).toHaveText('L2');
-      await seek(page, 6);
-      await sourceStep.click();
-      await expect(page.locator('#progress')).toHaveText('5 / 8');
-      await expect(page.locator('#source-line')).toHaveText('L2');
+      await test.step('keyboard source navigation to Step 5', async () => {
+        await sourceStep.focus();
+        await page.keyboard.press('Enter');
+        await expect(page.locator('#progress')).toHaveText('5 / 8');
+        await expect(page.locator('#source-line')).toHaveText('L2');
+      });
+      await test.step('Read restores selected Step 5 after cursor follow, then pointer source navigation', async () => {
+        await seek(page, 6);
+        // Cursor follow can center the decision while Step 5 stays selected.
+        await read.click();
+        await expect
+          .poll(
+            async () => {
+              const sizes = await readableFontSizes();
+              return sizes.length >= 2 ? Math.min(...sizes) : 0;
+            },
+            { timeout: 3_000 },
+          )
+          .toBeGreaterThanOrEqual(12);
+        await expect
+          .poll(sourceHit, { timeout: 3_000 })
+          .toEqual({ contained: true, unobstructed: true });
+        await sourceStep.click();
+        await expect(page.locator('#progress')).toHaveText('5 / 8');
+        await expect(page.locator('#source-line')).toHaveText('L2');
+      });
       await expect(page.locator('[data-edge-kind="branch"]')).toHaveCount(2);
       await picker.selectOption('0');
       await expect(page.locator('#progress')).toHaveText('2 / 8');
