@@ -48,17 +48,17 @@ flowchart TD
 
 ## Verified codebase evidence and gaps
 
-| Evidence classification | Finding / impact | Source at baseline SHA |
-| --- | --- | --- |
-| OBSERVED | Loop scope begins below header; group membership visually detached | `public/diagram-control-layout.js:122–130` |
-| OBSERVED | `try/catch/finally` sequential edges can imply executed catch; legacy test asserts `try→catch` normal transition | `public/diagram-control-layout.js:189–200`; `tests/diagram-control-layout.test.mjs` |
-| OBSERVED | Horizontal wrapping infers structure from rectangle coordinates | `public/diagram-control-layout.js:257–342` |
-| OBSERVED | Diagram orientation writes raw `code-anime-layout`, player panel layout uses JSON under same key | `public/diagram.js:270–282`; `public/player.js:3050–3075` |
-| OBSERVED | Native HTML selectors + callbacks, X6 `targetMarker`, call/return ancestry/overview fallback already exist | `public/diagram.js:166–192,1204–1241,1308–1340`; `public/diagram-returns.js:1–32` |
-| OBSERVED | Legacy control layout invoked synchronously, and public player/diagram uses it; ELK not installed | `public/diagram.js:825–839`; `package.json` |
-| OBSERVED | Same-origin CSP, build/package scripts, and existing Playwright tests exist; no ELK Worker assets | `src/web/app.ts:15–16`; `scripts/build.mjs`; `scripts/verify-package.mjs`; `tests/browser/player.spec.ts` |
-| UNVERIFIED | Archived `11/11`, `5/5 Worker`, `9/9 arrows`, ten old browser failures, and six lost local commits are historical claims—not current test results | Conversation lines 980–1075, 1178–1205 |
-| UNVERIFIED | Exact 76-event original trace outcomes and original design document not supplied | ZIP inventory and restored-plan disclaimer |
+| Evidence classification | Finding / impact                                                                                                                                  | Source at baseline SHA                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| OBSERVED                | Loop scope begins below header; group membership visually detached                                                                                | `public/diagram-control-layout.js:122–130`                                                                |
+| OBSERVED                | `try/catch/finally` sequential edges can imply executed catch; legacy test asserts `try→catch` normal transition                                  | `public/diagram-control-layout.js:189–200`; `tests/diagram-control-layout.test.mjs`                       |
+| OBSERVED                | Horizontal wrapping infers structure from rectangle coordinates                                                                                   | `public/diagram-control-layout.js:257–342`                                                                |
+| OBSERVED                | Diagram orientation writes raw `code-anime-layout`, player panel layout uses JSON under same key                                                  | `public/diagram.js:270–282`; `public/player.js:3050–3075`                                                 |
+| OBSERVED                | Native HTML selectors + callbacks, X6 `targetMarker`, call/return ancestry/overview fallback already exist                                        | `public/diagram.js:166–192,1204–1241,1308–1340`; `public/diagram-returns.js:1–32`                         |
+| OBSERVED                | Legacy control layout invoked synchronously, and public player/diagram uses it; ELK not installed                                                 | `public/diagram.js:825–839`; `package.json`                                                               |
+| OBSERVED                | Same-origin CSP, build/package scripts, and existing Playwright tests exist; no ELK Worker assets                                                 | `src/web/app.ts:15–16`; `scripts/build.mjs`; `scripts/verify-package.mjs`; `tests/browser/player.spec.ts` |
+| UNVERIFIED              | Archived `11/11`, `5/5 Worker`, `9/9 arrows`, ten old browser failures, and six lost local commits are historical claims—not current test results | Conversation lines 980–1075, 1178–1205                                                                    |
+| UNVERIFIED              | Exact 76-event original trace outcomes and original design document not supplied                                                                  | ZIP inventory and restored-plan disclaimer                                                                |
 
 ## Review Focus — five failure classes not safely covered by aesthetic acceptance alone
 
@@ -200,13 +200,13 @@ Initial independent-ready tasks after approval: **T1**, **T3**, **T7**, but only
 
 ## Execution phases, stop gates and rollback
 
-| Phase | Entry | Exit proof | Block/rollback |
-| --- | --- | --- | --- |
-| Baseline & T1/T2 | Exact SHA and source evidence | Stable hierarchy, truthful typed edges, each prepared index once | Ambiguous source grouped as fact, fake catch/loopback/return |
-| T3/T4 | Verified dependency/license path | Real same-origin Worker under CSP, nested DOWN/RIGHT geometry and protocol failure tests | Native Worker blocked, silent main-thread fallback, malformed result hang |
-| T5/T6 | Valid topology/geometry | Native selectors, call/return, playback and viewport races preserved | Clipping, lost state/events, stale async commit, wrong arrows |
-| T7/T8 | User-confirmed PC-only enhancement scope | Preferences migrated; compact fit-to-screen keyboard/zoom UX; existing mobile behavior preserved | Persisted panel data lost, focus theft, mobile regression |
-| T9 | All prior focused GREEN | Full suite + actual package + license approval + independent reviews, no hidden baseline red | Failed gate, unrelated blocker needing scope choice, legal/source issue |
+| Phase            | Entry                                    | Exit proof                                                                                       | Block/rollback                                                            |
+| ---------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| Baseline & T1/T2 | Exact SHA and source evidence            | Stable hierarchy, truthful typed edges, each prepared index once                                 | Ambiguous source grouped as fact, fake catch/loopback/return              |
+| T3/T4            | Verified dependency/license path         | Real same-origin Worker under CSP, nested DOWN/RIGHT geometry and protocol failure tests         | Native Worker blocked, silent main-thread fallback, malformed result hang |
+| T5/T6            | Valid topology/geometry                  | Native selectors, call/return, playback and viewport races preserved                             | Clipping, lost state/events, stale async commit, wrong arrows             |
+| T7/T8            | User-confirmed PC-only enhancement scope | Preferences migrated; compact fit-to-screen keyboard/zoom UX; existing mobile behavior preserved | Persisted panel data lost, focus theft, mobile regression                 |
+| T9               | All prior focused GREEN                  | Full suite + actual package + license approval + independent reviews, no hidden baseline red     | Failed gate, unrelated blocker needing scope choice, legal/source issue   |
 
 **Rollback:** Revert only the scoped reviewed UI adapter/Worker commits, retain X6 renderer, preserved stored mock sessions, legacy diagram route as recoverable code until verified replacement, and rollback migration without deleting storage. A failed Worker must never trigger unreported main-thread ELK execution. Do not silently revert user files or reset branches.
 
@@ -236,17 +236,17 @@ Each advisor worked separately from the same neutral evidence brief and read the
 
 Proposals were randomized as A–E, without author roles in the packet. Each peer was a newly spawned reviewer distinct from the five advisor conversations. Letters are retained below; author-role mapping was not shared with reviewers. Their findings are not counted as measurements merely because multiple reviewers repeated them.
 
-| Real peer | Best evidence-backed proposal | Primary challenge | Missing risk / decisive test |
-| --- | --- | --- | --- |
-| **R1** | **A**, because it explicitly tests truthful edges and no dropped events | **E** assumes B is less expensive without proving nested routing | Repeated source-line events with different visit/invocation IDs; assert correct ancestry/return mapping |
-| **R2** | **A**; clear negative tests and distribution gates | **E** proposes a comparison spike whose scope/cost may delay approved work | 500/1000 DOM controls, memory and **input-to-paint**, not Worker-only timing |
-| **R3** | **A**, strongest correctness gates | **E** assumes B needs early comparison although A was user-selected | Legacy `code-anime-layout` raw vs JSON migration/partial storage failures; test both preference orders and throwing storage |
-| **R4** | **D**, best asynchronous contract | Generation/flow/topology alone can still accept an obsolete continuation | `traceRevision`, `workerEpoch/requestId/geometryKey`, plus `viewportRevision`; append prepared events while old Worker reply is held and assert atomic newest state |
-| **R5** | **A**, best explicit execution truth | **E** assumes B is lower impact without full source ambiguity study | Mixed-quality/unbraced/CodeGraph-derived sources; unresolved lane with visible `unknown`, no fabricated containment |
+| Real peer | Best evidence-backed proposal                                           | Primary challenge                                                          | Missing risk / decisive test                                                                                                                                        |
+| --------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **R1**    | **A**, because it explicitly tests truthful edges and no dropped events | **E** assumes B is less expensive without proving nested routing           | Repeated source-line events with different visit/invocation IDs; assert correct ancestry/return mapping                                                             |
+| **R2**    | **A**; clear negative tests and distribution gates                      | **E** proposes a comparison spike whose scope/cost may delay approved work | 500/1000 DOM controls, memory and **input-to-paint**, not Worker-only timing                                                                                        |
+| **R3**    | **A**, strongest correctness gates                                      | **E** assumes B needs early comparison although A was user-selected        | Legacy `code-anime-layout` raw vs JSON migration/partial storage failures; test both preference orders and throwing storage                                         |
+| **R4**    | **D**, best asynchronous contract                                       | Generation/flow/topology alone can still accept an obsolete continuation   | `traceRevision`, `workerEpoch/requestId/geometryKey`, plus `viewportRevision`; append prepared events while old Worker reply is held and assert atomic newest state |
+| **R5**    | **A**, best explicit execution truth                                    | **E** assumes B is lower impact without full source ambiguity study        | Mixed-quality/unbraced/CodeGraph-derived sources; unresolved lane with visible `unknown`, no fabricated containment                                                 |
 
 ### Live EDO objections, actual advisor rebuttals and resolution
 
-**D1 — Does Option B need a comparison spike *before* starting the user-approved Option A?**
+**D1 — Does Option B need a comparison spike _before_ starting the user-approved Option A?**
 
 - **EDO challenge:** B might have less Worker operational surface, but source-grounded grouping plus both orientations/cross-boundary routing risks recreating a full custom layout engine. What measured proof justifies delaying A?
 - **Relevant live responses:** The alternative-design advisor **conceded B is not a mandatory precondition** to A. The architecture advisor **conceded B may produce compact output in a bounded case**, but agreed it should be entertained only after A fails an evidence-backed hard gate.
