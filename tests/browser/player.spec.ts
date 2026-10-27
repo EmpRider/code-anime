@@ -333,10 +333,48 @@ for (const mobile of [false, true]) {
       await show(page, mobile, 'flow');
       const viewportTransform = () =>
         page.locator('.x6-graph-svg-viewport').evaluate((node) => {
-          const matrix = new DOMMatrix(node.getAttribute('transform')!);
-          return { scale: matrix.a, x: matrix.e, y: matrix.f };
+          const matrix = (node as SVGGraphicsElement).getCTM();
+          if (!matrix) throw new Error('SVG viewport has no coordinate matrix');
+          return {
+            scale: Math.hypot(matrix.a, matrix.b),
+            x: matrix.e,
+            y: matrix.f,
+          };
         });
-      expect((await viewportTransform()).scale).toBeGreaterThanOrEqual(0.89);
+      const originalTransform = await viewportTransform();
+      expect(originalTransform.scale).toBeGreaterThanOrEqual(0.89);
+      const viewport = page.locator('.x6-graph-svg-viewport');
+      const localTransform = await viewport.getAttribute('transform');
+      const svg = page.locator('.x6-graph-svg');
+      const originalViewBox = await svg.evaluate((node) => {
+        const bounds = node.getBoundingClientRect();
+        if (!bounds.width || !bounds.height)
+          throw new Error('SVG diagram has no measurable bounds');
+        const original = node.getAttribute('viewBox');
+        node.setAttribute(
+          'viewBox',
+          `17 13 ${bounds.width * 2} ${bounds.height * 2}`,
+        );
+        return original;
+      });
+      try {
+        const ancestorTransform = await viewportTransform();
+        expect(
+          Math.abs(ancestorTransform.scale - originalTransform.scale),
+        ).toBeGreaterThan(0.1);
+        expect(
+          Math.hypot(
+            ancestorTransform.x - originalTransform.x,
+            ancestorTransform.y - originalTransform.y,
+          ),
+        ).toBeGreaterThan(1);
+        expect(await viewport.getAttribute('transform')).toBe(localTransform);
+      } finally {
+        await svg.evaluate((node, previous) => {
+          if (previous === null) node.removeAttribute('viewBox');
+          else node.setAttribute('viewBox', previous);
+        }, originalViewBox);
+      }
       await seek(page, 4);
       await page
         .getByRole('button', { name: 'Expand method B.work', exact: true })
@@ -398,6 +436,11 @@ for (const mobile of [false, true]) {
       expect(Math.abs(secondTransform.x - firstTransform.x)).toBeLessThan(1);
       expect(Math.abs(secondTransform.y - firstTransform.y)).toBeLessThan(1);
       await expect(page.locator('#progress')).toHaveText('4 / 8');
+      await step.focus();
+      await expect(step).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('#progress')).toHaveText('5 / 8');
+      await seek(page, 4);
       await step.click();
       await expect(page.locator('#progress')).toHaveText('5 / 8');
       await expect(page).toHaveURL(/step=5/);

@@ -14,7 +14,7 @@ code must never execute to construct animations.
 | B0d  | True Fit and reachable source-step navigation                      | B0b; B0e, B0g UX/geometry gates  | IMPLEMENTED_CANDIDATE — browser gate RED                   |
 | B0e  | Set Fit overview versus immediate-label readability contract       | B0d; explicit product choice     | WAITING_ON_OWNER                                           |
 | B0f  | Set literal-source versus simulated-label display contract         | B0c; explicit product choice     | WAITING_ON_OWNER                                           |
-| B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | READY_AFTER_LEDGER                                         |
+| B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | IN_PROGRESS — test patch; Chromium gate pending            |
 | B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | READY_AFTER_LEDGER                                         |
 | B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | READY_READ_ONLY                                            |
 | B0j  | Review accidental trailing README test line                        | B0 gate; owner priority          | LOW_PRIORITY                                               |
@@ -83,6 +83,22 @@ outside the socket sandbox. No local browser green is claimed: the Chromium
 download returned an invalid zero-byte archive. Keep T1–T9 PAUSED until B0
 acceptance and the revised plan's explicit owner approval. Do not merge,
 release, publish or remove this task ledger without owner authorization.
+
+### B0g incremental progress — not accepted
+
+- **Prepared change:** `tests/browser/player.spec.ts` no longer assumes the X6
+  viewport SVG `<g>` has an inline `transform` attribute. The test reads its
+  composed `getCTM()` and checks a temporary ancestor-group transform with
+  `try/finally` restoration, plus keyboard activation of source Step 5 alongside
+  existing unforced pointer, camera, and source synchronization checks.
+- **Local verification:** elevated `npm run check` passed scope, typecheck,
+  **185 Node tests with two opt-in CodeGraph skips**, build, and formatting.
+  The restricted-sandbox run instead failed three socket-dependent suites.
+  Focused Playwright could not start: first `listen EPERM`, then after elevation
+  missing `chromium_headless_shell-1248` binary. **No Chromium assertion ran.**
+  Independent static spec/quality review passed after one false-green negative
+  control was corrected. Exact-head Chromium CI and remote commit verification
+  remain pending. Keep `IN_PROGRESS` until those gates resolve.
 
 ## T0 evidence
 
