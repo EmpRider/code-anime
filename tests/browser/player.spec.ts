@@ -1036,16 +1036,27 @@ for (const mobile of [false, true]) {
       await page
         .getByRole('button', { name: 'Fit diagram', exact: true })
         .click();
-      expect(
-        await decision.locator('.diagram-name').evaluate((name) => {
-          const viewport = document.querySelector<SVGGraphicsElement>(
-            '.x6-graph-svg-viewport',
-          )!;
-          return (
-            parseFloat(getComputedStyle(name).fontSize) * viewport.getCTM()!.a
-          );
-        }),
-      ).toBeGreaterThanOrEqual(12);
+      const overview = await page
+        .locator('.diagram-surface .x6-node')
+        .evaluateAll((nodes) => {
+          const surface = document
+            .querySelector('.diagram-surface')!
+            .getBoundingClientRect();
+          return {
+            count: nodes.length,
+            contained: nodes.every((node) => {
+              const box = node.getBoundingClientRect();
+              return (
+                box.left >= surface.left - 1 &&
+                box.right <= surface.right + 1 &&
+                box.top >= surface.top - 1 &&
+                box.bottom <= surface.bottom + 1
+              );
+            }),
+          };
+        });
+      expect(overview.count).toBeGreaterThan(8);
+      expect(overview.contained).toBe(true);
       expect(
         await page
           .locator('.diagram-card[data-control-type="loop"]')
@@ -1099,6 +1110,129 @@ for (const mobile of [false, true]) {
       expect(routes.some(({ points }) => points[1].y > points[0].y)).toBe(true);
       expect(routes.some(({ path }) => /[CQ]/.test(path ?? ''))).toBe(true);
       await expect(page.locator('#source-line')).toHaveText('L3');
+      const stepFive = page.locator('.diagram-card[data-step="5"]');
+      await expect(stepFive).toHaveCount(1);
+      const stepName = stepFive.locator('.diagram-name');
+      await page.locator('.diagram-surface').focus();
+      const tabLimit =
+        (await page
+          .locator(
+            '.diagram-surface button, .diagram-surface summary, .diagram-surface select',
+          )
+          .count()) + 1;
+      let reachedStep = false;
+      for (let i = 0; i < tabLimit; i++) {
+        await page.keyboard.press('Tab');
+        if (
+          await stepName.evaluate((node) => document.activeElement === node)
+        ) {
+          reachedStep = true;
+          break;
+        }
+      }
+      expect(reachedStep).toBe(true);
+      const read = page.getByRole('button', {
+        name: 'Read selected node',
+        exact: true,
+      });
+      await expect(read).toBeVisible();
+      const readableFontSizes = () =>
+        page
+          .locator(
+            '.diagram-card[data-step="5"] .diagram-name, .diagram-card[data-control-type="decision"] .diagram-name',
+          )
+          .evaluateAll((names) => {
+            const matrix = document
+              .querySelector<SVGGraphicsElement>('.x6-graph-svg-viewport')!
+              .getScreenCTM()!;
+            return names.map(
+              (name) =>
+                parseFloat(getComputedStyle(name).fontSize) *
+                Math.hypot(matrix.a, matrix.b),
+            );
+          });
+      for (let cycle = 0; cycle < 2; cycle++) {
+        if (cycle) {
+          await page
+            .getByRole('button', { name: 'Fit diagram', exact: true })
+            .click();
+        }
+        const surface = page.locator('.diagram-surface');
+        await surface.focus();
+        const surfaceBox = (await surface.boundingBox())!;
+        // Move the selected node out of view so zoom alone cannot satisfy Read.
+        for (let i = 0; i < Math.ceil(surfaceBox.width / 80) + 2; i++) {
+          await page.keyboard.press('ArrowLeft');
+        }
+        expect((await stepFive.boundingBox())!.x).toBeGreaterThan(
+          surfaceBox.x + surfaceBox.width,
+        );
+        const headingTabLimit =
+          (await page
+            .locator(
+              '.diagram-heading button, .diagram-heading select, .diagram-heading summary',
+            )
+            .count()) + 1;
+        let reachedRead = false;
+        for (let i = 0; i < headingTabLimit; i++) {
+          await page.keyboard.press('Shift+Tab');
+          if (await read.evaluate((node) => document.activeElement === node)) {
+            reachedRead = true;
+            break;
+          }
+        }
+        expect(reachedRead).toBe(true);
+        await page.keyboard.press('Enter');
+        await expect
+          .poll(async () => Math.min(...(await readableFontSizes())))
+          .toBeGreaterThanOrEqual(12);
+        const centered = (await stepFive.boundingBox())!;
+        expect(
+          Math.abs(
+            centered.x +
+              centered.width / 2 -
+              (surfaceBox.x + surfaceBox.width / 2),
+          ),
+        ).toBeLessThanOrEqual(2);
+        expect(
+          Math.abs(
+            centered.y +
+              centered.height / 2 -
+              (surfaceBox.y + surfaceBox.height / 2),
+          ),
+        ).toBeLessThanOrEqual(2);
+      }
+      const sourceStep = stepFive.getByRole('button', {
+        name: 'Go to source step 5',
+        exact: true,
+      });
+      const hit = await sourceStep.evaluate((button) => {
+        const box = button.getBoundingClientRect();
+        const surface = document
+          .querySelector('.diagram-surface')!
+          .getBoundingClientRect();
+        const x = box.left + box.width / 2;
+        const y = box.top + box.height / 2;
+        const target = document.elementFromPoint(x, y);
+        return {
+          contained:
+            box.left >= surface.left + 2 &&
+            box.right <= surface.right - 2 &&
+            box.top >= surface.top + 2 &&
+            box.bottom <= surface.bottom - 2,
+          unobstructed: target === button || button.contains(target),
+        };
+      });
+      expect(hit).toEqual({ contained: true, unobstructed: true });
+      await sourceStep.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('#progress')).toHaveText('5 / 8');
+      await expect(page.locator('#source-line')).toHaveText('L2');
+      await seek(page, 6);
+      await sourceStep.click();
+      await expect(page.locator('#progress')).toHaveText('5 / 8');
+      await expect(page.locator('#source-line')).toHaveText('L2');
+      await expect(page.locator('[data-edge-kind="branch"]')).toHaveCount(2);
       await picker.selectOption('0');
       await expect(page.locator('#progress')).toHaveText('2 / 8');
       await expect(decision).toContainText('Condition true');

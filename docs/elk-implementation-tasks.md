@@ -12,7 +12,7 @@ code must never execute to construct animations.
 | B0b  | Restore map navigation and continuation                            | B0a; behavior-contract evidence  | IMPLEMENTED_CANDIDATE — browser gate RED                   |
 | B0c  | Preserve truthful typed call/return ancestry                       | B0b; mock/source identity        | IMPLEMENTED_CANDIDATE — browser gate RED                   |
 | B0d  | True Fit and reachable source-step navigation                      | B0b; B0e, B0g UX/geometry gates  | IMPLEMENTED_CANDIDATE — browser gate RED                   |
-| B0e  | Preserve overview Fit; focus/zoom then readable step navigation    | B0d; owner choice approved       | READY_AFTER_DECISION_LEDGER — B0e first                    |
+| B0e  | Preserve overview Fit; focus/zoom then readable step navigation    | B0d; owner choice approved       | IN_PROGRESS — Chromium gate pending                        |
 | B0f  | Show literal source first, explicitly simulated event second       | B0c; B0e commit; owner approved  | READY_AFTER_B0e — provenance/safety gates                  |
 | B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | IN_PROGRESS — test patch; Chromium gate pending            |
 | B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IN_PROGRESS — test-only patch; Chromium gate pending       |
@@ -48,11 +48,11 @@ explicit owner confirmation before optional ELK T1–T9 begin.
 - **B0d — Fit/camera specialist; independent QA:** whole-map Fit is present,
   but after Fit actual labels measured 6.73px desktop and 2.15px mobile against
   the >=12px assertion; mobile pointer verification is blocked by B0g helper.
-- **B0e — UX/accessibility specialist; owner decision:** choose A whole-map
-  overview with keyboard Step 5 focus/zoom, readable labels after zoom, or B
-  immediate >=12px readable/direct-click cards with possible overview clipping.
-  Verify actual hit target and pointer/keyboard navigation, never just remove
-  the readability assertion.
+- **B0e — UX/accessibility specialist; owner approved option A:** explicit Fit
+  must show the whole-map overview; users then focus Step 5 with keyboard and
+  activate `Read selected node` to zoom/center until labels reach >=12px.
+  Verify actual hit target, pointer/keyboard navigation, and preserved branch
+  routes; readability is checked after deliberate Read, not immediately after Fit.
 - **B0f — provenance specialist; owner decision:** expanded card shows mock
   `call A.main` while fixture literal source is `B.work();` (two failures).
   Proposed primary literal source plus explicit secondary simulated identity;
@@ -207,6 +207,29 @@ scoped existing-MVP B0e and B0f fixes**, not the optional ELK redesign.
   received explicit renewed design/implementation approval. All T1–T9 remain
   PAUSED under `AGENTS.md`, even if B0 browser becomes green. Owner-gated T7
   preference migration remains separately OPEN.
+
+### B0e candidate verification — 2026-10-27
+
+- **Status: IN_PROGRESS.** Test-only changes in `tests/browser/player.spec.ts`
+  preserve whole-map Fit bounds and branch routes. Actual Tab traversal reaches
+  Step 5's name. Each of two Fit/Read cycles pans Step 5 offscreen with keyboard
+  arrows, reverse-Tabs to Read, and activates it with Enter. Assertions require
+  centered Step 5, effective Step 5 and decision labels >=12px, unobstructed
+  source-button geometry, pointer/keyboard source navigation and correct cursor.
+  No production code or static/mock behavior changed.
+- **Observed checks:** scoped Prettier and `git diff --check` passed. Restricted
+  `npm run check` passed scope/typecheck but reported three file-level test
+  failures (`analysis.test.ts`, `builder.test.ts`, `provider.test.ts`). Elevated
+  `npm run check` then passed scope/typecheck, all unit tests (187 total, 185
+  passed, 2 existing skips, 0 failed), build and whole-tree formatting. Existing
+  npm proxy and unresolved build-time layout-icon warnings remained.
+- **Browser UNVERIFIED:** focused desktop/mobile
+  `graph groups loop visits and decision paths without losing steps` first
+  stopped at `listen EPERM: operation not permitted 127.0.0.1`. The elevated
+  rerun passed server startup but both cases stopped before assertions because
+  `chromium_headless_shell-1248` was absent. No browser RED/GREEN or mutation
+  result is claimed. Independent review and exact-head Chromium CI remain gates;
+  no commit or remote delivery is claimed here.
 
 ## T0 evidence
 
