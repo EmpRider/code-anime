@@ -9,7 +9,8 @@ code must never execute to construct animations.
 | T0   | Restore mandatory formatting CI at the authored/generated boundary | Approved formatting remedy       | DONE — delivered as f2b5f10; remote branch verified        |
 | T0a  | Format newly imported ELK plan and task-tracker docs to restore CI | T0 delivery; two-file CI failure | DONE — delivered as b5a08a67 and ffd490bb; remote verified |
 | B0a  | Restore Values disclosure pointer and viewport reachability        | T0a; browser RED baseline        | DONE — focused desktop/mobile Chromium GREEN; full CI RED  |
-| B0b  | Restore or prove equivalent map navigation and continuation        | B0a; behavior-contract evidence  | WAITING — user-visible navigation acceptance pending       |
+| B0b  | Restore or prove equivalent map navigation and continuation        | B0a; behavior-contract evidence  | CANDIDATE — delivered; final Chromium run pending          |
+| B0d  | Restore true Fit reachability for source-step controls             | B0b map navigation               | READY — desktop/mobile Chromium RED; permanent fix pending |
 | B0c  | Align stale browser assertions with truthful mock-flow behavior    | B0b; typed-edge/step evidence    | WAITING — no expectation-only test changes authorized      |
 | T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | PAUSED — actionable browser failures under AGENTS.md       |
 | T2   | Pure logical compound topology and truthful execution edges        | T1                               | Pending                                                    |
@@ -106,16 +107,42 @@ close and remains pointer reachable` cases **passed**: unforced pointer and
   invocation path, distinct call IDs, correct returns and source, cursor and
   breakpoint preservation, reload/URL and continuation. Repair missing
   map-native behavior before replacing a historical selector assertion.
+- **B0b candidate delivery, not acceptance:** Map navigation/continuation
+  implementation and browser contract tests were delivered through the GitHub
+  connector: generated bundle `8d1328d`, authored source `aa85ba3`, browser
+  specification `b8bc3bd`, and amended browser specification `6edcc8d`.
+  Full branch HEAD is `6edcc8d7223d001154531fe9a5e1964e3bd1c106`.
+  Final-head [Actions run 40483518141](https://github.com/EmpRider/code-anime/actions/runs/40483518141)
+  completed: all four Node/check matrix jobs **passed**, but Chromium had
+  **37 passed and 6 failed of 43 tests**. The residual failures are one B0b
+  mobile focused owner-drilldown case, two B0d desktop/mobile Fit cases, and
+  three B0c cases (two recursive raw-edge assertions and one X6 paging case).
+  B0b remains a **candidate**, not accepted; full browser CI is RED.
+- **B0d — Fit source-step reachability:** Existing
+  [Actions run 40481825483](https://github.com/EmpRider/code-anime/actions/runs/40481825483)
+  demonstrates desktop/mobile Chromium RED: after `Fit diagram`, the
+  `Go to source step 5` control lies outside the reachable viewport. Repair
+  the actual fit/hit-target contract; a forced click or weakened assertion is
+  not an acceptable remedy. Require unforced pointer and keyboard access to
+  Step 5 after Fit on desktop/mobile, repeated Fit/zoom stability, usable
+  playback controls, intact cursor/breakpoint and Values disclosure behavior,
+  focused RED→GREEN Chromium tests, and independent review before delivery.
 - **B0c — Browser assertion integrity:** Prove every prepared index remains
   reachable once, and typed call/return edges preserve real invocation
   ancestry. Use negative controls for missing steps or wrong return targets.
+  Source review identifies scoped first-appearance sequence links in
+  `public/diagram.js` (around lines 1263–1305) labeled `kind: 'call'` despite
+  no call evidence. Verify this truthful typed-edge invariant with a RED
+  counter-test before a Council-approved remedy; preserve genuine root-map
+  call and return edges.
   Replace obsolete card/edge/page counts only with equivalent or stronger
   user-visible tests; do not narrow or skip browser coverage.
 - **Exit gate:** Each slice needs focused RED→GREEN browser evidence,
   independent review, full relevant Node/build/package checks and its own
   descriptive verified GitHub delivery. The B0 gate closes only on applicable
-  full browser acceptance (41/41 under the current suite) and successful CI.
-  T1/T3/T7 remain paused until then or explicit owner override of MVP-first.
+  full browser acceptance (the B0b-v2 suite includes 43 cases; add B0d tests
+  to that count when introduced) and successful CI. B0b, B0d and B0c must be
+  accepted before T1/T3/T7 resume, absent explicit owner override of MVP-first.
 
 ## Role owners and acceptance gates
 
@@ -128,6 +155,7 @@ All tasks require independent review; PM coordinates delivery after verification
 | T0a  | Documentation formatting specialist; independent reviewer | Only two Markdown files changed; RED/GREEN format, full check and package smoke                                             |
 | B0a  | Browser accessibility/UI specialist; independent reviewer | Chromium desktop/mobile Values click open/close and hit-test, keyboard and dock controls, cursor/zoom parity                |
 | B0b  | Map navigation/player specialist; independent reviewer    | Accessible nested navigation, invocation and return provenance, URL/recovery/continuation, source and cursor parity         |
+| B0d  | Camera/Player UI specialist; independent reviewer         | Unforced pointer/keyboard Step 5 after Fit on desktop/mobile; idempotent zoom/fit, playback/cursor/breakpoint/Values parity |
 | B0c  | Browser contract QA specialist; independent reviewer      | Every prepared index accessible, typed call/return ancestry, negative controls, equivalent assertions without test skips    |
 | T1   | Semantic-analysis specialist                              | Source-proven nested grouping, distinct event/visit/invocation identity, ambiguous syntax unresolved                        |
 | T2   | Topology specialist                                       | Pure compound topology, truthful typed edges, every prepared index preserved                                                |
@@ -141,16 +169,22 @@ All tasks require independent review; PM coordinates delivery after verification
 
 ## Open gates
 
-- B0a's narrow Values desktop/mobile acceptance is verified, but B0b/B0c and
-  the full browser MVP gate remain RED. T1/T3/T7 are blocked by that actionable
-  gate; T1–T9 are not implemented or verified.
+- B0a's narrow Values desktop/mobile acceptance is verified. B0b is a
+  delivered, Chromium-pending candidate; B0d Fit clickability and B0c browser
+  contracts remain open. The full browser MVP gate is RED. T1/T3/T7 remain
+  paused under `AGENTS.md`; T1–T9 are not implemented or verified.
 - Local browser verification is blocked by the unavailable Playwright browser
   binary. Final-head GitHub Actions browser run `40478955531` at `17c56326`
   actually ran **41 tests: 31 passed, 10 failed**. Its two new focused B0a
   cases passed on desktop/mobile; the old full-map cases and eight other
   browser tests remain RED. The `Fit diagram` → source Step 5 offscreen target
-  is assigned to B0b for diagnosis, not claimed fixed by B0a. All four Node
-  matrix jobs passed, but full browser CI is a release blocker.
+  is now separately tracked as B0d, not claimed fixed by B0a/B0b. All four
+  Node matrix jobs passed at that historical HEAD, but full browser CI is a
+  release blocker. B0b-v2 final-head Chromium run `40483518141` completed:
+  **37 passed, 6 failed of 43**; all four Node/check jobs succeeded. Remaining
+  browser RED: B0b mobile owner-drilldown (1), B0d Fit (2), and B0c recursive
+  raw-edge (2) plus X6 paging (1). The full suite is not green, and the
+  `AGENTS.md` MVP gate continues to block T1/T3/T7.
 - Verify ELK version, license notices, package inclusion, and obtain human public
   distribution sign-off before distributing the proposed ELK Worker.
 - Actual Worker/CSP, nested geometry, async/player parity, desktop interaction,
