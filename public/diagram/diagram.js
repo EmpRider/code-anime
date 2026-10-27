@@ -144,8 +144,8 @@ function N(e) {
 	return e != null && (t == "object" || t == "function");
 }
 // node_modules/lodash-es/toNumber.js
-var ue = NaN, de = /^[-+]0x[0-9a-f]+$/i, fe = /^0b[01]+$/i, pe = /^0o[0-7]+$/i, P = parseInt;
-function me(e) {
+var ue = NaN, de = /^[-+]0x[0-9a-f]+$/i, fe = /^0b[01]+$/i, pe = /^0o[0-7]+$/i, me = parseInt;
+function P(e) {
 	if (typeof e == "number") return e;
 	if (te(e)) return ue;
 	if (N(e)) {
@@ -155,7 +155,7 @@ function me(e) {
 	if (typeof e != "string") return e === 0 ? e : +e;
 	e = le(e);
 	var n = fe.test(e);
-	return n || pe.test(e) ? P(e.slice(2), n ? 2 : 8) : de.test(e) ? ue : +e;
+	return n || pe.test(e) ? me(e.slice(2), n ? 2 : 8) : de.test(e) ? ue : +e;
 }
 // node_modules/lodash-es/identity.js
 function he(e) {
@@ -1004,7 +1004,7 @@ function Xi(e, t, n) {
 }
 // node_modules/lodash-es/clamp.js
 function Zi(e, t, n) {
-	return n === void 0 && (n = t, t = void 0), n !== void 0 && (n = me(n), n = n === n ? n : 0), t !== void 0 && (t = me(t), t = t === t ? t : 0), Xi(me(e), t, n);
+	return n === void 0 && (n = t, t = void 0), n !== void 0 && (n = P(n), n = n === n ? n : 0), t !== void 0 && (t = P(t), t = t === t ? t : 0), Xi(P(e), t, n);
 }
 // node_modules/lodash-es/_stackClear.js
 function Qi() {
@@ -1528,7 +1528,7 @@ var hc = function() {
 function yc(e, t, n) {
 	var r, i, a, o, s, c, l = 0, u = !1, d = !1, f = !0;
 	if (typeof e != "function") throw TypeError(gc);
-	t = me(t) || 0, N(n) && (u = !!n.leading, d = "maxWait" in n, a = d ? _c(me(n.maxWait) || 0, t) : a, f = "trailing" in n ? !!n.trailing : f);
+	t = P(t) || 0, N(n) && (u = !!n.leading, d = "maxWait" in n, a = d ? _c(P(n.maxWait) || 0, t) : a, f = "trailing" in n ? !!n.trailing : f);
 	function p(t) {
 		var n = r, a = i;
 		return r = i = void 0, l = t, o = e.apply(a, n), o;
@@ -22852,8 +22852,8 @@ var lT = /* @__PURE__ */ o(((e, t) => {
 	var n = aD(), r = mE(), i = hE(), a = i && i.isSet;
 	t.exports = a ? r(a) : n;
 })), sD = /* @__PURE__ */ o(((e, t) => {
-	var n = QT(), r = $T(), i = nE(), a = wE(), o = OE(), s = kE(), c = AE(), l = PE(), u = RE(), d = BE(), f = VE(), p = KE(), m = qE(), h = eD(), g = nD(), _ = cE(), v = uE(), y = iD(), b = DT(), x = oD(), S = CE(), C = DE(), w = 1, T = 2, E = 4, D = "[object Arguments]", O = "[object Array]", k = "[object Boolean]", A = "[object Date]", ee = "[object Error]", te = "[object Function]", ne = "[object GeneratorFunction]", j = "[object Map]", re = "[object Number]", M = "[object Object]", ie = "[object RegExp]", ae = "[object Set]", oe = "[object String]", se = "[object Symbol]", ce = "[object WeakMap]", le = "[object ArrayBuffer]", N = "[object DataView]", ue = "[object Float32Array]", de = "[object Float64Array]", fe = "[object Int8Array]", pe = "[object Int16Array]", P = "[object Int32Array]", me = "[object Uint8Array]", he = "[object Uint8ClampedArray]", ge = "[object Uint16Array]", _e = "[object Uint32Array]", F = {};
-	F[D] = F[O] = F[le] = F[N] = F[k] = F[A] = F[ue] = F[de] = F[fe] = F[pe] = F[P] = F[j] = F[re] = F[M] = F[ie] = F[ae] = F[oe] = F[se] = F[me] = F[he] = F[ge] = F[_e] = !0, F[ee] = F[te] = F[ce] = !1;
+	var n = QT(), r = $T(), i = nE(), a = wE(), o = OE(), s = kE(), c = AE(), l = PE(), u = RE(), d = BE(), f = VE(), p = KE(), m = qE(), h = eD(), g = nD(), _ = cE(), v = uE(), y = iD(), b = DT(), x = oD(), S = CE(), C = DE(), w = 1, T = 2, E = 4, D = "[object Arguments]", O = "[object Array]", k = "[object Boolean]", A = "[object Date]", ee = "[object Error]", te = "[object Function]", ne = "[object GeneratorFunction]", j = "[object Map]", re = "[object Number]", M = "[object Object]", ie = "[object RegExp]", ae = "[object Set]", oe = "[object String]", se = "[object Symbol]", ce = "[object WeakMap]", le = "[object ArrayBuffer]", N = "[object DataView]", ue = "[object Float32Array]", de = "[object Float64Array]", fe = "[object Int8Array]", pe = "[object Int16Array]", me = "[object Int32Array]", P = "[object Uint8Array]", he = "[object Uint8ClampedArray]", ge = "[object Uint16Array]", _e = "[object Uint32Array]", F = {};
+	F[D] = F[O] = F[le] = F[N] = F[k] = F[A] = F[ue] = F[de] = F[fe] = F[pe] = F[me] = F[j] = F[re] = F[M] = F[ie] = F[ae] = F[oe] = F[se] = F[P] = F[he] = F[ge] = F[_e] = !0, F[ee] = F[te] = F[ce] = !1;
 	function ve(e, t, O, k, A, ee) {
 		var j, re = t & w, ie = t & T, ae = t & E;
 		if (O && (j = A ? O(e, k, A, ee) : O(e)), j !== void 0) return j;
@@ -26817,7 +26817,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 		try {
 			localStorage.setItem("code-anime-layout", p);
 		} catch {}
-		g(), ne = "", we(w);
+		g(), ne = "", Te(w);
 	});
 	m.className = "diagram-orientation";
 	let h = $("span", "", "diagram-layout-icon");
@@ -26826,7 +26826,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 		let t = p === "vertical" ? "Horizontal layout" : "Vertical layout";
 		m.title = t, m.setAttribute("aria-label", t), h.style.transform = p === "vertical" ? "" : "rotate(90deg)", e.dataset.direction = p;
 	}
-	g(), d.append(m, f("−", "Zoom out", () => be(-.15)), f("Fit", "Fit diagram", () => ye()), f("+", "Zoom in", () => be(.15)));
+	g(), d.append(m, f("−", "Zoom out", () => xe(-.15)), f("Fit", "Fit diagram", () => be()), f("+", "Zoom in", () => xe(.15)));
 	let _ = $("div", "", "diagram-pan-buttons");
 	_.setAttribute("role", "group"), _.setAttribute("aria-label", "Pan diagram");
 	for (let [e, t, n] of [
@@ -26873,7 +26873,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 		let n = M.get(e)?.getData();
 		O.hidden = !n, n ? (A(), O.replaceChildren($("span", n.label), f("Read", "Read selected node", () => {
 			y.zoomTo(1), y.centerCell(M.get(e));
-		}), f(n.level === "step" ? "Source" : "Expand / collapse", "Open selected node", () => _e(M.get(e).getData())), f("Values", "Toggle selected node values", () => fe(e)), f("Inspect", "Inspect selected node", () => t(n.symbol, n.callId)), f("Close", "Close selected node actions", () => {
+		}), f(n.level === "step" ? "Source" : "Expand / collapse", "Open selected node", () => F(M.get(e).getData())), f("Values", "Toggle selected node values", () => pe(e)), f("Inspect", "Inspect selected node", () => t(n.symbol, n.callId)), f("Close", "Close selected node actions", () => {
 			k(void 0), A(), c.focus({ preventScroll: !0 });
 		}))) : (D = void 0, O.replaceChildren());
 	}
@@ -26908,17 +26908,28 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			"+",
 			"=",
 			"-"
-		].includes(e.key) && (e.preventDefault(), e.stopPropagation(), be(e.key === "-" ? -.15 : .15));
+		].includes(e.key) && (e.preventDefault(), e.stopPropagation(), xe(e.key === "-" ? -.15 : .15));
 	}), y.on("scale", () => e.classList.toggle("diagram-overview", y.zoom() < .6));
-	let ne = "", j = -1, re = !1, M = /* @__PURE__ */ new Map(), ie = /* @__PURE__ */ new Map(), ae = [], oe = /* @__PURE__ */ new Set(), se = /* @__PURE__ */ new Set(), ce = /* @__PURE__ */ new Map(), le = /* @__PURE__ */ new Map(), N, ue = /* @__PURE__ */ new Set(), de = (e) => ue.has(e) ? 160 : 0, fe = (e) => {
-		r?.(), ue.has(e) ? ue.delete(e) : ue.add(e), we(w, !1);
-	}, pe, P = null, me = [], he = $("div", "", "diagram-navigation");
-	i.append(he);
-	function ge(e, t = !1) {
-		r?.(), t ? me = [] : me.push(P), P = e, T = 0, E = !1, ne = "", we(w), he.querySelector("button")?.focus({ preventScroll: !0 });
+	let ne = "", j = -1, re = !1, M = /* @__PURE__ */ new Map(), ie = /* @__PURE__ */ new Map(), ae = [], oe = /* @__PURE__ */ new Set(), se = /* @__PURE__ */ new Set(), ce = /* @__PURE__ */ new Map(), le = /* @__PURE__ */ new Map(), N, ue = /* @__PURE__ */ new Set(), de = (e) => ue.has(e) ? 160 : 0;
+	function fe(e) {
+		let t = M.get(e), n = t && y.findViewByCell(t)?.container.querySelector(".diagram-values-summary");
+		if (!n) return;
+		let r = n.getBoundingClientRect(), i = c.getBoundingClientRect(), a = i.left + 12, o = i.right - 12, s = i.top + 12, l = i.bottom - 12, u = document.querySelector(".playback-dock")?.getBoundingClientRect();
+		if (u && u.top < l && u.bottom > s && u.left < o && u.right > a && (l = Math.min(l, u.top - 12)), l <= s || o <= a) return;
+		let d = r.left < a ? a - r.left : r.right > o ? o - r.right : 0, f = r.top < s ? s - r.top : r.bottom > l ? l - r.bottom : 0;
+		(d || f) && te(d, f);
 	}
-	function _e(t) {
-		if (t.level === "class") ge({
+	let pe = (e) => {
+		r?.(), ue.has(e) ? ue.delete(e) : ue.add(e), Te(w, !1), requestAnimationFrame(() => {
+			re || fe(e);
+		});
+	}, me, P = null, he = [], ge = $("div", "", "diagram-navigation");
+	i.append(ge);
+	function _e(e, t = !1) {
+		r?.(), t ? he = [] : he.push(P), P = e, T = 0, E = !1, ne = "", Te(w), ge.querySelector("button")?.focus({ preventScroll: !0 });
+	}
+	function F(t) {
+		if (t.level === "class") _e({
 			kind: "class",
 			id: t.owner
 		});
@@ -26927,24 +26938,24 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			if (w.mode === "map" && !P) {
 				r?.();
 				let n = M.has(t.id) ? t.id : t.callId, i = (t) => [...e.querySelectorAll(".diagram-card")].find((e) => e.dataset.nodeId === t)?.getBoundingClientRect(), a = i(n);
-				se.has(t.id) ? se.delete(t.id) : se.add(t.id), ne = "", we(w, !1);
+				se.has(t.id) ? se.delete(t.id) : se.add(t.id), ne = "", Te(w, !1);
 				let o = M.get(n) ?? M.get(t.callId);
 				if (o && a) {
 					let e = i(o.id);
 					e && te(a.x - e.x, a.y - e.y), k(o.id);
 				}
-			} else ge({
+			} else _e({
 				kind: "method",
 				id: t.callId
 			});
 		} else n(t.index);
 	}
-	function F(e, t = 1) {
-		return t < 0 ? pe.previous(e, P) : pe.next(e, P);
+	function ve(e, t = 1) {
+		return t < 0 ? me.previous(e, P) : me.next(e, P);
 	}
-	let ve = $("div", "", "diagram-groups");
-	i.append(ve);
-	function ye() {
+	let ye = $("div", "", "diagram-groups");
+	i.append(ye);
+	function be() {
 		if (!re && c.clientWidth && c.clientHeight && y.getNodes().length && (y.resize(c.clientWidth, c.clientHeight), y.zoomToFit({
 			padding: 24,
 			minScale: .9,
@@ -26961,18 +26972,18 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			}
 		}
 	}
-	function be(e) {
+	function xe(e) {
 		y.zoomTo(Math.max(.25, Math.min(1.6, y.zoom() + e)));
 	}
-	let xe = !1, Se = new ResizeObserver(() => {
+	let Se = !1, Ce = new ResizeObserver(() => {
 		if (re || !c.clientWidth || !c.clientHeight) return;
 		y.resize(c.clientWidth, c.clientHeight);
-		let e = !xe;
-		xe = !0, we(w, e);
+		let e = !Se;
+		Se = !0, Te(w, e);
 	});
-	Se.observe(c);
-	function Ce(e, t = !1) {
-		b = e, x = e.trace?.events ?? [], pe = FA(x, e.trace?.sourceFiles), N = UA(e), t || (P = null, me = [], se.clear(), ue.clear(), ce.clear(), le.clear(), D = void 0, O.hidden = !0, O.replaceChildren()), S = NA(x).invocations, C = IA(x, S), S.length || (S = [...new Set(e.steps.flatMap((e) => [e.from, e.to]))].map((t) => ({
+	Ce.observe(c);
+	function we(e, t = !1) {
+		b = e, x = e.trace?.events ?? [], me = FA(x, e.trace?.sourceFiles), N = UA(e), t || (P = null, he = [], se.clear(), ue.clear(), ce.clear(), le.clear(), D = void 0, O.hidden = !0, O.replaceChildren()), S = NA(x).invocations, C = IA(x, S), S.length || (S = [...new Set(e.steps.flatMap((e) => [e.from, e.to]))].map((t) => ({
 			callId: t,
 			symbol: t,
 			methodName: t.split(/[.:]/).at(-1),
@@ -26981,7 +26992,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			certainty: "unverified"
 		}))), ne = "", j = -1, T = 0, E = !1, oe.clear();
 	}
-	function we(i = {}, s = !0) {
+	function Te(i = {}, s = !0) {
 		if (!b || re) return;
 		let l = document.activeElement, m = l?.closest(".diagram-card"), h = e.contains(l) ? m ? `.diagram-card[data-node-id="${CSS.escape(m.dataset.nodeId)}"] ${l.hasAttribute("aria-label") ? `[aria-label="${CSS.escape(l.getAttribute("aria-label"))}"]` : "." + l.className}` : l.hasAttribute("aria-label") ? `button[aria-label="${CSS.escape(l.getAttribute("aria-label"))}"]` : void 0 : void 0, g = w.mode;
 		w = {
@@ -26992,31 +27003,31 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			duration: 500,
 			...i
 		};
-		let { mode: _, cursor: O, follow: ee, reducedMotion: F, duration: be } = w;
-		g && g !== _ && (P = null, me = [], ne = ""), c.dataset.motion = F ? "reduced" : "full", c.style.setProperty("--diagram-duration", `${Math.max(100, be)}ms`), (O !== j || g !== _) && (E = !1);
-		let xe = x[Math.max(0, O - 1)], Se = S.find((e) => e.callSiteIndex === O)?.callId ?? xe?.callId ?? b.steps[Math.max(0, O - 1)]?.to, Ce = p === "vertical", Te = [], Ee = [], De = new Map(S.map((e) => [e.callId, e])), Oe = PA(S, x), ke = Oe.byCall.get(Se);
-		he.replaceChildren(), x.length && _ === "map" ? se.size && he.append(f("Collapse methods", "Collapse expanded methods", () => {
-			r?.(), se.clear(), ne = "", we(w);
-		})) : x.length && (he.append(f("Classes", "Show class-level diagram", () => ge({ kind: "classes" }, !0))), P && (he.append(f("↑ Collapse", "Collapse diagram level", () => {
-			r?.(), P = me.pop() ?? null, T = 0, E = !1, ne = "", we(w), he.querySelector("button")?.focus({ preventScroll: !0 });
-		})), he.append(f("All steps", "Show all prepared steps", () => ge(null, !0)))));
+		let { mode: _, cursor: O, follow: ee, reducedMotion: fe, duration: ve } = w;
+		g && g !== _ && (P = null, he = [], ne = ""), c.dataset.motion = fe ? "reduced" : "full", c.style.setProperty("--diagram-duration", `${Math.max(100, ve)}ms`), (O !== j || g !== _) && (E = !1);
+		let xe = x[Math.max(0, O - 1)], Se = S.find((e) => e.callSiteIndex === O)?.callId ?? xe?.callId ?? b.steps[Math.max(0, O - 1)]?.to, Ce = p === "vertical", we = [], Ee = [], De = new Map(S.map((e) => [e.callId, e])), Oe = PA(S, x), ke = Oe.byCall.get(Se);
+		ge.replaceChildren(), x.length && _ === "map" ? se.size && ge.append(f("Collapse methods", "Collapse expanded methods", () => {
+			r?.(), se.clear(), ne = "", Te(w);
+		})) : x.length && (ge.append(f("Classes", "Show class-level diagram", () => _e({ kind: "classes" }, !0))), P && (ge.append(f("↑ Collapse", "Collapse diagram level", () => {
+			r?.(), P = he.pop() ?? null, T = 0, E = !1, ne = "", Te(w), ge.querySelector("button")?.focus({ preventScroll: !0 });
+		})), ge.append(f("All steps", "Show all prepared steps", () => _e(null, !0)))));
 		let Ae, je;
 		if (P) {
-			if (Ae = (P.kind === "classes" ? pe.classes : P.kind === "class" ? pe.methods(P.id) : pe.flowSteps(P.id)).map((e) => ({
+			if (Ae = (P.kind === "classes" ? me.classes : P.kind === "class" ? me.methods(P.id) : me.flowSteps(P.id)).map((e) => ({
 				...e,
 				level: e.kind,
 				kind: e.kind === "step" ? e.event.kind : e.kind,
 				expandLabel: e.kind === "class" ? "Expand class " + e.owner : e.kind === "step" ? "Go to source step " + e.index : "Expand method " + e.symbol,
 				expandable: e.kind !== "step",
 				value: e.kind === "class" ? `${e.count} method invocations` : YA(e.event),
-				active: O > 0 && (e.kind === "class" ? e.owner === pe.owner(Se) : e.kind === "method" ? P.kind === "class" ? Se === e.callId : pe.contains(Se, e.callId) : e.index === O)
+				active: O > 0 && (e.kind === "class" ? e.owner === me.owner(Se) : e.kind === "method" ? P.kind === "class" ? Se === e.callId : me.contains(Se, e.callId) : e.index === O)
 			})), ee && !E) {
 				let e = Ae.findIndex((e) => e.active);
 				e >= 0 && (T = Math.floor(e / JA));
 			}
-			T = Math.max(0, Math.min(T, Math.ceil(Ae.length / JA) - 1)), Te = Ae.slice(T * JA, (T + 1) * JA), Ee = Te.slice(1).map((e, t) => [Te[t].id, e.id]), a.textContent = P.kind === "classes" ? "Classes / modules" : P.kind === "class" ? P.id : (De.get(P.id)?.symbol ?? P.id) + " · " + P.id, o.textContent = P.kind === "classes" ? "Class-level playback · expand a class" : P.kind === "class" ? "Method-level playback · expand an invocation" : "Source-step playback · expand nested calls", o.textContent += " · arrows: " + (P.kind === "method" ? "prepared step order" : "first appearance order, not calls"), O > 0 && !Ae.some((e) => e.active) && (o.textContent += " · cursor outside this scope");
+			T = Math.max(0, Math.min(T, Math.ceil(Ae.length / JA) - 1)), we = Ae.slice(T * JA, (T + 1) * JA), Ee = we.slice(1).map((e, t) => [we[t].id, e.id]), a.textContent = P.kind === "classes" ? "Classes / modules" : P.kind === "class" ? P.id : (De.get(P.id)?.symbol ?? P.id) + " · " + P.id, o.textContent = P.kind === "classes" ? "Class-level playback · expand a class" : P.kind === "class" ? "Method-level playback · expand an invocation" : "Source-step playback · expand nested calls", o.textContent += " · arrows: " + (P.kind === "method" ? "prepared step order" : "first appearance order, not calls"), O > 0 && !Ae.some((e) => e.active) && (o.textContent += " · cursor outside this scope");
 		} else {
-			Te = Oe.functions.filter((e) => !oe.has(e.invocations[0].className)).map((e) => {
+			we = Oe.functions.filter((e) => !oe.has(e.invocations[0].className)).map((e) => {
 				let t = O > 0 && e.id === ke;
 				t && ee && O !== j && ce.set(e.id, Se);
 				let i = e.invocations.find((t) => t.callId === ce.get(e.id)) ?? e.invocations[0], a = x[i.index - 1], o = t && i.callId === Se;
@@ -27024,7 +27035,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 					id: e.id,
 					invocations: e.invocations,
 					onInvocation: (t) => {
-						r?.(), ce.set(e.id, t), n(De.get(t).index), we(w, !1);
+						r?.(), ce.set(e.id, t), n(De.get(t).index), Te(w, !1);
 					},
 					index: o ? O : i.index,
 					symbol: i.symbol,
@@ -27038,12 +27049,12 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 					value: YA(o ? xe : a),
 					inputs: a?.inputs ?? x[i.callSiteIndex - 1]?.inputs,
 					expanded: se.has(e.id),
-					steps: se.has(e.id) ? pe.steps(i.callId).filter((e) => e.kind === "step" && (e.event.kind !== "enter" || e.certainty === "unresolved")) : [],
+					steps: se.has(e.id) ? me.steps(i.callId).filter((e) => e.kind === "step" && (e.event.kind !== "enter" || e.certainty === "unresolved")) : [],
 					cursor: O,
 					active: t
 				};
 			});
-			let e = new Set(Te.map((e) => e.id));
+			let e = new Set(we.map((e) => e.id));
 			Ee = Oe.relationships.filter((t) => e.has(t.source) && e.has(t.target)).map((e) => [
 				e.source,
 				e.target,
@@ -27051,17 +27062,17 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			]);
 		}
 		if (!P && _ === "map" && (ne === "" || g !== _)) {
-			ve.replaceChildren();
+			ye.replaceChildren();
 			for (let e of new Set(S.map((e) => e.className))) {
 				let t = f(e, "Toggle group " + e, () => {
-					oe.has(e) ? oe.delete(e) : oe.add(e), ne = "", we(w);
+					oe.has(e) ? oe.delete(e) : oe.add(e), ne = "", Te(w);
 				});
-				t.setAttribute("aria-pressed", String(!oe.has(e))), ve.append(t);
+				t.setAttribute("aria-pressed", String(!oe.has(e))), ye.append(t);
 			}
 		}
 		let Me = _ === "map" && !P, Ne = /* @__PURE__ */ new Map(), Pe = /* @__PURE__ */ new Map();
 		if (Me) {
-			let e = new Set(Te.map((e) => e.id)), t = (t, n, r = "") => {
+			let e = new Set(we.map((e) => e.id)), t = (t, n, r = "") => {
 				let i = JSON.stringify([
 					t,
 					n,
@@ -27079,7 +27090,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 				}
 				return Ne.get(i);
 			};
-			for (let e of Te) {
+			for (let e of we) {
 				let n = t("file", e.file);
 				if (n.members.push(e.id), e.group === "Functions" || e.group === e.file) Pe.set(e.id, n.id);
 				else {
@@ -27088,8 +27099,8 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 				}
 			}
 		}
-		let Fe = [], Ie = [], Le = /* @__PURE__ */ new Set([...Te.map((e) => e.id), ...[...Ne.values()].map((e) => e.id)]), Re = [], ze = [];
-		for (let e of Te) {
+		let Fe = [], Ie = [], Le = /* @__PURE__ */ new Set([...we.map((e) => e.id), ...[...Ne.values()].map((e) => e.id)]), Re = [], ze = [];
+		for (let e of we) {
 			let t = N.methods.find((t) => t.id === e.callId);
 			if (e.expanded && t) {
 				let i = WA(t.items, {
@@ -27149,7 +27160,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 						visits: t.node.iterations,
 						visit: t.visit,
 						onVisit: (e) => {
-							r?.(), le.set(t.node.id, e), n(t.node.iterations[e].indices[0]), ne = "", we(w, !1);
+							r?.(), le.set(t.node.id, e), n(t.node.iterations[e].indices[0]), ne = "", Te(w, !1);
 						}
 					});
 				}
@@ -27191,7 +27202,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 				Fe.push(a), i && Ie.push([i, r]), i = r;
 			}
 		}
-		for (let e of Te) {
+		for (let e of we) {
 			e.headerHeight = KA + de(e.id) + (e.invocations?.length > 1 ? 36 : 0);
 			let t = Fe.filter((t) => t.parentId === e.id);
 			if (e.controlLayout) {
@@ -27204,8 +27215,8 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			for (let r of t) r.offsetY = e.headerHeight + 16 + n.slice(0, r.row).reduce((e, t) => e + t + qA, 0);
 			e.height = e.headerHeight + (t.length ? n.reduce((e, t) => e + t + qA, 16) : 0);
 		}
-		let Be = [...Te, ...Fe];
-		for (let e of Be) e.inline = Me, e.valuesOpen = ue.has(e.id), e.onValues = fe;
+		let Be = [...we, ...Fe];
+		for (let e of Be) e.inline = Me, e.valuesOpen = ue.has(e.id), e.onValues = pe;
 		let Ve = JSON.stringify([
 			_,
 			Ce,
@@ -27229,7 +27240,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 				marginx: 20,
 				marginy: 20
 			}).setDefaultEdgeLabel(() => ({}));
-			for (let t of Te) e.setNode(t.id, {
+			for (let t of we) e.setNode(t.id, {
 				width: t.width,
 				height: t.height
 			});
@@ -27279,7 +27290,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 				ie.set(t.id, r);
 			}
 			for (let e of Ne.values()) e.parent && ie.get(e.parent).addChild(ie.get(e.id));
-			for (let r of Te) {
+			for (let r of we) {
 				let i = e.node(r.id), a = y.addNode({
 					id: r.id,
 					shape: "code-anime-card",
@@ -27292,7 +27303,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 						...r,
 						onSelect: t,
 						onSeek: n,
-						onExpand: _e
+						onExpand: F
 					}
 				});
 				M.set(r.id, a), Pe.has(r.id) && ie.get(Pe.get(r.id)).addChild(a);
@@ -27310,7 +27321,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 						...e,
 						onSelect: t,
 						onSeek: n,
-						onExpand: _e
+						onExpand: F
 					}
 				});
 				r.addChild(a), M.set(e.id, a);
@@ -27500,24 +27511,24 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 				for (let e of d) t.append($("li", e));
 				v.append(e, $("p", "Collapse unrelated methods or filter owners to free routing space. Inspect a method for its prepared return value."), t);
 			}
-			D && k(D), s && ye();
+			D && k(D), s && be();
 		} else if (O !== j) for (let e of Be) M.get(e.id)?.setData({
 			...e,
 			onSelect: t,
 			onSeek: n,
-			onExpand: _e
+			onExpand: F
 		});
 		for (let e of Ne.values()) ie.get(e.id)?.setData({
 			...e,
 			active: O > 0 && e.members.includes(Me ? ke : Se)
 		});
-		let Ue = Fe.find((e) => e.active && e.level === "step") ?? Te.find((e) => e.active), We = new Set(Be.filter((e) => e.active).map((e) => e.id));
+		let Ue = Fe.find((e) => e.active && e.level === "step") ?? we.find((e) => e.active), We = new Set(Be.filter((e) => e.active).map((e) => e.id));
 		for (let e of ae) {
 			let t = e.getData().kind === "return", n = t ? e.getData().index === O : Me && e.getData().kind === "call" ? O > 0 && xe?.kind !== "return" && e.getData().callId === Se : We.has(e.getTargetCellId());
-			e.attr("line/stroke", n ? "#4f46e5" : "#64748b"), e.attr("line/strokeWidth", n ? 2.5 : 1.5), e.attr("line/class", n && (t || !Me) && !F ? "diagram-edge-active" : ""), e.attr("line/strokeDasharray", t || e.getData().inactive || !Me && n && !F ? "5 7" : "");
+			e.attr("line/stroke", n ? "#4f46e5" : "#64748b"), e.attr("line/strokeWidth", n ? 2.5 : 1.5), e.attr("line/class", n && (t || !Me) && !fe ? "diagram-edge-active" : ""), e.attr("line/strokeDasharray", t || e.getData().inactive || !Me && n && !fe ? "5 7" : "");
 		}
 		if (A(), !He && ee && O !== j && Ue) {
-			if (P) ye();
+			if (P) be();
 			else {
 				let e = M.get(Ue.id), t = y.localToClient(e.getBBox()), n = c.getBoundingClientRect(), r = d.getBoundingClientRect();
 				if (t.x + t.width > r.left && t.x < r.right && t.y + t.height > r.top || t.x < n.left + 12 || t.y < n.top + 12 || t.x + t.width > n.right - 12 || t.y + t.height > n.bottom - 12) {
@@ -27530,26 +27541,26 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 		if (j = O, He || !u.childNodes.length) {
 			if (u.replaceChildren(), P) {
 				let e = Ae?.length ?? je ?? b.steps.length, t = (e) => {
-					T += e, E = !0, we(w);
+					T += e, E = !0, Te(w);
 				}, n = f("‹", "Previous diagram page", () => t(-1)), r = f("›", "Next diagram page", () => t(1));
 				n.disabled = T === 0, r.disabled = (T + 1) * JA >= e, u.append(n, $("span", e ? `${T * JA + 1}–${Math.min((T + 1) * JA, e)} / ${e}` : "No steps"), r);
-			} else u.append($("span", `${Te.length} visible · drag to pan`));
+			} else u.append($("span", `${we.length} visible · drag to pan`));
 		}
 		if (h && !l.isConnected) {
 			let t = e.querySelector(h);
 			(t && !t.disabled ? t : d.querySelector("button[aria-label=\"Fit diagram\"]")).focus({ preventScroll: !0 });
 		}
 	}
-	function Te() {
-		re = !0, Se.disconnect(), e.removeEventListener("focusin", ee), y.dispose(), e.replaceChildren();
+	function Ee() {
+		re = !0, Ce.disconnect(), e.removeEventListener("focusin", ee), y.dispose(), e.replaceChildren();
 	}
 	return {
-		setFlow: Ce,
-		render: we,
-		zoom: be,
-		fit: ye,
-		dispose: Te,
-		advance: F
+		setFlow: we,
+		render: Te,
+		zoom: xe,
+		fit: be,
+		dispose: Ee,
+		advance: ve
 	};
 }
 export { XA as createDiagram };
