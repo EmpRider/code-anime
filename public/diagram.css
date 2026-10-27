@@ -559,6 +559,32 @@
     flex-wrap: wrap;
   }
 }
+@media (max-width: 650px) {
+  #canvas .diagram-footer {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 4px 8px;
+    border-top: 1px solid var(--diagram-border);
+    background: var(--diagram-bg);
+    flex-wrap: nowrap;
+  }
+  #canvas .diagram-controls {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+    scrollbar-width: thin;
+  }
+  #canvas .diagram-pages {
+    flex: 0 0 auto;
+  }
+}
 .diagram-card[data-parent-id] .diagram-name {
   font-size: 14px;
   line-height: 20px;
