@@ -16,7 +16,7 @@ code must never execute to construct animations.
 | B0f  | Set literal-source versus simulated-label display contract         | B0c; explicit product choice     | WAITING_ON_OWNER                                           |
 | B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | IN_PROGRESS — test patch; Chromium gate pending            |
 | B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IN_PROGRESS — test-only patch; Chromium gate pending       |
-| B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DIAGNOSED_AWAITING_PUSH — no source fix                    |
+| B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DONE — DIAGNOSTIC ONLY; T7 bug still open                  |
 | B0j  | Review accidental trailing README test line                        | B0 gate; owner priority          | LOW_PRIORITY                                               |
 | T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | PAUSED — actionable browser failures under AGENTS.md       |
 | T2   | Pure logical compound topology and truthful execution edges        | T1                               | Pending                                                    |
@@ -157,6 +157,13 @@ release, publish or remove this task ledger without owner authorization.
   independently reviewed and the task-specific GitHub docs commit/push is
   verified. The **preference bug itself remains OPEN** under owner-gated T7;
   B0i diagnostic completion must never imply the migration is implemented.
+- **Verified diagnostic delivery:** independent spec/quality review accepted
+  the source-grounded reproduction. GitHub connector verified documentation
+  commit `c1c4bc19cccd68ae9aaeb14bae5d3113857cf86c` and tracker blob
+  `ea0ebacf` on `fix/react-layout-collapse`. **B0i is DONE only for the
+  diagnostic**, contingent on this separate status commit being pushed and
+  verified. No storage migration or browser UI acceptance has been performed;
+  **T7 remains PAUSED/WAITING_ON_OWNER** for remedial design approval.
 
 ## T0 evidence
 
