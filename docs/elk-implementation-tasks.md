@@ -9,9 +9,15 @@ code must never execute to construct animations.
 | T0   | Restore mandatory formatting CI at the authored/generated boundary | Approved formatting remedy       | DONE — delivered as f2b5f10; remote branch verified        |
 | T0a  | Format newly imported ELK plan and task-tracker docs to restore CI | T0 delivery; two-file CI failure | DONE — delivered as b5a08a67 and ffd490bb; remote verified |
 | B0a  | Restore Values disclosure pointer and viewport reachability        | T0a; browser RED baseline        | DONE — focused desktop/mobile Chromium GREEN; full CI RED  |
-| B0b  | Restore or prove equivalent map navigation and continuation        | B0a; behavior-contract evidence  | CANDIDATE — delivered; final Chromium run pending          |
-| B0d  | Restore true Fit reachability for source-step controls             | B0b map navigation               | READY — desktop/mobile Chromium RED; permanent fix pending |
-| B0c  | Align stale browser assertions with truthful mock-flow behavior    | B0b; typed-edge/step evidence    | WAITING — no expectation-only test changes authorized      |
+| B0b  | Restore map navigation and continuation                            | B0a; behavior-contract evidence  | IMPLEMENTED_CANDIDATE — browser gate RED                   |
+| B0c  | Preserve truthful typed call/return ancestry                       | B0b; mock/source identity        | IMPLEMENTED_CANDIDATE — browser gate RED                   |
+| B0d  | True Fit and reachable source-step navigation                      | B0b; B0e, B0g UX/geometry gates  | IMPLEMENTED_CANDIDATE — browser gate RED                   |
+| B0e  | Set Fit overview versus immediate-label readability contract       | B0d; explicit product choice     | WAITING_ON_OWNER                                           |
+| B0f  | Set literal-source versus simulated-label display contract         | B0c; explicit product choice     | WAITING_ON_OWNER                                           |
+| B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | READY_AFTER_LEDGER                                         |
+| B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | READY_AFTER_LEDGER                                         |
+| B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | READY_READ_ONLY                                            |
+| B0j  | Review accidental trailing README test line                        | B0 gate; owner priority          | LOW_PRIORITY                                               |
 | T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | PAUSED — actionable browser failures under AGENTS.md       |
 | T2   | Pure logical compound topology and truthful execution edges        | T1                               | Pending                                                    |
 | T3   | Real same-origin ELK Worker and distributable package              | B0 gate; dependency/license gate | PAUSED — actionable browser failures under AGENTS.md       |
@@ -21,6 +27,62 @@ code must never execute to construct animations.
 | T7   | Isolate orientation/panel preference keys with migration           | B0 MVP browser gate              | PAUSED — actionable browser failures under AGENTS.md       |
 | T8   | PC-only compact visual clarity and accessibility                   | T6                               | Pending                                                    |
 | T9   | Full mock-trace, performance, and package acceptance               | T1–T8                            | Pending                                                    |
+
+## 2026-10-27 Council reconciliation and next tasks
+
+The current branch baseline is `32f0ea01f92bbef7098ad206c88c3bf16d3881a4`.
+[GitHub Actions 40489360476](https://github.com/EmpRider/code-anime/actions/runs/40489360476)
+passed all four Node/check jobs but only **51/57 Chromium browser tests**.
+Five independent Council advisors, five anonymized peer reviews, and four EDO
+rebuttals recommended narrow B0 recovery. **No source fix or task acceptance is
+claimed by this reconciliation.** The existing implementation plan still needs
+explicit owner confirmation before optional ELK T1–T9 begin.
+
+- **B0b — map specialist; independent QA:** navigation and continuation code is
+  present, with relevant cases passing. Preserve unique invocation IDs,
+  return/source/cursor/breakpoint continuity, reload and keyboard navigation;
+  do not mark DONE while full browser acceptance is RED.
+- **B0c — ancestry specialist; independent QA:** first-appearance and true
+  typed call/return edges are present. Preserve all prepared indexes and add
+  negative controls for absent call site and incorrect return target.
+- **B0d — Fit/camera specialist; independent QA:** whole-map Fit is present,
+  but after Fit actual labels measured 6.73px desktop and 2.15px mobile against
+  the >=12px assertion; mobile pointer verification is blocked by B0g helper.
+- **B0e — UX/accessibility specialist; owner decision:** choose A whole-map
+  overview with keyboard Step 5 focus/zoom, readable labels after zoom, or B
+  immediate >=12px readable/direct-click cards with possible overview clipping.
+  Verify actual hit target and pointer/keyboard navigation, never just remove
+  the readability assertion.
+- **B0f — provenance specialist; owner decision:** expanded card shows mock
+  `call A.main` while fixture literal source is `B.work();` (two failures).
+  Proposed primary literal source plus explicit secondary simulated identity;
+  preserve per-event/call uniqueness, escaped text, missing-source fallback.
+- **B0g — browser geometry QA; independent reviewer:** fix mobile
+  `DOMMatrix(null)` test helper without guessing identity transforms. Compose
+  ancestor/screen transforms, include nonidentity ancestor negative control,
+  real unforced pointer/keyboard interaction and repeated Fit/zoom checks.
+- **B0h — mobile controls QA; independent reviewer:** desktop toolbar grid
+  intentionally becomes mobile in-flow flex under 650px. Assert each actual
+  viewport contract plus pointer/keyboard hit targets, overlay interception
+  negative control and prior Step 6 reachability. No expectation-only green.
+- **B0i — reliability/storage specialist; independent reviewer:**
+  `public/diagram.js` stores raw orientation and `public/player.js` stores JSON
+  panel settings under the same `code-anime-layout` key. Diagnose both write
+  orders, legacy/corrupt/throwing storage. Escalate a separately approved B0
+  fix if user-visible preference loss is reproduced; otherwise schedule T7.
+- **B0j — documentation maintainer:** review trailing README `test commit`
+  test line; lower priority than the six browser failures.
+
+**Task progress commits:** commit/push one task ID at a time through the GitHub
+connector; partial implementations remain `IN_PROGRESS` with exact delivered
+versus missing criteria, never unsupported percentages. Each slice requires
+independent review, focused genuine Chromium RED→GREEN desktop/mobile where
+applicable, scope/type/unit/build/format/package checks, and exact-HEAD CI.
+Local baseline `npm run check` passed 185 tests with 2 opt-in CodeGraph skips
+outside the socket sandbox. No local browser green is claimed: the Chromium
+download returned an invalid zero-byte archive. Keep T1–T9 PAUSED until B0
+acceptance and the revised plan's explicit owner approval. Do not merge,
+release, publish or remove this task ledger without owner authorization.
 
 ## T0 evidence
 
