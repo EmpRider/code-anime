@@ -3309,6 +3309,71 @@ test('T7 legacy raw horizontal migrates once without altering old storage', asyn
   );
 });
 
+test('T7 raw vertical migration and partial or null orientation values stay safe', async ({
+  page,
+}) => {
+  await open(page, 'flow');
+  await page.evaluate(() => {
+    localStorage.removeItem('code-anime-diagram-orientation');
+    localStorage.setItem('code-anime-layout', 'vertical');
+  });
+  await page.reload();
+  await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+    'data-direction',
+    'vertical',
+  );
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem('code-anime-diagram-orientation'),
+    ),
+  ).toBe('vertical');
+  for (const invalid of ['null', '"horizontal"', '{"direction":', 'false']) {
+    await page.evaluate((value) => {
+      localStorage.setItem('code-anime-diagram-orientation', value);
+      localStorage.setItem('code-anime-layout', 'horizontal');
+    }, invalid);
+    await page.reload();
+    await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+      'data-direction',
+      'vertical',
+    );
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('code-anime-diagram-orientation'),
+      ),
+    ).toBe(invalid);
+  }
+});
+
+test('T7 throwing legacy storage read does not disable orientation', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    const get = Storage.prototype.getItem;
+    Storage.prototype.getItem = function (key) {
+      if (key === 'code-anime-layout')
+        throw new DOMException('Legacy read disabled', 'SecurityError');
+      return get.call(this, key);
+    };
+  });
+  await open(page, 'flow');
+  await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+    'data-direction',
+    'vertical',
+  );
+  await page
+    .getByRole('button', { name: 'Horizontal layout', exact: true })
+    .click();
+  await page.reload();
+  await expect(page.locator('.diagram-canvas')).toHaveAttribute(
+    'data-direction',
+    'horizontal',
+  );
+  expect(errors).toEqual([]);
+});
+
 test('T7 valid legacy panel JSON survives an orientation change', async ({
   page,
 }) => {
