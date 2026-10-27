@@ -1266,6 +1266,9 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
         const internal = Boolean(nodeCells.get(to).getData().parentId);
         const callId = invocationId ?? to;
         const entry = entryById.get(callId);
+        const realCall = grouped && !internal;
+        const firstAppearance =
+          !grouped && !internal && scope?.kind !== 'method';
         // Expanded methods show selected prepared visits; other calls remain in the picker/trace.
         if (
           grouped &&
@@ -1284,12 +1287,21 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
         pending.push({
           source,
           target,
-          kind: internal ? 'step-order' : 'call',
-          callId: internal ? undefined : callId,
-          index: internal ? undefined : (entry?.callSiteIndex ?? entry?.index),
-          description: internal
-            ? undefined
-            : `Call ${callId}: ${entry?.parentSymbol ?? from} to ${entry?.symbol ?? to} · step ${entry?.callSiteIndex ?? entry?.index}`,
+          kind: realCall
+            ? 'call'
+            : firstAppearance
+              ? 'first-appearance'
+              : 'step-order',
+          callId: realCall ? callId : undefined,
+          index: realCall ? (entry?.callSiteIndex ?? entry?.index) : undefined,
+          label: firstAppearance
+            ? 'First appearance order—not a call'
+            : undefined,
+          description: realCall
+            ? `Call ${callId}: ${entry?.parentSymbol ?? from} to ${entry?.symbol ?? to} · step ${entry?.callSiteIndex ?? entry?.index}`
+            : firstAppearance
+              ? `First appearance order—not a call: ${from} to ${to}`
+              : undefined,
         });
         if (grouped && !internal)
           for (const item of returns.get(callId) ?? [])
@@ -1395,7 +1407,10 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
               line: {
                 stroke: '#64748b',
                 strokeWidth: 1.5,
-                strokeDasharray: item.kind === 'return' ? '5 7' : '',
+                strokeDasharray:
+                  item.kind === 'return' || item.kind === 'first-appearance'
+                    ? '5 7'
+                    : '',
                 targetMarker: { name: 'block', width: 7, height: 6 },
               },
             },
@@ -1470,13 +1485,16 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
     );
     for (const edge of edgeCells) {
       const isReturn = edge.getData().kind === 'return';
-      const active = isReturn
-        ? edge.getData().index === cursor
-        : grouped && edge.getData().kind === 'call'
-          ? cursor > 0 &&
-            current?.kind !== 'return' &&
-            edge.getData().callId === activeId
-          : activeCards.has(edge.getTargetCellId());
+      const firstAppearance = edge.getData().kind === 'first-appearance';
+      const active = firstAppearance
+        ? false
+        : isReturn
+          ? edge.getData().index === cursor
+          : grouped && edge.getData().kind === 'call'
+            ? cursor > 0 &&
+              current?.kind !== 'return' &&
+              edge.getData().callId === activeId
+            : activeCards.has(edge.getTargetCellId());
       edge.attr('line/stroke', active ? '#4f46e5' : '#64748b');
       edge.attr('line/strokeWidth', active ? 2.5 : 1.5);
       edge.attr(
@@ -1488,6 +1506,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
       edge.attr(
         'line/strokeDasharray',
         isReturn ||
+          firstAppearance ||
           edge.getData().inactive ||
           (!grouped && active && !reducedMotion)
           ? '5 7'
