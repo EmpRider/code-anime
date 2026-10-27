@@ -12,13 +12,13 @@ code must never execute to construct animations.
 | B0b  | Restore map navigation and continuation                            | B0a; behavior-contract evidence  | IMPLEMENTED_CANDIDATE — browser gate RED                   |
 | B0c  | Preserve truthful typed call/return ancestry                       | B0b; mock/source identity        | IMPLEMENTED_CANDIDATE — browser gate RED                   |
 | B0d  | True Fit and reachable source-step navigation                      | B0b; B0e, B0g UX/geometry gates  | IMPLEMENTED_CANDIDATE — browser gate RED                   |
-| B0e  | Preserve overview Fit; focus/zoom then readable step navigation    | B0d; owner choice approved       | IN_PROGRESS — Chromium gate pending                        |
-| B0f  | Show literal source first, explicitly simulated event second       | B0c; B0e commit; owner approved  | IN_PROGRESS — source patch; Chromium gate pending          |
-| B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | IN_PROGRESS — test patch; Chromium gate pending            |
-| B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IN_PROGRESS — test-only patch; Chromium gate pending       |
+| B0e  | Preserve overview Fit; focus/zoom then readable step navigation    | B0d; owner choice approved       | IMPLEMENTED_CANDIDATE — targeted CI passed; B0k RED        |
+| B0f  | Show literal source first, explicitly simulated event second       | B0c; B0e commit; owner approved  | IMPLEMENTED_CANDIDATE — targeted CI passed; B0k RED        |
+| B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | IMPLEMENTED_CANDIDATE — targeted CI passed; B0k RED        |
+| B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IMPLEMENTED_CANDIDATE — targeted CI passed; B0k RED        |
 | B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DONE — DIAGNOSTIC ONLY; T7 bug still open                  |
 | B0j  | Review accidental trailing README test line                        | B0 gate; owner priority          | LOW_PRIORITY                                               |
-| B0k  | Verify grouped boundaries after method collapse                    | B0f; CI 40553347458              | BLOCKED_ON_COUNCIL — two Chromium failures                 |
+| B0k  | Verify grouped boundaries after method collapse                    | B0f; CI 40598039061              | COUNCIL_APPROVED_READY — test-contract fix, CI RED         |
 | T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | PAUSED — actionable browser failures under AGENTS.md       |
 | T2   | Pure logical compound topology and truthful execution edges        | T1                               | Pending                                                    |
 | T3   | Real same-origin ELK Worker and distributable package              | B0 gate; dependency/license gate | PAUSED — actionable browser failures under AGENTS.md       |
@@ -29,10 +29,10 @@ code must never execute to construct animations.
 | T8   | PC-only compact visual clarity and accessibility                   | T6                               | Pending                                                    |
 | T9   | Full mock-trace, performance, and package acceptance               | T1–T8                            | Pending                                                    |
 
-### B0k — full-map boundary contract after collapsing expanded methods (issue discovery only)
+### B0k — full-map boundary contract after collapsing expanded methods
 
 - **Task ID / title:** B0k — Verify grouped-boundary visibility and collapse
-  contract. **Priority:** P2 candidate, Council assessment pending.
+  contract. **Priority:** P2 test-contract regression, Council reviewed.
   **Responsible role:** TL-assigned diagram-state/test specialist; independent
   browser QA and Council review. **Dependencies:** B0f provenance delivery and
   exact-head browser result at `a662ea6f89a1342365a37d60813f715db865ffd5`.
@@ -75,9 +75,52 @@ code must never execute to construct animations.
   remedy has independent review and real Chromium desktop/mobile regression
   evidence with non-vacuous semantic assertions. All four Node/check jobs,
   whole browser suite, build and package gates pass on the exact pushed HEAD.
-  Task status remains `BLOCKED_ON_COUNCIL` until a review verdict and
-  a separate, verified B0k implementation commit. **No source/test change
-  is authorized by this discovery record alone.**
+  Task remains open until a separate, verified B0k browser-test commit and
+  exact-head full acceptance. The preceding evidence describes initial
+  discovery; see the dated Council decision below.
+
+#### B0k Council decision — 2026-10-28
+
+- **Exact pre-fix evidence:** Branch HEAD `db29779196a16d1938cbe4fbb95ec7f5fc41726a`;
+  [Actions #40598039061](https://github.com/EmpRider/code-anime/actions/runs/40598039061)
+  passed four Node/check/package jobs and **61/63 Chromium tests**. The only
+  two failures were the desktop/mobile `full map nests files and owners with
+synchronized visible mock context` cases at `player.spec.ts:2063`:
+  assertion expected zero `.diagram-boundary` nodes but got three.
+- **Contract evidence:** `public/diagram.js` only clears method expansion on
+  `Collapse expanded methods`; full-map grouping is independent of method
+  expansion. `docs/react-migration-audit.md:79–103` explicitly promises that
+  file/owner groups and call/return arrows remain after methods collapse.
+  The same browser case earlier expects one file and two owner boundaries.
+- **Genuine Council:** Five independently tasked role advisors (architecture,
+  implementation, QA, reliability/accessibility, devil's advocate); five new
+  anonymized blind peer reviews; an EDO-led technical challenge and live QA
+  plus devil's-advocate rebuttals. The unanimous engineering recommendation
+  was **Option A: a narrow, nonvacuous test-contract correction**. No human
+  approval for a different grouping UX, ungroup mode, or release is inferred.
+  Removing production boundaries (Option B) was rejected for breaking a
+  documented Full-map contract; switching to an ungrouped mode (Option C)
+  would need a separate owner decision; leaving the test RED (Option D) is
+  not an acceptable completed remedy.
+- **Approved change boundary:** Fix `tests/browser/player.spec.ts`, not
+  production JS/CSS. Assert after collapse exactly one correctly labeled
+  prepared file boundary and two distinct prepared owner boundaries; two
+  unexpanded outer method cards; zero expanded/child cards; geometrically
+  correct hierarchy; preserved typed A→B call and B→A return identities;
+  cursor `5 / 8`, no orphaned selection/context and connected, accessible
+  keyboard focus. Use the group-B hide/restore behavior as a negative control
+  for missing owner/return edges. Owner `B` is prepared mock grouping, not
+  a claim about a runtime class declaration.
+- **Residual uncertainty:** Assertions after the original failure did not
+  execute in that CI run. If the corrected browser run exposes a genuine
+  source, focus, or selection defect, reopen a separate scoped production
+  task rather than weakening that check. The local environment lacks the
+  pinned Playwright Chromium binary; browser acceptance must be established
+  by exact-head GitHub Actions, not inferred from local Node success.
+- **Completion gate:** Push the Council/ledger preflight before editing the
+  test. After the separate corrective commit, require independent review,
+  genuine desktop/mobile Chromium PASS and full browser/Node/package/build
+  evidence at the final pushed HEAD. Do not mark B0k or B0e–h DONE early.
 
 ## 2026-10-27 Council reconciliation and next tasks
 
