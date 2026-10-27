@@ -47,7 +47,7 @@ code must never execute to construct animations.
   consistently returns **3** (one file group, two owner groups).
 - **EXPECTED / contract under review:** Current test demands no boundaries
   after collapse, but earlier in the same test it requires one file and two
-  owner boundaries. The collapse control may only hide expanded *method*
+  owner boundaries. The collapse control may only hide expanded _method_
   cards while preserving the still-grouped full map. The intended boundary
   lifecycle must be verified against product behavior, map navigation,
   call/return routes, selection/context and existing user-visible contracts
