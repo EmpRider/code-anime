@@ -16,7 +16,7 @@ code must never execute to construct animations.
 | B0f  | Set literal-source versus simulated-label display contract         | B0c; explicit product choice     | WAITING_ON_OWNER                                           |
 | B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | IN_PROGRESS — test patch; Chromium gate pending            |
 | B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IN_PROGRESS — test-only patch; Chromium gate pending       |
-| B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | READY_READ_ONLY                                            |
+| B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DIAGNOSED_AWAITING_PUSH — no source fix                    |
 | B0j  | Review accidental trailing README test line                        | B0 gate; owner priority          | LOW_PRIORITY                                               |
 | T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | PAUSED — actionable browser failures under AGENTS.md       |
 | T2   | Pure logical compound topology and truthful execution edges        | T1                               | Pending                                                    |
@@ -120,6 +120,43 @@ release, publish or remove this task ledger without owner authorization.
   `chromium_headless_shell-1248` binary after escalation. **No new Chromium
   assertion has run.** B0h browser RED→GREEN, task-specific remote commit/push
   and exact-HEAD CI await delivery. Keep `IN_PROGRESS`, not `DONE`.
+
+### B0i diagnostic evidence — code fix not authorized
+
+- **Expected:** selected diagram orientation and player panel settings each
+  survive reload without erasing the other's preference.
+- **Observed source:** `public/diagram.js:270–279` reads the shared
+  `code-anime-layout` key only as raw `horizontal` and writes raw
+  `horizontal`/`vertical`. `public/player.js:3050–3077` instead parses the
+  same key as JSON panel settings and writes JSON. These incompatible formats
+  overwrite each other. Both callers are on the static/mock player path;
+  no analyzed user code executes.
+- **Deterministic reproduction:** an independent reliability specialist ran
+  verbatim extracts of those production storage paths in isolated Node `vm`
+  contexts sharing a Map-backed `localStorage` (exit 0, all assertions passed;
+  no repository files changed). **Panel then orientation:** persist inspector
+  `true` as JSON, invoke the orientation-write snippet, then invoke the
+  simulated next-load read: inspector reverts `false` because raw
+  `horizontal` cannot parse as panel JSON. **Orientation then panel:** persist
+  `horizontal`, invoke the panel-save snippet, then simulate the next-load
+  read: orientation reverts vertical because the key now contains JSON.
+  Invalid or throwing storage safely falls back without an uncaught exception.
+- **Confidence / severity:** preference-loss mechanism **OBSERVED in a
+  production-slice deterministic harness**, not yet verified in full Chromium
+  UI. P2 bounded persistence regression candidate; no evidence of source-data
+  loss or security impact. The storage snippets tolerate throwing storage;
+  actual current-page control interaction was not browser-tested.
+- **Remediation gate:** no code change approved as B0i. Revisit the Council's
+  conditional decision and obtain owner priority/plan confirmation before
+  promoting a scoped fix or implementing **T7**. Compare separate storage keys
+  with legacy migration against a broader versioned settings schema; preserve
+  both raw and JSON legacy cases, corrupt/throwing storage, both write orders,
+  fresh/reload persistence and no uncontrolled deletion. Require real browser
+  regression, Node/build/package/CI and independent review before closure.
+- **Tracking:** B0i's diagnostic scope can close only after this evidence is
+  independently reviewed and the task-specific GitHub docs commit/push is
+  verified. The **preference bug itself remains OPEN** under owner-gated T7;
+  B0i diagnostic completion must never imply the migration is implemented.
 
 ## T0 evidence
 
