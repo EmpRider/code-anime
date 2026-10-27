@@ -280,6 +280,43 @@ async function show(
       el.open = true;
     });
 }
+async function expectPointerHitTarget(page: Page, name: string) {
+  const target = page.getByRole('button', { name, exact: true });
+  await expect(target).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        target.evaluate((button) => {
+          const box = button.getBoundingClientRect();
+          const surface = document
+            .querySelector('.diagram-surface')
+            ?.getBoundingClientRect();
+          const x = box.left + box.width / 2;
+          const y = box.top + box.height / 2;
+          const hit = document.elementFromPoint(x, y);
+          return {
+            withinSurface: Boolean(
+              surface &&
+              x >= surface.left &&
+              x < surface.right &&
+              y >= surface.top &&
+              y < surface.bottom,
+            ),
+            unobstructed: hit === button || button.contains(hit),
+            coveredByCamera: Boolean(hit?.closest('.diagram-footer')),
+          };
+        }),
+      {
+        timeout: 3000,
+        message: `${name} must stay clickable above camera controls`,
+      },
+    )
+    .toEqual({
+      withinSurface: true,
+      unobstructed: true,
+      coveredByCamera: false,
+    });
+}
 for (const mobile of [false, true]) {
   test.describe(mobile ? 'mobile' : 'desktop', () => {
     test.use({
@@ -1585,7 +1622,7 @@ for (const mobile of [false, true]) {
       await expect(page.locator('#workspace-main')).toBeFocused();
       await expect(page.locator('#snippet')).toHaveAttribute('translate', 'no');
     });
-    test('map owner drilldown reaches prepared source without losing the cursor or breakpoint', async ({
+    test('map owner direct source keeps the global call-site and breakpoint', async ({
       page,
     }) => {
       await open(page, 'flow');
@@ -1612,33 +1649,15 @@ for (const mobile of [false, true]) {
         'A.main · a',
       );
       await expect(page.locator('#progress')).toHaveText('4 / 8');
-      await page
-        .getByRole('button', { name: 'Go to source step 6', exact: true })
-        .click();
+      await test.step('A.main prepared step remains an unobstructed pointer target', async () => {
+        await expectPointerHitTarget(page, 'Go to source step 6');
+        await page
+          .getByRole('button', { name: 'Go to source step 6', exact: true })
+          .click();
+      });
       await expect(page.locator('#progress')).toHaveText('6 / 8');
       await show(page, mobile, 'code');
       await expect(page.locator('.code-row[data-line="4"]')).toHaveAttribute(
-        'aria-current',
-        'location',
-      );
-      await seek(page, 4);
-      await show(page, mobile, 'flow');
-      await expect(
-        page.getByRole('button', { name: 'Expand method B.work', exact: true }),
-      ).toBeVisible();
-      await page
-        .getByRole('button', { name: 'Expand method B.work', exact: true })
-        .click();
-      await expect(page.locator('.diagram-heading > strong')).toHaveText(
-        'B.work · b',
-      );
-      await seek(page, 3);
-      await page
-        .getByRole('button', { name: 'Go to source step 4', exact: true })
-        .click();
-      await expect(page.locator('#progress')).toHaveText('4 / 8');
-      await show(page, mobile, 'code');
-      await expect(page.locator('.code-row[data-line="7"]')).toHaveAttribute(
         'aria-current',
         'location',
       );
@@ -1658,12 +1677,6 @@ for (const mobile of [false, true]) {
       await page
         .getByRole('button', { name: 'Collapse diagram level', exact: true })
         .click();
-      await expect(page.locator('.diagram-heading > strong')).toHaveText(
-        'A.main · a',
-      );
-      await page
-        .getByRole('button', { name: 'Collapse diagram level', exact: true })
-        .click();
       await expect(page.locator('.diagram-heading > strong')).toHaveText('A');
       await expect(page.locator('#progress')).toHaveText('4 / 8');
       await page
@@ -1674,6 +1687,101 @@ for (const mobile of [false, true]) {
       );
       await expect(page.locator('.x6-edge[data-edge-kind="call"]')).toHaveCount(
         1,
+      );
+    });
+    test('map owner nested B.work remains clickable after direct A.main source navigation', async ({
+      page,
+    }) => {
+      await open(page, 'flow');
+      await show(page, mobile, 'flow');
+      await test.step('open class and method scopes', async () => {
+        await page
+          .getByRole('button', { name: 'Open class A details', exact: true })
+          .click();
+        await page
+          .getByRole('button', { name: 'Expand method A.main', exact: true })
+          .click();
+        await expect(page.locator('.diagram-heading > strong')).toHaveText(
+          'A.main · a',
+        );
+      });
+      await test.step('source selection does not obstruct nested method', async () => {
+        await expectPointerHitTarget(page, 'Go to source step 6');
+        await page
+          .getByRole('button', { name: 'Go to source step 6', exact: true })
+          .click();
+        await expect(page.locator('#progress')).toHaveText('6 / 8');
+        await show(page, mobile, 'code');
+        await seek(page, 4);
+        await show(page, mobile, 'flow');
+        await expectPointerHitTarget(page, 'Expand method B.work');
+        await page
+          .getByRole('button', { name: 'Expand method B.work', exact: true })
+          .click();
+        await expect(page.locator('.diagram-heading > strong')).toHaveText(
+          'B.work · b',
+        );
+      });
+      await test.step('nested prepared source, return, and call-site remain navigable', async () => {
+        await seek(page, 3);
+        await expectPointerHitTarget(page, 'Go to source step 4');
+        await page
+          .getByRole('button', { name: 'Go to source step 4', exact: true })
+          .click();
+        await expect(page.locator('#progress')).toHaveText('4 / 8');
+        await show(page, mobile, 'code');
+        await expect(page.locator('.code-row[data-line="7"]')).toHaveAttribute(
+          'aria-current',
+          'location',
+        );
+        await seek(page, 2);
+        await expect(page.locator('.code-row[data-line="3"]')).toHaveAttribute(
+          'aria-current',
+          'location',
+        );
+        await show(page, mobile, 'flow');
+        for (const heading of ['A.main · a', 'A', 'Execution path']) {
+          await page
+            .getByRole('button', {
+              name: 'Collapse diagram level',
+              exact: true,
+            })
+            .click();
+          await expect(page.locator('.diagram-heading > strong')).toHaveText(
+            heading,
+          );
+        }
+        await expect(
+          page.locator('.x6-edge[data-edge-kind="call"]'),
+        ).toHaveCount(1);
+      });
+    });
+    test('map owner keyboard reaches nested prepared step without changing URL scope', async ({
+      page,
+    }) => {
+      await open(page, 'flow');
+      await show(page, mobile, 'flow');
+      for (const [name, heading] of [
+        ['Open class A details', 'A'],
+        ['Expand method A.main', 'A.main · a'],
+        ['Expand method B.work', 'B.work · b'],
+      ] as const) {
+        await page.getByRole('button', { name, exact: true }).focus();
+        await page.keyboard.press('Enter');
+        await expect(page.locator('.diagram-heading > strong')).toHaveText(
+          heading,
+        );
+      }
+      await page
+        .getByRole('button', { name: 'Go to source step 4', exact: true })
+        .focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('#progress')).toHaveText('4 / 8');
+      await expect(page).toHaveURL(/view=map&step=4/);
+      await show(page, mobile, 'code');
+      await expect(page.locator('.code-row[data-line="7"]')).toHaveAttribute(
+        'aria-current',
+        'location',
       );
     });
     test('routing disclosures expose congested connections without hover', async ({
