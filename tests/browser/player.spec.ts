@@ -1103,24 +1103,14 @@ for (const mobile of [false, true]) {
       await expect(page.locator('#progress')).toHaveText('2 / 8');
       await expect(decision).toContainText('Condition true');
     });
-    test('diagram navigation floats in the bottom-right corner', async ({
+    test('diagram navigation remains usable in desktop grid and mobile in-flow layouts', async ({
       page,
     }, info) => {
       await open(page, 'flow');
       await show(page, mobile, 'flow');
       const controls = page.locator('.diagram-controls');
-      await expect(controls).toHaveCSS('display', 'grid');
       await expect(controls).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
       const canvas = (await page.locator('#canvas').boundingBox())!;
-      const bounds = (await controls.boundingBox())!;
-      expect(canvas.x + canvas.width - bounds.x - bounds.width).toBeCloseTo(
-        12,
-        0,
-      );
-      expect(canvas.y + canvas.height - bounds.y - bounds.height).toBeCloseTo(
-        12,
-        0,
-      );
       const positions = [
         ['Horizontal layout', 1, 1],
         ['Pan up', 1, 2],
@@ -1131,11 +1121,58 @@ for (const mobile of [false, true]) {
         ['Pan down', 3, 2],
         ['Zoom out', 3, 3],
       ] as const;
-      for (const [name, row, column] of positions) {
-        const button = controls.getByRole('button', { name, exact: true });
-        await expect(button).toBeInViewport();
-        await expect(button).toHaveCSS('grid-row-start', String(row));
-        await expect(button).toHaveCSS('grid-column-start', String(column));
+      if (mobile) {
+        const footer = page.locator('.diagram-footer');
+        await expect(footer).toHaveCSS('position', 'relative');
+        await expect(controls).toHaveCSS('display', 'flex');
+        await expect(controls).toHaveCSS('overflow-x', 'auto');
+        await expect(controls).toHaveCSS('flex-wrap', 'nowrap');
+        const surface = (await page.locator('.diagram-surface').boundingBox())!;
+        const dock = (await footer.boundingBox())!;
+        expect(dock.y).toBeGreaterThanOrEqual(surface.y + surface.height - 1);
+        expect(dock.x).toBeGreaterThanOrEqual(canvas.x - 1);
+        expect(dock.x + dock.width).toBeLessThanOrEqual(
+          canvas.x + canvas.width + 1,
+        );
+        for (const [name] of positions) {
+          const button = controls.getByRole('button', { name, exact: true });
+          await button.scrollIntoViewIfNeeded();
+          await expect(button).toBeInViewport();
+          await expect
+            .poll(() =>
+              button.evaluate((node) => {
+                const box = node.getBoundingClientRect();
+                const hit = document.elementFromPoint(
+                  box.left + box.width / 2,
+                  box.top + box.height / 2,
+                );
+                return hit === node || node.contains(hit);
+              }),
+            )
+            .toBe(true);
+        }
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth,
+          ),
+        ).toBe(true);
+      } else {
+        await expect(controls).toHaveCSS('display', 'grid');
+        const bounds = (await controls.boundingBox())!;
+        expect(canvas.x + canvas.width - bounds.x - bounds.width).toBeCloseTo(
+          12,
+          0,
+        );
+        expect(canvas.y + canvas.height - bounds.y - bounds.height).toBeCloseTo(
+          12,
+          0,
+        );
+        for (const [name, row, column] of positions) {
+          const button = controls.getByRole('button', { name, exact: true });
+          await expect(button).toBeInViewport();
+          await expect(button).toHaveCSS('grid-row-start', String(row));
+          await expect(button).toHaveCSS('grid-column-start', String(column));
+        }
       }
       const viewport = page.locator('.x6-graph-svg-viewport');
       const before = await viewport.getAttribute('transform');
@@ -1159,7 +1196,8 @@ for (const mobile of [false, true]) {
       );
       await controls
         .getByRole('button', { name: 'Horizontal layout', exact: true })
-        .click();
+        .focus();
+      await page.keyboard.press('Enter');
       await expect(
         controls.getByRole('button', { name: 'Vertical layout', exact: true }),
       ).toBeVisible();
@@ -1211,6 +1249,59 @@ for (const mobile of [false, true]) {
         }),
       ).toBeVisible();
       await page.screenshot({ path: info.outputPath('corner-controls.png') });
+      if (mobile) {
+        await page
+          .getByRole('button', { name: 'Open class A details', exact: true })
+          .click();
+        await page
+          .getByRole('button', { name: 'Expand method A.main', exact: true })
+          .click();
+        const sourceStep = page.getByRole('button', {
+          name: 'Go to source step 6',
+          exact: true,
+        });
+        const isUnobstructed = () =>
+          sourceStep.evaluate((button) => {
+            const box = button.getBoundingClientRect();
+            const hit = document.elementFromPoint(
+              box.left + box.width / 2,
+              box.top + box.height / 2,
+            );
+            return hit === button || button.contains(hit);
+          });
+        await expectPointerHitTarget(page, 'Go to source step 6');
+        await sourceStep.evaluate((button) => {
+          const box = button.getBoundingClientRect();
+          const overlay = document.createElement('div');
+          overlay.dataset.testStepOverlay = 'true';
+          Object.assign(overlay.style, {
+            position: 'fixed',
+            left: `${box.left}px`,
+            top: `${box.top}px`,
+            width: `${box.width}px`,
+            height: `${box.height}px`,
+            zIndex: '2147483647',
+            backgroundColor: '#000',
+            pointerEvents: 'auto',
+          });
+          document.body.append(overlay);
+        });
+        try {
+          await expect.poll(isUnobstructed).toBe(false);
+        } finally {
+          await page
+            .locator('[data-test-step-overlay="true"]')
+            .evaluate((overlay) => overlay.remove());
+        }
+        await expectPointerHitTarget(page, 'Go to source step 6');
+        await sourceStep.click();
+        await expect(page.locator('#progress')).toHaveText('6 / 8');
+        await show(page, mobile, 'code');
+        await expect(page.locator('.code-row[data-line="4"]')).toHaveAttribute(
+          'aria-current',
+          'location',
+        );
+      }
     });
     test('method inputs persist and controls follow the selected theme', async ({
       page,

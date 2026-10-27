@@ -15,7 +15,7 @@ code must never execute to construct animations.
 | B0e  | Set Fit overview versus immediate-label readability contract       | B0d; explicit product choice     | WAITING_ON_OWNER                                           |
 | B0f  | Set literal-source versus simulated-label display contract         | B0c; explicit product choice     | WAITING_ON_OWNER                                           |
 | B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | IN_PROGRESS — test patch; Chromium gate pending            |
-| B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | READY_AFTER_LEDGER                                         |
+| B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IN_PROGRESS — test-only patch; Chromium gate pending       |
 | B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | READY_READ_ONLY                                            |
 | B0j  | Review accidental trailing README test line                        | B0 gate; owner priority          | LOW_PRIORITY                                               |
 | T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | PAUSED — actionable browser failures under AGENTS.md       |
@@ -99,6 +99,27 @@ release, publish or remove this task ledger without owner authorization.
   Independent static spec/quality review passed after one false-green negative
   control was corrected. Exact-head Chromium CI and remote commit verification
   remain pending. Keep `IN_PROGRESS` until those gates resolve.
+
+### B0h incremental progress — not accepted
+
+- **Prepared test-only change:** the diagram navigation browser case preserves
+  desktop bottom-right grid and 3×3 control placement assertions while checking
+  the intentionally mobile in-flow footer, scrollable flex controls, real
+  control-center pointer hit targets and keyboard orientation activation.
+  Its mobile path also tests source Step 6 pointer reachability, cursor and
+  source-line synchronization, plus a temporary opaque pointer-blocking DOM
+  overlay (removed in `finally`) to prove hit-test interception is detected.
+- **Verification:** no product CSS/JS changes. Elevated `npm run check`
+  passed static/mock scope, typecheck, 185 Node tests with two opt-in skips,
+  build and formatting. Independent static spec/quality review passed after
+  the overlay was made opaque. [GitHub Actions 40543156843](https://github.com/EmpRider/code-anime/actions/runs/40543156843)
+  on B0g HEAD `8a7dc6b6b2c6c45088175fda44c56ce2c6039e9e` passed four Node
+  jobs and 52/57 browser tests; the original mobile grid expectation was the
+  remaining B0h browser failure. Focused local browser verification was blocked
+  first by sandbox `listen EPERM`, then by absent
+  `chromium_headless_shell-1248` binary after escalation. **No new Chromium
+  assertion has run.** B0h browser RED→GREEN, task-specific remote commit/push
+  and exact-HEAD CI await delivery. Keep `IN_PROGRESS`, not `DONE`.
 
 ## T0 evidence
 
