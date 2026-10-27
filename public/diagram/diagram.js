@@ -145,7 +145,7 @@ function N(e) {
 }
 // node_modules/lodash-es/toNumber.js
 var ue = NaN, de = /^[-+]0x[0-9a-f]+$/i, fe = /^0b[01]+$/i, pe = /^0o[0-7]+$/i, me = parseInt;
-function P(e) {
+function he(e) {
 	if (typeof e == "number") return e;
 	if (te(e)) return ue;
 	if (N(e)) {
@@ -158,7 +158,7 @@ function P(e) {
 	return n || pe.test(e) ? me(e.slice(2), n ? 2 : 8) : de.test(e) ? ue : +e;
 }
 // node_modules/lodash-es/identity.js
-function he(e) {
+function P(e) {
 	return e;
 }
 // node_modules/lodash-es/isFunction.js
@@ -263,7 +263,7 @@ var Ke = function() {
 		value: Ge(t),
 		writable: !0
 	});
-} : he);
+} : P);
 // node_modules/lodash-es/_arrayEach.js
 function Je(e, t) {
 	for (var n = -1, r = e == null ? 0 : e.length; ++n < r && t(e[n], n, e) !== !1;);
@@ -338,7 +338,7 @@ function lt(e, t, n) {
 }
 // node_modules/lodash-es/_baseRest.js
 function ut(e, t) {
-	return qe(lt(e, t, he), e + "");
+	return qe(lt(e, t, P), e + "");
 }
 // node_modules/lodash-es/isLength.js
 var dt = 9007199254740991;
@@ -1004,7 +1004,7 @@ function Xi(e, t, n) {
 }
 // node_modules/lodash-es/clamp.js
 function Zi(e, t, n) {
-	return n === void 0 && (n = t, t = void 0), n !== void 0 && (n = P(n), n = n === n ? n : 0), t !== void 0 && (t = P(t), t = t === t ? t : 0), Xi(P(e), t, n);
+	return n === void 0 && (n = t, t = void 0), n !== void 0 && (n = he(n), n = n === n ? n : 0), t !== void 0 && (t = he(t), t = t === t ? t : 0), Xi(he(e), t, n);
 }
 // node_modules/lodash-es/_stackClear.js
 function Qi() {
@@ -1471,7 +1471,7 @@ function ac(e) {
 }
 // node_modules/lodash-es/_baseIteratee.js
 function oc(e) {
-	return typeof e == "function" ? e : e == null ? he : typeof e == "object" ? j(e) ? nc(e[0], e[1]) : Xs(e) : ac(e);
+	return typeof e == "function" ? e : e == null ? P : typeof e == "object" ? j(e) ? nc(e[0], e[1]) : Xs(e) : ac(e);
 }
 // node_modules/lodash-es/_arrayAggregator.js
 function sc(e, t, n, r) {
@@ -1528,7 +1528,7 @@ var hc = function() {
 function yc(e, t, n) {
 	var r, i, a, o, s, c, l = 0, u = !1, d = !1, f = !0;
 	if (typeof e != "function") throw TypeError(gc);
-	t = P(t) || 0, N(n) && (u = !!n.leading, d = "maxWait" in n, a = d ? _c(P(n.maxWait) || 0, t) : a, f = "trailing" in n ? !!n.trailing : f);
+	t = he(t) || 0, N(n) && (u = !!n.leading, d = "maxWait" in n, a = d ? _c(he(n.maxWait) || 0, t) : a, f = "trailing" in n ? !!n.trailing : f);
 	function p(t) {
 		var n = r, a = i;
 		return r = i = void 0, l = t, o = e.apply(a, n), o;
@@ -1707,7 +1707,7 @@ function Zc(e, t, n) {
 }
 // node_modules/lodash-es/max.js
 function Qc(e) {
-	return e && e.length ? Zc(e, he, zc) : void 0;
+	return e && e.length ? Zc(e, P, zc) : void 0;
 }
 // node_modules/lodash-es/merge.js
 var $c = ht(function(e, t, n) {
@@ -1765,7 +1765,7 @@ function al(e, t, n) {
 		return j(e) ? function(t) {
 			return lr(t, e.length === 1 ? e[0] : e);
 		} : e;
-	}) : [he];
+	}) : [P];
 	var r = -1;
 	return t = ne(t, nn(oc)), nl(Ic(e, function(e, n, i) {
 		return {
@@ -1816,7 +1816,7 @@ function ml(e, t, n) {
 		}
 		return i;
 	}
-	return fl(e, t, he, n);
+	return fl(e, t, P, n);
 }
 // node_modules/lodash-es/sortedIndex.js
 function hl(e, t) {
@@ -22852,8 +22852,8 @@ var lT = /* @__PURE__ */ o(((e, t) => {
 	var n = aD(), r = mE(), i = hE(), a = i && i.isSet;
 	t.exports = a ? r(a) : n;
 })), sD = /* @__PURE__ */ o(((e, t) => {
-	var n = QT(), r = $T(), i = nE(), a = wE(), o = OE(), s = kE(), c = AE(), l = PE(), u = RE(), d = BE(), f = VE(), p = KE(), m = qE(), h = eD(), g = nD(), _ = cE(), v = uE(), y = iD(), b = DT(), x = oD(), S = CE(), C = DE(), w = 1, T = 2, E = 4, D = "[object Arguments]", O = "[object Array]", k = "[object Boolean]", A = "[object Date]", ee = "[object Error]", te = "[object Function]", ne = "[object GeneratorFunction]", j = "[object Map]", re = "[object Number]", M = "[object Object]", ie = "[object RegExp]", ae = "[object Set]", oe = "[object String]", se = "[object Symbol]", ce = "[object WeakMap]", le = "[object ArrayBuffer]", N = "[object DataView]", ue = "[object Float32Array]", de = "[object Float64Array]", fe = "[object Int8Array]", pe = "[object Int16Array]", me = "[object Int32Array]", P = "[object Uint8Array]", he = "[object Uint8ClampedArray]", ge = "[object Uint16Array]", _e = "[object Uint32Array]", F = {};
-	F[D] = F[O] = F[le] = F[N] = F[k] = F[A] = F[ue] = F[de] = F[fe] = F[pe] = F[me] = F[j] = F[re] = F[M] = F[ie] = F[ae] = F[oe] = F[se] = F[P] = F[he] = F[ge] = F[_e] = !0, F[ee] = F[te] = F[ce] = !1;
+	var n = QT(), r = $T(), i = nE(), a = wE(), o = OE(), s = kE(), c = AE(), l = PE(), u = RE(), d = BE(), f = VE(), p = KE(), m = qE(), h = eD(), g = nD(), _ = cE(), v = uE(), y = iD(), b = DT(), x = oD(), S = CE(), C = DE(), w = 1, T = 2, E = 4, D = "[object Arguments]", O = "[object Array]", k = "[object Boolean]", A = "[object Date]", ee = "[object Error]", te = "[object Function]", ne = "[object GeneratorFunction]", j = "[object Map]", re = "[object Number]", M = "[object Object]", ie = "[object RegExp]", ae = "[object Set]", oe = "[object String]", se = "[object Symbol]", ce = "[object WeakMap]", le = "[object ArrayBuffer]", N = "[object DataView]", ue = "[object Float32Array]", de = "[object Float64Array]", fe = "[object Int8Array]", pe = "[object Int16Array]", me = "[object Int32Array]", he = "[object Uint8Array]", P = "[object Uint8ClampedArray]", ge = "[object Uint16Array]", _e = "[object Uint32Array]", F = {};
+	F[D] = F[O] = F[le] = F[N] = F[k] = F[A] = F[ue] = F[de] = F[fe] = F[pe] = F[me] = F[j] = F[re] = F[M] = F[ie] = F[ae] = F[oe] = F[se] = F[he] = F[P] = F[ge] = F[_e] = !0, F[ee] = F[te] = F[ce] = !1;
 	function ve(e, t, O, k, A, ee) {
 		var j, re = t & w, ie = t & T, ae = t & E;
 		if (O && (j = A ? O(e, k, A, ee) : O(e)), j !== void 0) return j;
@@ -26817,7 +26817,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 		try {
 			localStorage.setItem("code-anime-layout", p);
 		} catch {}
-		g(), ne = "", Te(w);
+		g(), ne = "", Ee(w);
 	});
 	m.className = "diagram-orientation";
 	let h = $("span", "", "diagram-layout-icon");
@@ -26826,7 +26826,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 		let t = p === "vertical" ? "Horizontal layout" : "Vertical layout";
 		m.title = t, m.setAttribute("aria-label", t), h.style.transform = p === "vertical" ? "" : "rotate(90deg)", e.dataset.direction = p;
 	}
-	g(), d.append(m, f("−", "Zoom out", () => xe(-.15)), f("Fit", "Fit diagram", () => be()), f("+", "Zoom in", () => xe(.15)));
+	g(), d.append(m, f("−", "Zoom out", () => Se(-.15)), f("Fit", "Fit diagram", () => xe()), f("+", "Zoom in", () => Se(.15)));
 	let _ = $("div", "", "diagram-pan-buttons");
 	_.setAttribute("role", "group"), _.setAttribute("aria-label", "Pan diagram");
 	for (let [e, t, n] of [
@@ -26873,7 +26873,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 		let n = M.get(e)?.getData();
 		O.hidden = !n, n ? (A(), O.replaceChildren($("span", n.label), f("Read", "Read selected node", () => {
 			y.zoomTo(1), y.centerCell(M.get(e));
-		}), f(n.level === "step" ? "Source" : "Expand / collapse", "Open selected node", () => F(M.get(e).getData())), f("Values", "Toggle selected node values", () => pe(e)), f("Inspect", "Inspect selected node", () => t(n.symbol, n.callId)), f("Close", "Close selected node actions", () => {
+		}), f(n.level === "step" ? "Source" : "Expand / collapse", "Open selected node", () => ve(M.get(e).getData())), f("Values", "Toggle selected node values", () => me(e)), f("Inspect", "Inspect selected node", () => t(n.symbol, n.callId)), f("Close", "Close selected node actions", () => {
 			k(void 0), A(), c.focus({ preventScroll: !0 });
 		}))) : (D = void 0, O.replaceChildren());
 	}
@@ -26908,10 +26908,10 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			"+",
 			"=",
 			"-"
-		].includes(e.key) && (e.preventDefault(), e.stopPropagation(), xe(e.key === "-" ? -.15 : .15));
+		].includes(e.key) && (e.preventDefault(), e.stopPropagation(), Se(e.key === "-" ? -.15 : .15));
 	}), y.on("scale", () => e.classList.toggle("diagram-overview", y.zoom() < .6));
-	let ne = "", j = -1, re = !1, M = /* @__PURE__ */ new Map(), ie = /* @__PURE__ */ new Map(), ae = [], oe = /* @__PURE__ */ new Set(), se = /* @__PURE__ */ new Set(), ce = /* @__PURE__ */ new Map(), le = /* @__PURE__ */ new Map(), N, ue = /* @__PURE__ */ new Set(), de = (e) => ue.has(e) ? 160 : 0;
-	function fe(e) {
+	let ne = "", j = -1, re = !1, M = /* @__PURE__ */ new Map(), ie = /* @__PURE__ */ new Map(), ae = [], oe = /* @__PURE__ */ new Set(), se = /* @__PURE__ */ new Set(), ce = /* @__PURE__ */ new Map(), le = /* @__PURE__ */ new Map(), N, ue = /* @__PURE__ */ new Set(), de = 0, fe = (e) => ue.has(e) ? 160 : 0;
+	function pe(e) {
 		let t = M.get(e), n = t && y.findViewByCell(t)?.container.querySelector(".diagram-values-summary");
 		if (!n) return;
 		let r = n.getBoundingClientRect(), i = c.getBoundingClientRect(), a = i.left + 12, o = i.right - 12, s = i.top + 12, l = i.bottom - 12, u = document.querySelector(".playback-dock")?.getBoundingClientRect();
@@ -26919,17 +26919,21 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 		let d = r.left < a ? a - r.left : r.right > o ? o - r.right : 0, f = r.top < s ? s - r.top : r.bottom > l ? l - r.bottom : 0;
 		(d || f) && te(d, f);
 	}
-	let pe = (e) => {
-		r?.(), ue.has(e) ? ue.delete(e) : ue.add(e), Te(w, !1), requestAnimationFrame(() => {
-			re || fe(e);
+	let me = (e) => {
+		r?.();
+		let t = !ue.has(e);
+		t ? ue.add(e) : ue.delete(e);
+		let n = ++de;
+		Ee(w, !1), t && requestAnimationFrame(() => {
+			!re && n === de && ue.has(e) && pe(e);
 		});
-	}, me, P = null, he = [], ge = $("div", "", "diagram-navigation");
-	i.append(ge);
-	function _e(e, t = !1) {
-		r?.(), t ? he = [] : he.push(P), P = e, T = 0, E = !1, ne = "", Te(w), ge.querySelector("button")?.focus({ preventScroll: !0 });
+	}, he, P = null, ge = [], _e = $("div", "", "diagram-navigation");
+	i.append(_e);
+	function F(e, t = !1) {
+		r?.(), t ? ge = [] : ge.push(P), P = e, T = 0, E = !1, ne = "", Ee(w), _e.querySelector("button")?.focus({ preventScroll: !0 });
 	}
-	function F(t) {
-		if (t.level === "class") _e({
+	function ve(t) {
+		if (t.level === "class") F({
 			kind: "class",
 			id: t.owner
 		});
@@ -26938,24 +26942,24 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			if (w.mode === "map" && !P) {
 				r?.();
 				let n = M.has(t.id) ? t.id : t.callId, i = (t) => [...e.querySelectorAll(".diagram-card")].find((e) => e.dataset.nodeId === t)?.getBoundingClientRect(), a = i(n);
-				se.has(t.id) ? se.delete(t.id) : se.add(t.id), ne = "", Te(w, !1);
+				se.has(t.id) ? se.delete(t.id) : se.add(t.id), ne = "", Ee(w, !1);
 				let o = M.get(n) ?? M.get(t.callId);
 				if (o && a) {
 					let e = i(o.id);
 					e && te(a.x - e.x, a.y - e.y), k(o.id);
 				}
-			} else _e({
+			} else F({
 				kind: "method",
 				id: t.callId
 			});
 		} else n(t.index);
 	}
-	function ve(e, t = 1) {
-		return t < 0 ? me.previous(e, P) : me.next(e, P);
+	function ye(e, t = 1) {
+		return t < 0 ? he.previous(e, P) : he.next(e, P);
 	}
-	let ye = $("div", "", "diagram-groups");
-	i.append(ye);
-	function be() {
+	let be = $("div", "", "diagram-groups");
+	i.append(be);
+	function xe() {
 		if (!re && c.clientWidth && c.clientHeight && y.getNodes().length && (y.resize(c.clientWidth, c.clientHeight), y.zoomToFit({
 			padding: 24,
 			minScale: .9,
@@ -26972,18 +26976,18 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			}
 		}
 	}
-	function xe(e) {
+	function Se(e) {
 		y.zoomTo(Math.max(.25, Math.min(1.6, y.zoom() + e)));
 	}
-	let Se = !1, Ce = new ResizeObserver(() => {
+	let Ce = !1, we = new ResizeObserver(() => {
 		if (re || !c.clientWidth || !c.clientHeight) return;
 		y.resize(c.clientWidth, c.clientHeight);
-		let e = !Se;
-		Se = !0, Te(w, e);
+		let e = !Ce;
+		Ce = !0, Ee(w, e);
 	});
-	Ce.observe(c);
-	function we(e, t = !1) {
-		b = e, x = e.trace?.events ?? [], me = FA(x, e.trace?.sourceFiles), N = UA(e), t || (P = null, he = [], se.clear(), ue.clear(), ce.clear(), le.clear(), D = void 0, O.hidden = !0, O.replaceChildren()), S = NA(x).invocations, C = IA(x, S), S.length || (S = [...new Set(e.steps.flatMap((e) => [e.from, e.to]))].map((t) => ({
+	we.observe(c);
+	function Te(e, t = !1) {
+		++de, b = e, x = e.trace?.events ?? [], he = FA(x, e.trace?.sourceFiles), N = UA(e), t || (P = null, ge = [], se.clear(), ue.clear(), ce.clear(), le.clear(), D = void 0, O.hidden = !0, O.replaceChildren()), S = NA(x).invocations, C = IA(x, S), S.length || (S = [...new Set(e.steps.flatMap((e) => [e.from, e.to]))].map((t) => ({
 			callId: t,
 			symbol: t,
 			methodName: t.split(/[.:]/).at(-1),
@@ -26992,7 +26996,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			certainty: "unverified"
 		}))), ne = "", j = -1, T = 0, E = !1, oe.clear();
 	}
-	function Te(i = {}, s = !0) {
+	function Ee(i = {}, s = !0) {
 		if (!b || re) return;
 		let l = document.activeElement, m = l?.closest(".diagram-card"), h = e.contains(l) ? m ? `.diagram-card[data-node-id="${CSS.escape(m.dataset.nodeId)}"] ${l.hasAttribute("aria-label") ? `[aria-label="${CSS.escape(l.getAttribute("aria-label"))}"]` : "." + l.className}` : l.hasAttribute("aria-label") ? `button[aria-label="${CSS.escape(l.getAttribute("aria-label"))}"]` : void 0 : void 0, g = w.mode;
 		w = {
@@ -27003,29 +27007,29 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			duration: 500,
 			...i
 		};
-		let { mode: _, cursor: O, follow: ee, reducedMotion: fe, duration: ve } = w;
-		g && g !== _ && (P = null, he = [], ne = ""), c.dataset.motion = fe ? "reduced" : "full", c.style.setProperty("--diagram-duration", `${Math.max(100, ve)}ms`), (O !== j || g !== _) && (E = !1);
-		let xe = x[Math.max(0, O - 1)], Se = S.find((e) => e.callSiteIndex === O)?.callId ?? xe?.callId ?? b.steps[Math.max(0, O - 1)]?.to, Ce = p === "vertical", we = [], Ee = [], De = new Map(S.map((e) => [e.callId, e])), Oe = PA(S, x), ke = Oe.byCall.get(Se);
-		ge.replaceChildren(), x.length && _ === "map" ? se.size && ge.append(f("Collapse methods", "Collapse expanded methods", () => {
-			r?.(), se.clear(), ne = "", Te(w);
-		})) : x.length && (ge.append(f("Classes", "Show class-level diagram", () => _e({ kind: "classes" }, !0))), P && (ge.append(f("↑ Collapse", "Collapse diagram level", () => {
-			r?.(), P = he.pop() ?? null, T = 0, E = !1, ne = "", Te(w), ge.querySelector("button")?.focus({ preventScroll: !0 });
-		})), ge.append(f("All steps", "Show all prepared steps", () => _e(null, !0)))));
+		let { mode: _, cursor: O, follow: ee, reducedMotion: de, duration: pe } = w;
+		g && g !== _ && (P = null, ge = [], ne = ""), c.dataset.motion = de ? "reduced" : "full", c.style.setProperty("--diagram-duration", `${Math.max(100, pe)}ms`), (O !== j || g !== _) && (E = !1);
+		let ye = x[Math.max(0, O - 1)], Se = S.find((e) => e.callSiteIndex === O)?.callId ?? ye?.callId ?? b.steps[Math.max(0, O - 1)]?.to, Ce = p === "vertical", we = [], Te = [], De = new Map(S.map((e) => [e.callId, e])), Oe = PA(S, x), ke = Oe.byCall.get(Se);
+		_e.replaceChildren(), x.length && _ === "map" ? se.size && _e.append(f("Collapse methods", "Collapse expanded methods", () => {
+			r?.(), se.clear(), ne = "", Ee(w);
+		})) : x.length && (_e.append(f("Classes", "Show class-level diagram", () => F({ kind: "classes" }, !0))), P && (_e.append(f("↑ Collapse", "Collapse diagram level", () => {
+			r?.(), P = ge.pop() ?? null, T = 0, E = !1, ne = "", Ee(w), _e.querySelector("button")?.focus({ preventScroll: !0 });
+		})), _e.append(f("All steps", "Show all prepared steps", () => F(null, !0)))));
 		let Ae, je;
 		if (P) {
-			if (Ae = (P.kind === "classes" ? me.classes : P.kind === "class" ? me.methods(P.id) : me.flowSteps(P.id)).map((e) => ({
+			if (Ae = (P.kind === "classes" ? he.classes : P.kind === "class" ? he.methods(P.id) : he.flowSteps(P.id)).map((e) => ({
 				...e,
 				level: e.kind,
 				kind: e.kind === "step" ? e.event.kind : e.kind,
 				expandLabel: e.kind === "class" ? "Expand class " + e.owner : e.kind === "step" ? "Go to source step " + e.index : "Expand method " + e.symbol,
 				expandable: e.kind !== "step",
 				value: e.kind === "class" ? `${e.count} method invocations` : YA(e.event),
-				active: O > 0 && (e.kind === "class" ? e.owner === me.owner(Se) : e.kind === "method" ? P.kind === "class" ? Se === e.callId : me.contains(Se, e.callId) : e.index === O)
+				active: O > 0 && (e.kind === "class" ? e.owner === he.owner(Se) : e.kind === "method" ? P.kind === "class" ? Se === e.callId : he.contains(Se, e.callId) : e.index === O)
 			})), ee && !E) {
 				let e = Ae.findIndex((e) => e.active);
 				e >= 0 && (T = Math.floor(e / JA));
 			}
-			T = Math.max(0, Math.min(T, Math.ceil(Ae.length / JA) - 1)), we = Ae.slice(T * JA, (T + 1) * JA), Ee = we.slice(1).map((e, t) => [we[t].id, e.id]), a.textContent = P.kind === "classes" ? "Classes / modules" : P.kind === "class" ? P.id : (De.get(P.id)?.symbol ?? P.id) + " · " + P.id, o.textContent = P.kind === "classes" ? "Class-level playback · expand a class" : P.kind === "class" ? "Method-level playback · expand an invocation" : "Source-step playback · expand nested calls", o.textContent += " · arrows: " + (P.kind === "method" ? "prepared step order" : "first appearance order, not calls"), O > 0 && !Ae.some((e) => e.active) && (o.textContent += " · cursor outside this scope");
+			T = Math.max(0, Math.min(T, Math.ceil(Ae.length / JA) - 1)), we = Ae.slice(T * JA, (T + 1) * JA), Te = we.slice(1).map((e, t) => [we[t].id, e.id]), a.textContent = P.kind === "classes" ? "Classes / modules" : P.kind === "class" ? P.id : (De.get(P.id)?.symbol ?? P.id) + " · " + P.id, o.textContent = P.kind === "classes" ? "Class-level playback · expand a class" : P.kind === "class" ? "Method-level playback · expand an invocation" : "Source-step playback · expand nested calls", o.textContent += " · arrows: " + (P.kind === "method" ? "prepared step order" : "first appearance order, not calls"), O > 0 && !Ae.some((e) => e.active) && (o.textContent += " · cursor outside this scope");
 		} else {
 			we = Oe.functions.filter((e) => !oe.has(e.invocations[0].className)).map((e) => {
 				let t = O > 0 && e.id === ke;
@@ -27035,7 +27039,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 					id: e.id,
 					invocations: e.invocations,
 					onInvocation: (t) => {
-						r?.(), ce.set(e.id, t), n(De.get(t).index), Te(w, !1);
+						r?.(), ce.set(e.id, t), n(De.get(t).index), Ee(w, !1);
 					},
 					index: o ? O : i.index,
 					symbol: i.symbol,
@@ -27043,31 +27047,31 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 					callId: i.callId,
 					group: i.className,
 					file: a?.source?.file ?? "Source unavailable",
-					source: t && xe?.callId === i.callId ? xe.source : a?.source,
+					source: t && ye?.callId === i.callId ? ye.source : a?.source,
 					kind: "function",
-					certainty: o ? xe?.certainty : i.certainty,
-					value: YA(o ? xe : a),
+					certainty: o ? ye?.certainty : i.certainty,
+					value: YA(o ? ye : a),
 					inputs: a?.inputs ?? x[i.callSiteIndex - 1]?.inputs,
 					expanded: se.has(e.id),
-					steps: se.has(e.id) ? me.steps(i.callId).filter((e) => e.kind === "step" && (e.event.kind !== "enter" || e.certainty === "unresolved")) : [],
+					steps: se.has(e.id) ? he.steps(i.callId).filter((e) => e.kind === "step" && (e.event.kind !== "enter" || e.certainty === "unresolved")) : [],
 					cursor: O,
 					active: t
 				};
 			});
 			let e = new Set(we.map((e) => e.id));
-			Ee = Oe.relationships.filter((t) => e.has(t.source) && e.has(t.target)).map((e) => [
+			Te = Oe.relationships.filter((t) => e.has(t.source) && e.has(t.target)).map((e) => [
 				e.source,
 				e.target,
 				e.callId
 			]);
 		}
 		if (!P && _ === "map" && (ne === "" || g !== _)) {
-			ye.replaceChildren();
+			be.replaceChildren();
 			for (let e of new Set(S.map((e) => e.className))) {
 				let t = f(e, "Toggle group " + e, () => {
-					oe.has(e) ? oe.delete(e) : oe.add(e), ne = "", Te(w);
+					oe.has(e) ? oe.delete(e) : oe.add(e), ne = "", Ee(w);
 				});
-				t.setAttribute("aria-pressed", String(!oe.has(e))), ye.append(t);
+				t.setAttribute("aria-pressed", String(!oe.has(e))), be.append(t);
 			}
 		}
 		let Me = _ === "map" && !P, Ne = /* @__PURE__ */ new Map(), Pe = /* @__PURE__ */ new Map();
@@ -27109,7 +27113,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 					targetAspectRatio: Math.max(1.8, Math.min(2.4, c.clientWidth / Math.max(1, c.clientHeight))),
 					cursor: ee ? O : 0,
 					visits: le,
-					extraHeight: (t) => de(JSON.stringify([
+					extraHeight: (t) => fe(JSON.stringify([
 						"control",
 						e.id,
 						t
@@ -27160,7 +27164,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 						visits: t.node.iterations,
 						visit: t.visit,
 						onVisit: (e) => {
-							r?.(), le.set(t.node.id, e), n(t.node.iterations[e].indices[0]), ne = "", Te(w, !1);
+							r?.(), le.set(t.node.id, e), n(t.node.iterations[e].indices[0]), ne = "", Ee(w, !1);
 						}
 					});
 				}
@@ -27203,7 +27207,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			}
 		}
 		for (let e of we) {
-			e.headerHeight = KA + de(e.id) + (e.invocations?.length > 1 ? 36 : 0);
+			e.headerHeight = KA + fe(e.id) + (e.invocations?.length > 1 ? 36 : 0);
 			let t = Fe.filter((t) => t.parentId === e.id);
 			if (e.controlLayout) {
 				for (let n of t) n.offsetY = e.headerHeight + 16 + n.layoutY;
@@ -27211,12 +27215,12 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 				continue;
 			}
 			let n = [];
-			for (let e of t) e.height = KA + de(e.id), n[e.row] = Math.max(n[e.row] ?? 0, e.height);
+			for (let e of t) e.height = KA + fe(e.id), n[e.row] = Math.max(n[e.row] ?? 0, e.height);
 			for (let r of t) r.offsetY = e.headerHeight + 16 + n.slice(0, r.row).reduce((e, t) => e + t + qA, 0);
 			e.height = e.headerHeight + (t.length ? n.reduce((e, t) => e + t + qA, 16) : 0);
 		}
 		let Be = [...we, ...Fe];
-		for (let e of Be) e.inline = Me, e.valuesOpen = ue.has(e.id), e.onValues = pe;
+		for (let e of Be) e.inline = Me, e.valuesOpen = ue.has(e.id), e.onValues = me;
 		let Ve = JSON.stringify([
 			_,
 			Ce,
@@ -27228,7 +27232,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 				e.expanded
 			]),
 			[...Ne.values()],
-			Ee
+			Te
 		]), He = Ve !== ne;
 		if (He) {
 			ne = Ve, y.clearCells(), M = /* @__PURE__ */ new Map(), ie = /* @__PURE__ */ new Map(), ae = [];
@@ -27247,7 +27251,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			for (let t of Ne.values()) e.setNode(t.id, {});
 			for (let t of Ne.values()) t.parent && e.setParent(t.id, t.parent);
 			for (let [t, n] of Pe) e.setParent(t, n);
-			for (let [t, n, r] of Ee) {
+			for (let [t, n, r] of Te) {
 				let i = Me ? (C.get(r) ?? []).map((e) => e.label) : [];
 				e.setEdge(t, n, i.length ? {
 					width: Math.max(...i.flatMap((e) => e.split("\n").map((e) => e.length * 6))) + 16,
@@ -27303,7 +27307,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 						...r,
 						onSelect: t,
 						onSeek: n,
-						onExpand: F
+						onExpand: ve
 					}
 				});
 				M.set(r.id, a), Pe.has(r.id) && ie.get(Pe.get(r.id)).addChild(a);
@@ -27321,7 +27325,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 						...e,
 						onSelect: t,
 						onSeek: n,
-						onExpand: F
+						onExpand: ve
 					}
 				});
 				r.addChild(a), M.set(e.id, a);
@@ -27383,7 +27387,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 				...e,
 				kind: e.kind ?? "step-order"
 			}));
-			for (let [e, t, n] of [...Ie, ...Ee]) {
+			for (let [e, t, n] of [...Ie, ...Te]) {
 				let i = !!M.get(t).getData().parentId, a = n ?? t, o = De.get(a);
 				if (Me && !i && M.get(e).getData().expanded && o?.callSiteIndex && !r.has(o.callSiteIndex)) continue;
 				let s = Me && !i ? r.get(o?.callSiteIndex) ?? e : e, c = Me && !i ? r.get(o?.index) ?? t : t;
@@ -27511,12 +27515,12 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 				for (let e of d) t.append($("li", e));
 				v.append(e, $("p", "Collapse unrelated methods or filter owners to free routing space. Inspect a method for its prepared return value."), t);
 			}
-			D && k(D), s && be();
+			D && k(D), s && xe();
 		} else if (O !== j) for (let e of Be) M.get(e.id)?.setData({
 			...e,
 			onSelect: t,
 			onSeek: n,
-			onExpand: F
+			onExpand: ve
 		});
 		for (let e of Ne.values()) ie.get(e.id)?.setData({
 			...e,
@@ -27524,11 +27528,11 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 		});
 		let Ue = Fe.find((e) => e.active && e.level === "step") ?? we.find((e) => e.active), We = new Set(Be.filter((e) => e.active).map((e) => e.id));
 		for (let e of ae) {
-			let t = e.getData().kind === "return", n = t ? e.getData().index === O : Me && e.getData().kind === "call" ? O > 0 && xe?.kind !== "return" && e.getData().callId === Se : We.has(e.getTargetCellId());
-			e.attr("line/stroke", n ? "#4f46e5" : "#64748b"), e.attr("line/strokeWidth", n ? 2.5 : 1.5), e.attr("line/class", n && (t || !Me) && !fe ? "diagram-edge-active" : ""), e.attr("line/strokeDasharray", t || e.getData().inactive || !Me && n && !fe ? "5 7" : "");
+			let t = e.getData().kind === "return", n = t ? e.getData().index === O : Me && e.getData().kind === "call" ? O > 0 && ye?.kind !== "return" && e.getData().callId === Se : We.has(e.getTargetCellId());
+			e.attr("line/stroke", n ? "#4f46e5" : "#64748b"), e.attr("line/strokeWidth", n ? 2.5 : 1.5), e.attr("line/class", n && (t || !Me) && !de ? "diagram-edge-active" : ""), e.attr("line/strokeDasharray", t || e.getData().inactive || !Me && n && !de ? "5 7" : "");
 		}
 		if (A(), !He && ee && O !== j && Ue) {
-			if (P) be();
+			if (P) xe();
 			else {
 				let e = M.get(Ue.id), t = y.localToClient(e.getBBox()), n = c.getBoundingClientRect(), r = d.getBoundingClientRect();
 				if (t.x + t.width > r.left && t.x < r.right && t.y + t.height > r.top || t.x < n.left + 12 || t.y < n.top + 12 || t.x + t.width > n.right - 12 || t.y + t.height > n.bottom - 12) {
@@ -27541,7 +27545,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 		if (j = O, He || !u.childNodes.length) {
 			if (u.replaceChildren(), P) {
 				let e = Ae?.length ?? je ?? b.steps.length, t = (e) => {
-					T += e, E = !0, Te(w);
+					T += e, E = !0, Ee(w);
 				}, n = f("‹", "Previous diagram page", () => t(-1)), r = f("›", "Next diagram page", () => t(1));
 				n.disabled = T === 0, r.disabled = (T + 1) * JA >= e, u.append(n, $("span", e ? `${T * JA + 1}–${Math.min((T + 1) * JA, e)} / ${e}` : "No steps"), r);
 			} else u.append($("span", `${we.length} visible · drag to pan`));
@@ -27551,16 +27555,16 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			(t && !t.disabled ? t : d.querySelector("button[aria-label=\"Fit diagram\"]")).focus({ preventScroll: !0 });
 		}
 	}
-	function Ee() {
-		re = !0, Ce.disconnect(), e.removeEventListener("focusin", ee), y.dispose(), e.replaceChildren();
+	function De() {
+		re = !0, we.disconnect(), e.removeEventListener("focusin", ee), y.dispose(), e.replaceChildren();
 	}
 	return {
-		setFlow: we,
-		render: Te,
-		zoom: xe,
-		fit: be,
-		dispose: Ee,
-		advance: ve
+		setFlow: Te,
+		render: Ee,
+		zoom: Se,
+		fit: xe,
+		dispose: De,
+		advance: ye
 	};
 }
 export { XA as createDiagram };
