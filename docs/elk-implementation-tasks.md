@@ -12,8 +12,8 @@ code must never execute to construct animations.
 | B0b  | Restore map navigation and continuation                            | B0a; behavior-contract evidence  | IMPLEMENTED_CANDIDATE — browser gate RED                   |
 | B0c  | Preserve truthful typed call/return ancestry                       | B0b; mock/source identity        | IMPLEMENTED_CANDIDATE — browser gate RED                   |
 | B0d  | True Fit and reachable source-step navigation                      | B0b; B0e, B0g UX/geometry gates  | IMPLEMENTED_CANDIDATE — browser gate RED                   |
-| B0e  | Set Fit overview versus immediate-label readability contract       | B0d; explicit product choice     | WAITING_ON_OWNER                                           |
-| B0f  | Set literal-source versus simulated-label display contract         | B0c; explicit product choice     | WAITING_ON_OWNER                                           |
+| B0e  | Preserve overview Fit; focus/zoom then readable step navigation    | B0d; owner choice approved       | READY_AFTER_DECISION_LEDGER — B0e first                    |
+| B0f  | Show literal source first, explicitly simulated event second       | B0c; B0e commit; owner approved  | READY_AFTER_B0e — provenance/safety gates                  |
 | B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | IN_PROGRESS — test patch; Chromium gate pending            |
 | B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IN_PROGRESS — test-only patch; Chromium gate pending       |
 | B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DONE — DIAGNOSTIC ONLY; T7 bug still open                  |
@@ -164,6 +164,49 @@ release, publish or remove this task ledger without owner authorization.
   diagnostic**, contingent on this separate status commit being pushed and
   verified. No storage migration or browser UI acceptance has been performed;
   **T7 remains PAUSED/WAITING_ON_OWNER** for remedial design approval.
+
+### Owner-resolved B0e/B0f contracts — implementation gate
+
+The owner explicitly selected the following options after the Council's
+five-advisor, five-peer, EDO challenge/rebuttal review. These **authorize the
+scoped existing-MVP B0e and B0f fixes**, not the optional ELK redesign.
+
+- **B0e — whole-map Fit / accessible readable detail (first):** preserve
+  `Fit diagram` as an overview of the entire prepared map, including true
+  branch/loop/return structure. Do **not** promise immediate >=12px labels at
+  overview scale: the dense fixture measured 6.73px desktop / 2.15px mobile.
+  Keep keyboard selection, an explicit `Read selected node` focus/zoom path,
+  and source Step 5 reachable by unforced pointer and keyboard. **After
+  focus/zoom**, assert labels >=12px, actual target inside the visible surface
+  and not intercepted; repeated Fit/read, source cursor, return arrows, Values
+  and playback must remain intact. Preserve or strengthen browser assertions;
+  never simply delete the >=12px check. Responsible role: camera/accessibility
+  QA with independent review. Inspect `public/diagram.js:342–399,541–555`,
+  `public/diagram.css:436–440` and `tests/browser/player.spec.ts:994–1005`.
+- **B0f — source/mock provenance (second, after B0e delivery):** primary card
+  label displays the literal source text when evidence exists; a separate,
+  clearly marked **Simulated** secondary label retains mock event identity.
+  Preserve `event.id`, invocation IDs, repeated same-line calls, typed returns,
+  truthful source fallback, source cursor and existing mock values. Render
+  arbitrary source text via safe text sinks (`textContent`), not HTML parsing.
+  Add browser negative controls for duplicate invocation/source lines, absent
+  source and markup-looking text. Responsible role: semantic-card engineer with
+  independent QA/security review. Inspect `public/diagram.js:928–947` and
+  `public/diagram-drilldown.js:44–69`.
+- **Baseline:** exact-code [Actions 40544366684](https://github.com/EmpRider/code-anime/actions/runs/40544366684)
+  at `433e6d26e0326d14303b5ee176d66012d0b5ba60` passed 4/4 Node/check
+  jobs and 53/57 Chromium cases. Its **only four failures** are the two B0e
+  readability cases and two B0f literal-source/mock-label cases.
+- **Delivery:** publish and remotely verify **this decision-ledger update
+  before source/test edits**. Ship B0e and B0f as distinct task-specific
+  commits with `IN_PROGRESS` whenever any acceptance criterion, especially
+  real Chromium, remains outstanding. Independent review and exact-head CI
+  are mandatory; no release, merge or task-file cleanup is authorized.
+- **ELK T1–T9:** owner chose **Review plan first**; revised
+  `docs/code-anime-elk-reviewed-implementation-plan-2026-10-27.md` has **NOT**
+  received explicit renewed design/implementation approval. All T1–T9 remain
+  PAUSED under `AGENTS.md`, even if B0 browser becomes green. Owner-gated T7
+  preference migration remains separately OPEN.
 
 ## T0 evidence
 
