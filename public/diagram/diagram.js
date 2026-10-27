@@ -27392,19 +27392,20 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 				kind: e.kind ?? "step-order"
 			}));
 			for (let [e, t, n] of [...Ie, ...Te]) {
-				let i = !!M.get(t).getData().parentId, a = n ?? t, o = De.get(a);
+				let i = !!M.get(t).getData().parentId, a = n ?? t, o = De.get(a), s = Me && !i, c = !Me && !i && P?.kind !== "method";
 				if (Me && !i && M.get(e).getData().expanded && o?.callSiteIndex && !r.has(o.callSiteIndex)) continue;
-				let s = Me && !i ? r.get(o?.callSiteIndex) ?? e : e, c = Me && !i ? r.get(o?.index) ?? t : t;
+				let l = Me && !i ? r.get(o?.callSiteIndex) ?? e : e, d = Me && !i ? r.get(o?.index) ?? t : t;
 				if (u.push({
-					source: s,
-					target: c,
-					kind: i ? "step-order" : "call",
-					callId: i ? void 0 : a,
-					index: i ? void 0 : o?.callSiteIndex ?? o?.index,
-					description: i ? void 0 : `Call ${a}: ${o?.parentSymbol ?? e} to ${o?.symbol ?? t} · step ${o?.callSiteIndex ?? o?.index}`
+					source: l,
+					target: d,
+					kind: s ? "call" : c ? "first-appearance" : "step-order",
+					callId: s ? a : void 0,
+					index: s ? o?.callSiteIndex ?? o?.index : void 0,
+					label: c ? "First appearance order—not a call" : void 0,
+					description: s ? `Call ${a}: ${o?.parentSymbol ?? e} to ${o?.symbol ?? t} · step ${o?.callSiteIndex ?? o?.index}` : c ? `First appearance order—not a call: ${e} to ${t}` : void 0
 				}), Me && !i) for (let e of C.get(a) ?? []) u.push({
 					source: r.get(e.index) ?? t,
-					target: s,
+					target: l,
 					kind: "return",
 					callId: a,
 					...e
@@ -27480,7 +27481,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 						line: {
 							stroke: "#64748b",
 							strokeWidth: 1.5,
-							strokeDasharray: e.kind === "return" ? "5 7" : "",
+							strokeDasharray: e.kind === "return" || e.kind === "first-appearance" ? "5 7" : "",
 							targetMarker: {
 								name: "block",
 								width: 7,
@@ -27532,8 +27533,8 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 		});
 		let Ue = Fe.find((e) => e.active && e.level === "step") ?? we.find((e) => e.active), We = new Set(Be.filter((e) => e.active).map((e) => e.id));
 		for (let e of ae) {
-			let t = e.getData().kind === "return", n = t ? e.getData().index === O : Me && e.getData().kind === "call" ? O > 0 && ye?.kind !== "return" && e.getData().callId === Se : We.has(e.getTargetCellId());
-			e.attr("line/stroke", n ? "#4f46e5" : "#64748b"), e.attr("line/strokeWidth", n ? 2.5 : 1.5), e.attr("line/class", n && (t || !Me) && !de ? "diagram-edge-active" : ""), e.attr("line/strokeDasharray", t || e.getData().inactive || !Me && n && !de ? "5 7" : "");
+			let t = e.getData().kind === "return", n = e.getData().kind === "first-appearance", r = n ? !1 : t ? e.getData().index === O : Me && e.getData().kind === "call" ? O > 0 && ye?.kind !== "return" && e.getData().callId === Se : We.has(e.getTargetCellId());
+			e.attr("line/stroke", r ? "#4f46e5" : "#64748b"), e.attr("line/strokeWidth", r ? 2.5 : 1.5), e.attr("line/class", r && (t || !Me) && !de ? "diagram-edge-active" : ""), e.attr("line/strokeDasharray", t || n || e.getData().inactive || !Me && r && !de ? "5 7" : "");
 		}
 		if (A(), !He && ee && O !== j && Ue) {
 			if (P) xe();
