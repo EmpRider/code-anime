@@ -18,6 +18,7 @@ code must never execute to construct animations.
 | B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IN_PROGRESS — test-only patch; Chromium gate pending       |
 | B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DONE — DIAGNOSTIC ONLY; T7 bug still open                  |
 | B0j  | Review accidental trailing README test line                        | B0 gate; owner priority          | LOW_PRIORITY                                               |
+| B0k  | Verify grouped boundaries after method collapse                    | B0f; CI 40553347458              | BLOCKED_ON_COUNCIL — two Chromium failures                 |
 | T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | PAUSED — actionable browser failures under AGENTS.md       |
 | T2   | Pure logical compound topology and truthful execution edges        | T1                               | Pending                                                    |
 | T3   | Real same-origin ELK Worker and distributable package              | B0 gate; dependency/license gate | PAUSED — actionable browser failures under AGENTS.md       |
@@ -27,6 +28,56 @@ code must never execute to construct animations.
 | T7   | Isolate orientation/panel preference keys with migration           | B0 MVP browser gate              | PAUSED — actionable browser failures under AGENTS.md       |
 | T8   | PC-only compact visual clarity and accessibility                   | T6                               | Pending                                                    |
 | T9   | Full mock-trace, performance, and package acceptance               | T1–T8                            | Pending                                                    |
+
+### B0k — full-map boundary contract after collapsing expanded methods (issue discovery only)
+
+- **Task ID / title:** B0k — Verify grouped-boundary visibility and collapse
+  contract. **Priority:** P2 candidate, Council assessment pending.
+  **Responsible role:** TL-assigned diagram-state/test specialist; independent
+  browser QA and Council review. **Dependencies:** B0f provenance delivery and
+  exact-head browser result at `a662ea6f89a1342365a37d60813f715db865ffd5`.
+  This issue record must be remotely verified **before any B0k code/test fix**.
+- **OBSERVED:** [Actions 40553347458](https://github.com/EmpRider/code-anime/actions/runs/40553347458)
+  passed four Windows/Ubuntu Node/check jobs and **61/63 Chromium tests**.
+  Both remaining failures are the same desktop/mobile
+  `full map nests files and owners with synchronized visible mock context`
+  case. After `Collapse expanded methods`, the test at
+  `tests/browser/player.spec.ts:2063` expects
+  `page.locator('.diagram-boundary')` count **0**, while the browser
+  consistently returns **3** (one file group, two owner groups).
+- **EXPECTED / contract under review:** Current test demands no boundaries
+  after collapse, but earlier in the same test it requires one file and two
+  owner boundaries. The collapse control may only hide expanded *method*
+  cards while preserving the still-grouped full map. The intended boundary
+  lifecycle must be verified against product behavior, map navigation,
+  call/return routes, selection/context and existing user-visible contracts
+  before changing any expectation.
+- **Initial source evidence, not a Council decision:** `public/diagram.js`
+  collapse clears expanded state without exiting map mode; file/owner
+  boundaries are created independently of method expansion and rerendered
+  after graph cells are cleared. This plausibly explains the observed three
+  persistent parent boundaries. Production regression versus stale assertion
+  remains under **Council verification**, not presumed resolved.
+- **Scoped reproduction:** Use the exact-head CI browser command
+  `npm run test:browser`; inspect the desktop/mobile full-map case, expand
+  methods, check typed call/return arrows and progress, collapse, and compare
+  file/owner/expanded-method counts and selection/context. Use unforced
+  pointer/keyboard verification and a negative control so a test-only
+  correction cannot mask an actual missing collapse or broken topology.
+- **Affected files/consumers:** `tests/browser/player.spec.ts`, potentially
+  `public/diagram.js` and regenerated `public/diagram/diagram.js` only if
+  source evidence proves a product defect; desktop/mobile grouped-map
+  consumers, source/cursor, expanded cards, selection/context and typed
+  call/return edges.
+- **Acceptance:** Council completes five independent advisor perspectives,
+  anonymized peer-review and EDO challenge/rebuttal, compares narrow
+  contract correction with a production lifecycle fix; the chosen permanent
+  remedy has independent review and real Chromium desktop/mobile regression
+  evidence with non-vacuous semantic assertions. All four Node/check jobs,
+  whole browser suite, build and package gates pass on the exact pushed HEAD.
+  Task status remains `BLOCKED_ON_COUNCIL` until a review verdict and
+  a separate, verified B0k implementation commit. **No source/test change
+  is authorized by this discovery record alone.**
 
 ## 2026-10-27 Council reconciliation and next tasks
 
