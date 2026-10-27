@@ -1557,7 +1557,16 @@ for (const mobile of [false, true]) {
       failed = false;
       await page.getByRole('button', { name: 'Retry loading flow' }).click();
       await expect(page.locator('#progress')).toHaveText('4 / 8');
-      await expect(page.locator('#view-mode')).toHaveValue('map');
+      await expect(page).toHaveURL(/view=map&step=4/);
+      await expect(
+        page.getByRole('button', { name: 'Expand method A.main', exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Toggle group A', exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Open class A details', exact: true }),
+      ).toBeVisible();
       await expect(page.locator('#play')).toBeEnabled();
       await page.locator('#next').click();
       await expect(page).toHaveURL(/view=map&step=5/);
@@ -1570,6 +1579,55 @@ for (const mobile of [false, true]) {
       await page.keyboard.press('Enter');
       await expect(page.locator('#workspace-main')).toBeFocused();
       await expect(page.locator('#snippet')).toHaveAttribute('translate', 'no');
+    });
+    test('map owner drilldown reaches prepared source without losing the cursor or breakpoint', async ({
+      page,
+    }) => {
+      await open(page, 'flow');
+      await seek(page, 4);
+      await show(page, mobile, 'state');
+      await page.locator('#breakpoint').click();
+      await expect(page.locator('#breakpoint')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await show(page, mobile, 'flow');
+      await expect(
+        page.getByRole('button', { name: 'Toggle group A', exact: true }),
+      ).toBeVisible();
+      await page
+        .getByRole('button', { name: 'Open class A details', exact: true })
+        .click();
+      await expect(page.locator('.diagram-heading > strong')).toHaveText('A');
+      await expect(page.locator('#progress')).toHaveText('4 / 8');
+      await page
+        .getByRole('button', { name: 'Expand method A.main', exact: true })
+        .click();
+      await expect(page.locator('.diagram-heading > strong')).toHaveText(
+        'A.main · a',
+      );
+      await expect(page.locator('#progress')).toHaveText('4 / 8');
+      await page
+        .getByRole('button', { name: 'Go to source step 2', exact: true })
+        .click();
+      await expect(page.locator('#progress')).toHaveText('2 / 8');
+      await show(page, mobile, 'code');
+      await expect(page.locator('.code-row[data-line="3"]')).toHaveAttribute(
+        'aria-current',
+        'location',
+      );
+      await seek(page, 4);
+      await show(page, mobile, 'state');
+      await expect(page.locator('#breakpoint')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await show(page, mobile, 'flow');
+      await page
+        .getByRole('button', { name: 'Collapse diagram level', exact: true })
+        .click();
+      await expect(page.locator('.diagram-heading > strong')).toHaveText('A');
+      await expect(page.locator('#progress')).toHaveText('4 / 8');
     });
     test('routing disclosures expose congested connections without hover', async ({
       page,
@@ -1617,10 +1675,7 @@ for (const mobile of [false, true]) {
       await open(page, 'flow');
       await show(page, mobile, 'flow');
       await page
-        .getByRole('button', { name: 'Show class-level diagram', exact: true })
-        .click();
-      await page
-        .getByRole('button', { name: 'Expand class A', exact: true })
+        .getByRole('button', { name: 'Open class A details', exact: true })
         .click();
       await expect(page.locator('.diagram-heading > span')).toContainText(
         'Method-level playback',
@@ -1687,8 +1742,11 @@ for (const mobile of [false, true]) {
         .getByRole('button', { name: 'Collapse diagram level', exact: true })
         .click();
       await expect(page.locator('.diagram-heading > strong')).toHaveText(
-        'Classes / modules',
+        'Execution path',
       );
+      await expect(
+        page.getByRole('button', { name: 'Open class A details', exact: true }),
+      ).toBeVisible();
       await page.locator('#next').click();
       await expect(page.locator('#progress')).toHaveText('7 / 8');
       await show(page, mobile, 'console');
@@ -1827,12 +1885,9 @@ for (const mobile of [false, true]) {
       };
       await assertOrderedLayout();
       await page
-        .getByRole('button', { name: 'Show class-level diagram', exact: true })
+        .getByRole('button', { name: 'Open class B details', exact: true })
         .click();
-      await assertOrderedLayout();
-      await page
-        .getByRole('button', { name: 'Expand class B', exact: true })
-        .click();
+      await expect(page.locator('.diagram-heading > strong')).toHaveText('B');
       await assertOrderedLayout();
       await seek(page, 4);
       await expect(page.locator('.diagram-card.is-active')).toHaveCount(1);
@@ -2077,8 +2132,18 @@ test('continuation auto-extends playback and exposes next/previous chunk links',
     .getByRole('button', { name: 'Expand method A.main', exact: true })
     .first()
     .click();
+  const mainCard = page.locator(
+    '.diagram-card[data-call-id="a"]:not([data-parent-id])',
+  );
+  await expect(mainCard).toHaveClass(/diagram-expanded-method/);
+  const mainNodeId = await mainCard.getAttribute('data-node-id');
+  expect(mainNodeId).not.toBeNull();
+  const mainSteps = page.locator(
+    `.diagram-card[data-parent-id=${JSON.stringify(mainNodeId)}]`,
+  );
+  await expect(mainSteps.first()).toBeVisible();
   await expect(page.locator('.diagram-heading > strong')).toHaveText(
-    'A.main · a',
+    'Execution path',
   );
   await show(page, false, 'state');
   await page.locator('#tab-context').click();
@@ -2092,8 +2157,10 @@ test('continuation auto-extends playback and exposes next/previous chunk links',
   await page.locator('#play').click();
   await expect(page.locator('#progress')).toHaveText('8 / 8');
   await expect(page.locator('#next-chunk')).toBeHidden();
+  await expect(mainCard).toHaveClass(/diagram-expanded-method/);
+  await expect(mainSteps.first()).toBeVisible();
   await expect(page.locator('.diagram-heading > strong')).toHaveText(
-    'A.main · a',
+    'Execution path',
   );
   await expect(page.locator('#play')).toHaveAttribute('data-playing', 'false');
   await page.screenshot({
