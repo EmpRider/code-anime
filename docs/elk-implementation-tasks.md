@@ -9,23 +9,23 @@ code must never execute to construct animations.
 | T0   | Restore mandatory formatting CI at the authored/generated boundary | Approved formatting remedy       | DONE — delivered as f2b5f10; remote branch verified        |
 | T0a  | Format newly imported ELK plan and task-tracker docs to restore CI | T0 delivery; two-file CI failure | DONE — delivered as b5a08a67 and ffd490bb; remote verified |
 | B0a  | Restore Values disclosure pointer and viewport reachability        | T0a; browser RED baseline        | DONE — focused desktop/mobile Chromium GREEN; full CI RED  |
-| B0b  | Restore map navigation and continuation                            | B0a; behavior-contract evidence  | IMPLEMENTED_CANDIDATE — browser gate RED                   |
-| B0c  | Preserve truthful typed call/return ancestry                       | B0b; mock/source identity        | IMPLEMENTED_CANDIDATE — browser gate RED                   |
-| B0d  | True Fit and reachable source-step navigation                      | B0b; B0e, B0g UX/geometry gates  | IMPLEMENTED_CANDIDATE — browser gate RED                   |
-| B0e  | Preserve overview Fit; focus/zoom then readable step navigation    | B0d; owner choice approved       | IMPLEMENTED_CANDIDATE — targeted CI passed; B0k RED        |
-| B0f  | Show literal source first, explicitly simulated event second       | B0c; B0e commit; owner approved  | IMPLEMENTED_CANDIDATE — targeted CI passed; B0k RED        |
-| B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | IMPLEMENTED_CANDIDATE — targeted CI passed; B0k RED        |
-| B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IMPLEMENTED_CANDIDATE — targeted CI passed; B0k RED        |
+| B0b  | Restore map navigation and continuation                            | B0a; behavior-contract evidence  | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
+| B0c  | Preserve truthful typed call/return ancestry                       | B0b; mock/source identity        | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
+| B0d  | True Fit and reachable source-step navigation                      | B0b; B0e, B0g UX/geometry gates  | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
+| B0e  | Preserve overview Fit; focus/zoom then readable step navigation    | B0d; owner choice approved       | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
+| B0f  | Show literal source first, explicitly simulated event second       | B0c; B0e commit; owner approved  | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
+| B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
+| B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
 | B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DONE — DIAGNOSTIC ONLY; T7 bug still open                  |
 | B0j  | Review accidental trailing README test line                        | B0 gate; owner priority          | LOW_PRIORITY                                               |
-| B0k  | Verify grouped boundaries after method collapse                    | B0f; CI 40601192848              | IN_PROGRESS — selected-outer contract, Chromium RED        |
-| T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | PAUSED — actionable browser failures under AGENTS.md       |
+| B0k  | Verify grouped boundaries after method collapse                    | B0f; CI 40602271424              | DONE — 08dfc5b, Chromium 63/63 + Node 4/4                  |
+| T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | PAUSED — wider MVP/revised-plan gate review                |
 | T2   | Pure logical compound topology and truthful execution edges        | T1                               | Pending                                                    |
-| T3   | Real same-origin ELK Worker and distributable package              | B0 gate; dependency/license gate | PAUSED — actionable browser failures under AGENTS.md       |
+| T3   | Real same-origin ELK Worker and distributable package              | B0 gate; dependency/license gate | PAUSED — owner/license distribution gate                   |
 | T4   | Nested ELK geometry and robust Worker protocol                     | T2, T3                           | Pending                                                    |
 | T5   | X6 compound frames, arrows, and existing HTML controls             | T4                               | Pending                                                    |
 | T6   | Async race safety and full player-state preservation               | T5                               | Pending                                                    |
-| T7   | Isolate orientation/panel preference keys with migration           | B0 MVP browser gate              | PAUSED — actionable browser failures under AGENTS.md       |
+| T7   | Isolate orientation/panel preference keys with migration           | B0 MVP browser gate              | PAUSED — wider MVP/revised-plan gate review                |
 | T8   | PC-only compact visual clarity and accessibility                   | T6                               | Pending                                                    |
 | T9   | Full mock-trace, performance, and package acceptance               | T1–T8                            | Pending                                                    |
 
@@ -178,6 +178,27 @@ synchronized visible mock context` cases at `player.spec.ts:2063`:
   or inaccessible-control bug emerges, record a separate scoped source-fix
   task before production edits. Browser 63/63 and exact-head Node/package
   evidence remain mandatory before DONE.
+
+#### B0k final browser/CI acceptance — 2026-10-28
+
+- Final test-only selection-contract commit:
+  `08dfc5b1502dba58868940b5d4132cd0a7ff501e`,
+  [Actions #40602271424](https://github.com/EmpRider/code-anime/actions/runs/40602271424).
+  The plugin verified the exact branch commit and test blob
+  `d191a4835a9f56a81554d36af06f19602dff4b22`; no production JS/CSS,
+  dependencies or generated assets changed in the scoped commit.
+- **Chromium 63/63 PASS** (full desktop/mobile suite, browser job log);
+  **Node/check/package 4/4 PASS** across Ubuntu/Windows and Node 22/24
+  (all five workflow jobs completed successfully). B0k's source-grounded
+  grouped-map and selected-node lifecycle contracts are now covered by
+  green browser tests. This satisfies the scoped B0k Council and independent
+  review gate; status **DONE**.
+- These results remove the observed B0 browser CI blocker, but do **not**
+  themselves complete the broader October 15 static/mock acceptance ledger,
+  human visual/assistive-technology review, revised ELK architecture approval
+  or public Worker licensing/distribution signoff. B0b–B0h remain
+  `IMPLEMENTED_CANDIDATE` until each task's wider acceptance is reconciled
+  independently; ELK tasks are not marked started merely because CI is green.
 
 ## 2026-10-27 Council reconciliation and next tasks
 
