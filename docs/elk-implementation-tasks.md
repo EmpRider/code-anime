@@ -18,7 +18,7 @@ code must never execute to construct animations.
 | B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IMPLEMENTED_CANDIDATE — targeted CI passed; B0k RED        |
 | B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DONE — DIAGNOSTIC ONLY; T7 bug still open                  |
 | B0j  | Review accidental trailing README test line                        | B0 gate; owner priority          | LOW_PRIORITY                                               |
-| B0k  | Verify grouped boundaries after method collapse                    | B0f; CI 40598039061              | IMPLEMENTED_CANDIDATE — 17ad7e6, final Chromium pending    |
+| B0k  | Verify grouped boundaries after method collapse                    | B0f; CI 40601192848              | IN_PROGRESS — selected-outer contract, Chromium RED        |
 | T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | PAUSED — actionable browser failures under AGENTS.md       |
 | T2   | Pure logical compound topology and truthful execution edges        | T1                               | Pending                                                    |
 | T3   | Real same-origin ELK Worker and distributable package              | B0 gate; dependency/license gate | PAUSED — actionable browser failures under AGENTS.md       |
@@ -144,6 +144,40 @@ synchronized visible mock context` cases at `player.spec.ts:2063`:
   final-head GitHub Actions Chromium and four Node/check/package jobs before
   marking B0k or the B0 candidates DONE. If newly exposed focus/context or
   grouping checks fail, create a scoped follow-up task and preserve RED.
+
+#### B0k focused selection-contract amendment — 2026-10-28
+
+- **Observed new RED:** Exact pushed ledger HEAD
+  `4470c76c97f5704898ae5e20213b72f1103ef762`,
+  [Actions #40601192848](https://github.com/EmpRider/code-anime/actions/runs/40601192848):
+  four Node/check/package jobs **PASS**, Chromium **61/63 PASS**. Only the
+  desktop/mobile grouped-map case fails at `player.spec.ts:2125`, where
+  `.diagram-selection` is expected hidden but remains visible. The previous
+  file/owner counts, distinct labels, containment and typed edges now pass;
+  later focus/context and negative checks were not reached.
+- **Source-grounded diagnosis:** `onExpand` selects the outer B method
+  (`public/diagram.js:524–546`). Global method-only Collapse clears only
+  expansion (`:688–693`), leaving outer B present; `render` reselects
+  that valid node (`:1490`). The documented contract clears actions when
+  the selected **node itself** is removed or filtered, not when the
+  selected outer method's child details are collapsed. Thus the blanket
+  hidden assertion is stale; no production selection bug is yet proven.
+- **Focused Council amendment:** Original independent QA and Devil's
+  Advocate replied live to the EDO's new-evidence challenge following the
+  previously completed five-advisor/five-blind-peer review. Both support
+  preserving selection of surviving outer B and clearing an explicitly
+  selected removed child. Detailed advisory evidence:
+  [B0k selection amendment](b0k-selection-amendment-edo-2026-10-27.md).
+  This remains the existing **B0k** task, not an invented B0l issue.
+- **Next authorized test-only correction:** Assert positive outer-B selection
+  persistence and valid actions after method Collapse; contrasting negative
+  paths select a nested child before Collapse (orphan actions must clear),
+  then hide owner B (selection/pair clears), restore B (no automatic reselection),
+  and explicitly reselect if needed. Retain cursor, typed arrows, file/owner
+  grouping, source/Values and keyboard/pointer focus. If a real orphaned-child
+  or inaccessible-control bug emerges, record a separate scoped source-fix
+  task before production edits. Browser 63/63 and exact-head Node/package
+  evidence remain mandatory before DONE.
 
 ## 2026-10-27 Council reconciliation and next tasks
 
