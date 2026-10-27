@@ -27010,9 +27010,9 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 		let { mode: _, cursor: O, follow: ee, reducedMotion: de, duration: pe } = w;
 		g && g !== _ && (P = null, ge = [], ne = ""), c.dataset.motion = de ? "reduced" : "full", c.style.setProperty("--diagram-duration", `${Math.max(100, pe)}ms`), (O !== j || g !== _) && (E = !1);
 		let ye = x[Math.max(0, O - 1)], Se = S.find((e) => e.callSiteIndex === O)?.callId ?? ye?.callId ?? b.steps[Math.max(0, O - 1)]?.to, Ce = p === "vertical", we = [], Te = [], De = new Map(S.map((e) => [e.callId, e])), Oe = PA(S, x), ke = Oe.byCall.get(Se);
-		_e.replaceChildren(), x.length && _ === "map" ? se.size && _e.append(f("Collapse methods", "Collapse expanded methods", () => {
+		_e.replaceChildren(), x.length && _ === "map" && !P ? se.size && _e.append(f("Collapse methods", "Collapse expanded methods", () => {
 			r?.(), se.clear(), ne = "", Ee(w);
-		})) : x.length && (_e.append(f("Classes", "Show class-level diagram", () => F({ kind: "classes" }, !0))), P && (_e.append(f("↑ Collapse", "Collapse diagram level", () => {
+		})) : x.length && (_ !== "map" && _e.append(f("Classes", "Show class-level diagram", () => F({ kind: "classes" }, !0))), P && (_e.append(f("↑ Collapse", "Collapse diagram level", () => {
 			r?.(), P = ge.pop() ?? null, T = 0, E = !1, ne = "", Ee(w), _e.querySelector("button")?.focus({ preventScroll: !0 });
 		})), _e.append(f("All steps", "Show all prepared steps", () => F(null, !0)))));
 		let Ae, je;
@@ -27031,7 +27031,7 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 			}
 			T = Math.max(0, Math.min(T, Math.ceil(Ae.length / JA) - 1)), we = Ae.slice(T * JA, (T + 1) * JA), Te = we.slice(1).map((e, t) => [we[t].id, e.id]), a.textContent = P.kind === "classes" ? "Classes / modules" : P.kind === "class" ? P.id : (De.get(P.id)?.symbol ?? P.id) + " · " + P.id, o.textContent = P.kind === "classes" ? "Class-level playback · expand a class" : P.kind === "class" ? "Method-level playback · expand an invocation" : "Source-step playback · expand nested calls", o.textContent += " · arrows: " + (P.kind === "method" ? "prepared step order" : "first appearance order, not calls"), O > 0 && !Ae.some((e) => e.active) && (o.textContent += " · cursor outside this scope");
 		} else {
-			we = Oe.functions.filter((e) => !oe.has(e.invocations[0].className)).map((e) => {
+			a.textContent = "Execution path", o.textContent = "Prepared steps · not runtime execution", we = Oe.functions.filter((e) => !oe.has(e.invocations[0].className)).map((e) => {
 				let t = O > 0 && e.id === ke;
 				t && ee && O !== j && ce.set(e.id, Se);
 				let i = e.invocations.find((t) => t.callId === ce.get(e.id)) ?? e.invocations[0], a = x[i.index - 1], o = t && i.callId === Se;
@@ -27065,13 +27065,17 @@ function XA(e, { onSelect: t, onSeek: n, onPause: r }) {
 				e.callId
 			]);
 		}
-		if (!P && _ === "map" && (ne === "" || g !== _)) {
+		if (P) be.replaceChildren();
+		else if (_ === "map" && (ne === "" || g !== _)) {
 			be.replaceChildren();
 			for (let e of new Set(S.map((e) => e.className))) {
 				let t = f(e, "Toggle group " + e, () => {
 					oe.has(e) ? oe.delete(e) : oe.add(e), ne = "", Ee(w);
 				});
-				t.setAttribute("aria-pressed", String(!oe.has(e))), be.append(t);
+				t.setAttribute("aria-pressed", String(!oe.has(e))), be.append(t, f("›", "Open class " + e + " details", () => F({
+					kind: "class",
+					id: e
+				})));
 			}
 		}
 		let Me = _ === "map" && !P, Ne = /* @__PURE__ */ new Map(), Pe = /* @__PURE__ */ new Map();
