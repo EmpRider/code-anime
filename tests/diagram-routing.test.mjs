@@ -250,7 +250,9 @@ let rendererImport;
 async function renderer() {
   if (!rendererImport) {
     const result = await build({
-      entryPoints: [fileURLToPath(new URL('../public/diagram.js', import.meta.url))],
+      entryPoints: [
+        fileURLToPath(new URL('../public/diagram.js', import.meta.url)),
+      ],
       bundle: true,
       platform: 'browser',
       format: 'esm',
