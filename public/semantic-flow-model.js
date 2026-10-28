@@ -15,13 +15,21 @@ function maskSource(source) {
     const next = source[i + 1];
     if (state === 'code') {
       if (character === '/' && next === '/') {
-        hide(i); hide(++i); state = 'line';
+        hide(i);
+        hide(++i);
+        state = 'line';
       } else if (character === '/' && next === '*') {
-        hide(i); hide(++i); state = 'comment';
+        hide(i);
+        hide(++i);
+        state = 'comment';
       } else if (source.slice(i, i + 3) === '"""') {
-        hide(i); hide(++i); hide(++i); state = 'triple';
+        hide(i);
+        hide(++i);
+        hide(++i);
+        state = 'triple';
       } else if (character === '"' || character === "'" || character === '\`') {
-        hide(i); state = character;
+        hide(i);
+        state = character;
       }
     } else if (state === 'line') {
       if (character === '\n') state = 'code';
@@ -29,12 +37,15 @@ function maskSource(source) {
     } else if (state === 'comment') {
       hide(i);
       if (character === '*' && next === '/') {
-        hide(++i); state = 'code';
+        hide(++i);
+        state = 'code';
       }
     } else if (state === 'triple') {
       hide(i);
       if (source.slice(i, i + 3) === '"""') {
-        hide(++i); hide(++i); state = 'code';
+        hide(++i);
+        hide(++i);
+        state = 'code';
       }
     } else {
       if (character === '\n' && state !== '\`') return;
@@ -52,10 +63,13 @@ function structures(source, file) {
   if (
     typeof source !== 'string' ||
     !/\.(?:[cm]?[jt]sx?|java|cs|kt|c|cpp|h|go|rs)$/.test(file)
-  ) return [];
+  )
+    return [];
   const masked = maskSource(source);
   if (masked === undefined) return [];
-  const pairs = new Map(), stack = [], lines = [];
+  const pairs = new Map(),
+    stack = [],
+    lines = [];
   let line = 1;
   for (let i = 0; i < masked.length; i++) {
     lines[i] = line;
@@ -67,7 +81,8 @@ function structures(source, file) {
         open !== undefined &&
         ((masked[open] === '(' && masked[i] === ')') ||
           (masked[open] === '{' && masked[i] === '}'))
-      ) pairs.set(open, i);
+      )
+        pairs.set(open, i);
       else return [];
     }
   }
@@ -76,9 +91,11 @@ function structures(source, file) {
   for (const match of masked.matchAll(/\bclass\b/g)) {
     const open = masked.indexOf('{', match.index + match[0].length);
     if (
-      open >= 0 && pairs.has(open) &&
+      open >= 0 &&
+      pairs.has(open) &&
       !/[;{}]/.test(masked.slice(match.index + match[0].length, open))
-    ) classBodies.add(open);
+    )
+      classBodies.add(open);
   }
   const objectBodies = new Set();
   for (const [open] of pairs) {
@@ -92,9 +109,11 @@ function structures(source, file) {
     if (
       !isCaseBlock &&
       ((character === '=' && masked[before - 1] !== '>') ||
-        character === ':' || character === '(' ||
+        character === ':' ||
+        character === '(' ||
         /\b(?:return|default)$/.test(suffix))
-    ) objectBodies.add(open);
+    )
+      objectBodies.add(open);
   }
   const braceScopes = [...pairs]
     .filter(([open]) => masked[open] === '{')
@@ -123,13 +142,16 @@ function structures(source, file) {
   function block(start, keyword) {
     let open = skip(start + keyword.length);
     if (
-      keyword === 'try' && masked[open] !== '{' &&
+      keyword === 'try' &&
+      masked[open] !== '{' &&
       !(file.endsWith('.java') && masked[open] === '(')
-    ) return;
+    )
+      return;
     if (
       ['if', 'for', 'while', 'foreach', 'switch'].includes(keyword) &&
       masked[open] !== '('
-    ) return;
+    )
+      return;
     if (masked[open] === '(') {
       const close = pairs.get(open);
       if (close === undefined) return;
@@ -137,8 +159,13 @@ function structures(source, file) {
     }
     if (masked[open] !== '{' || !pairs.has(open)) return;
     return {
-      start, open, end: pairs.get(open), line: lines[start],
-      bodyLine: lines[open], title: source.slice(start, open).trim(), keyword,
+      start,
+      open,
+      end: pairs.get(open),
+      line: lines[start],
+      bodyLine: lines[open],
+      title: source.slice(start, open).trim(),
+      keyword,
     };
   }
   function ifTail(main) {
@@ -181,20 +208,32 @@ function structures(source, file) {
       end,
       alternative: {
         label: 'No · condition false',
-        start: nestedStart, end, line: lines[nestedStart],
+        start: nestedStart,
+        end,
+        line: lines[nestedStart],
       },
     };
   }
   const all = [];
-  for (const match of masked.matchAll(/\b(if|for|while|foreach|try|switch)\b/g)) {
+  for (const match of masked.matchAll(
+    /\b(if|for|while|foreach|try|switch)\b/g,
+  )) {
     if (directlyInsideDeclaration(match.index)) continue;
     const main = block(match.index, match[0]);
     if (!main) continue;
-    const branches = [{
-      label: main.keyword === 'if' ? 'Yes · condition true' :
-        main.keyword === 'try' ? 'Try · normal path' : 'Body',
-      start: main.open + 1, end: main.end, line: main.line,
-    }];
+    const branches = [
+      {
+        label:
+          main.keyword === 'if'
+            ? 'Yes · condition true'
+            : main.keyword === 'try'
+              ? 'Try · normal path'
+              : 'Body',
+        start: main.open + 1,
+        end: main.end,
+        line: main.line,
+      },
+    ];
     let end = main.end;
     if (main.keyword === 'if') {
       const tail = ifTail(main);
@@ -210,7 +249,9 @@ function structures(source, file) {
         if (!part) break;
         branches.push({
           label: keyword === 'catch' ? 'Catch · recover' : 'Finally · cleanup',
-          start: part.open + 1, end: part.end, line: part.line,
+          start: part.open + 1,
+          end: part.end,
+          line: part.line,
         });
         end = part.end;
       }
@@ -218,11 +259,17 @@ function structures(source, file) {
     if (main.keyword === 'if' && branches.length === 1)
       branches.push({
         label: 'No · continue without body',
-        start: -1, end: -1, line: -1,
+        start: -1,
+        end: -1,
+        line: -1,
       });
-    const type = ['for','while','foreach'].includes(main.keyword)
-      ? 'loop' : main.keyword === 'try' ? 'try'
-      : main.keyword === 'switch' ? 'switch' : 'decision';
+    const type = ['for', 'while', 'foreach'].includes(main.keyword)
+      ? 'loop'
+      : main.keyword === 'try'
+        ? 'try'
+        : main.keyword === 'switch'
+          ? 'switch'
+          : 'decision';
     if (main.keyword === 'switch') {
       branches.length = 0;
       let depth = 0;
@@ -231,31 +278,38 @@ function structures(source, file) {
         if (masked[offset] === '}') depth--;
         if (depth || (offset > 0 && /[\w$]/.test(masked[offset - 1]))) continue;
         const label = /^(case\b[^:\n]*|default)\s*:/.exec(
-          masked.slice(offset, main.end)
+          masked.slice(offset, main.end),
         );
         if (!label) continue;
         if (branches.length) branches.at(-1).end = offset - 1;
         branches.push({
           label: source.slice(offset, offset + label[0].length).trim(),
-          start: offset, end: main.end, line: lines[offset],
+          start: offset,
+          end: main.end,
+          line: lines[offset],
         });
         offset += label[0].length - 1;
       }
       if (
         !branches.length ||
-        new Set(branches.map(b => b.line)).size !== branches.length
-      ) continue;
+        new Set(branches.map((b) => b.line)).size !== branches.length
+      )
+        continue;
     }
     // Line-only traces cannot disambiguate same-line arms.
     if (lines[main.open] === lines[end]) continue;
     all.push({
-      ...main, end, endLine: lines[end], type,
-      branches: branches.map(b => ({
-        ...b, endLine: b.end < 0 ? -1 : lines[b.end],
+      ...main,
+      end,
+      endLine: lines[end],
+      type,
+      branches: branches.map((b) => ({
+        ...b,
+        endLine: b.end < 0 ? -1 : lines[b.end],
       })),
     });
   }
-  return all.sort((a,b) => a.start - b.start || b.end - a.end);
+  return all.sort((a, b) => a.start - b.start || b.end - a.end);
 }
 const typeOf = (kind) =>
   ({
@@ -338,7 +392,9 @@ export function buildSemanticFlow(flow) {
   const occurrences = new Map();
   const occurrenceByIndex = events.map((event) => {
     const key = JSON.stringify([
-      event.callId ?? event.symbolId ?? 'flow', event.id ?? null, event.kind,
+      event.callId ?? event.symbolId ?? 'flow',
+      event.id ?? null,
+      event.kind,
     ]);
     const count = occurrences.get(key) ?? 0;
     occurrences.set(key, count + 1);
@@ -358,8 +414,9 @@ export function buildSemanticFlow(flow) {
   });
   const ambiguousTasks = new Set(
     [...taskContexts]
-      .filter(([id, contexts]) =>
-        contexts.size > 1 || (entryCounts.get(id) ?? 0) > 1)
+      .filter(
+        ([id, contexts]) => contexts.size > 1 || (entryCounts.get(id) ?? 0) > 1,
+      )
       .map(([id]) => id),
   );
   function evidence(index) {
@@ -368,12 +425,19 @@ export function buildSemanticFlow(flow) {
     const eventId = event.id ?? null;
     const occurrence = occurrenceByIndex[index - 1];
     return {
-      eventId, invocationId,
+      eventId,
+      invocationId,
       visitIdentity: JSON.stringify([
-        invocationId, eventId, event.kind, occurrence,
+        invocationId,
+        eventId,
+        event.kind,
+        occurrence,
       ]),
       evidenceIdentity: JSON.stringify([
-        index, invocationId, eventId, occurrence,
+        index,
+        invocationId,
+        eventId,
+        occurrence,
       ]),
     };
   }
@@ -461,7 +525,12 @@ export function buildSemanticFlow(flow) {
           children: groupSequence(steps, nested).map((child) =>
             child.event.kind === 'loop' &&
             child.event.source?.line === structure.line
-              ? { ...child, type: 'step', note: undefined, ownershipStatus: 'source-proven' }
+              ? {
+                  ...child,
+                  type: 'step',
+                  note: undefined,
+                  ownershipStatus: 'source-proven',
+                }
               : child,
           ),
         }));
@@ -473,19 +542,25 @@ export function buildSemanticFlow(flow) {
           indices: [],
           children: [],
         }));
-        const header = [], unknown = [];
+        const header = [],
+          unknown = [];
         for (const step of own) {
-          const e = events[step - 1], line = e.source.line;
+          const e = events[step - 1],
+            line = e.source.line;
           const armMatches = structure.branches.flatMap((b, i) =>
-            b.line >= 0 && line >= b.line && line <= b.endLine ? [i] : []
+            b.line >= 0 && line >= b.line && line <= b.endLine ? [i] : [],
           );
           let arm = armMatches.at(-1) ?? -1;
           if (armMatches.length > 1) {
-            if (e.kind === 'catch') arm = armMatches.find(i => i > 0) ?? -1;
-            else { unknown.push(step); continue; }
+            if (e.kind === 'catch') arm = armMatches.find((i) => i > 0) ?? -1;
+            else {
+              unknown.push(step);
+              continue;
+            }
           }
           if (line === structure.line || arm < 0) {
-            header.push(step); continue;
+            header.push(step);
+            continue;
           }
           node.branches[arm].indices.push(step);
         }
@@ -493,33 +568,42 @@ export function buildSemanticFlow(flow) {
           const bounds = structure.branches[i];
           branch.children = groupSequence(
             branch.indices,
-            nested.filter(s => s.start >= bounds.start && s.end <= bounds.end),
+            nested.filter(
+              (s) => s.start >= bounds.start && s.end <= bounds.end,
+            ),
           );
         }
         node.children = [
-          ...header.map(index => ({
-            ...leaf(index), type: 'step', note: undefined,
+          ...header.map((index) => ({
+            ...leaf(index),
+            type: 'step',
+            note: undefined,
           })),
-          ...unknown.map(index => ({
-            ...leaf(index), type: 'unresolved',
+          ...unknown.map((index) => ({
+            ...leaf(index),
+            type: 'unresolved',
             ownershipStatus: 'unresolved',
             note: 'Unresolved shared-line branch ownership; prepared event only.',
           })),
-        ].sort((a,b) => a.indices[0] - b.indices[0]);
+        ].sort((a, b) => a.indices[0] - b.indices[0]);
         if (structure.type === 'decision') {
           const condition = event.values?.condition;
           if (typeof condition === 'boolean' && node.branches.length === 2) {
-            const conflicts = node.branches.some((branch, i) =>
-              (i === 0) !== condition && branch.indices.length > 0
+            const conflicts = node.branches.some(
+              (branch, i) =>
+                (i === 0) !== condition && branch.indices.length > 0,
             );
             if (conflicts) {
               node.ownershipStatus = 'unresolved';
-              node.note = 'Contradictory evidence: prepared source membership conflicts with the supplied branch outcome; no arm selected.';
-            } else node.branches.forEach((branch, i) => {
-              branch.selected = (i === 0) === condition;
-            });
-          } else node.note =
-            'Branch outcome not supplied; lanes show source membership, not an inferred condition result.';
+              node.note =
+                'Contradictory evidence: prepared source membership conflicts with the supplied branch outcome; no arm selected.';
+            } else
+              node.branches.forEach((branch, i) => {
+                branch.selected = (i === 0) === condition;
+              });
+          } else
+            node.note =
+              'Branch outcome not supplied; lanes show source membership, not an inferred condition result.';
         }
       }
       result.push(node);
@@ -550,9 +634,11 @@ export function buildSemanticFlow(flow) {
       inputs: first.inputs,
       result: returned?.result,
       parentId: group?.parentCallId,
-      ...(ambiguousTasks.has(id) ? {
-        note: 'Unresolved invocation ownership: conflicting or incomplete task/entry identity for one callId; prepared order only.',
-      } : {}),
+      ...(ambiguousTasks.has(id)
+        ? {
+            note: 'Unresolved invocation ownership: conflicting or incomplete task/entry identity for one callId; prepared order only.',
+          }
+        : {}),
     };
   });
   const ids = new Set(methods.map((method) => method.id));
