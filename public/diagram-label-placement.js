@@ -24,7 +24,7 @@ export function reserveRouteLabel(points, text, obstacles, reservations) {
   }
   segments.sort((a, b) => b.length - a.length);
   for (const { a, b, horizontal } of segments) {
-    for (const ratio of [0.5, 0.25, 0.75]) {
+    for (const ratio of [0.5, 0.25, 0.75, 0.125, 0.875]) {
       const midX = a.x + (b.x - a.x) * ratio;
       const midY = a.y + (b.y - a.y) * ratio;
       for (const side of [-1, 1]) {

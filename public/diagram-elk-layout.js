@@ -72,11 +72,22 @@ function elkGraph(prepared, direction, extraHeight) {
   };
   const containers = new Map([['', graph]]);
   for (const region of prepared.regions) {
+    // Wrap only long direct sequences, not small nested branch/try groups.
+    const directChildCount =
+      prepared.cards.filter((card) => card.parentRegionId === region.id)
+        .length +
+      prepared.regions.filter((child) => child.parentRegionId === region.id)
+        .length;
     const node = {
       id: region.id,
       layoutOptions: {
         'elk.algorithm': 'layered',
         'elk.direction': DIRECTIONS[direction],
+        'elk.layered.wrapping.strategy':
+          direction === 'horizontal' && directChildCount >= 8
+            ? 'MULTI_EDGE'
+            : 'OFF',
+        'elk.aspectRatio': 2,
         'elk.padding': '[top=40,left=16,bottom=16,right=16]',
       },
       children: [],
