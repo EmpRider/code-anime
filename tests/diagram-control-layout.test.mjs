@@ -2,6 +2,550 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildSemanticFlow } from '../public/semantic-flow-model.js';
 import { layoutControlFlow } from '../public/diagram-control-layout.js';
+import * as topology from '../public/diagram-control-layout.js';
+
+const topologyEvent = (kind, line, i, extras = {}) => ({
+  id: `e-${i}`,
+  kind,
+  source: { file: 'fixture.ts', line },
+  callId: 'run',
+  symbolId: 'run',
+  label: `${kind} ${i}`,
+  values: {},
+  stack: [],
+  certainty: 'mock',
+  ...extras,
+});
+function methodItems(source, specs) {
+  const events = specs.map(([kind, line, extras], i) =>
+    topologyEvent(kind, line, i, extras),
+  );
+  return buildSemanticFlow({
+    trace: { events, sourceFiles: { 'fixture.ts': source } },
+  }).methods[0].items;
+}
+const cardAt = (prepared, index) =>
+  prepared.cards.find((card) => card.index === index);
+const edgeAt = (prepared, source, target) =>
+  prepared.edges.find(
+    (edge) =>
+      edge.source === cardAt(prepared, source)?.id &&
+      edge.target === cardAt(prepared, target)?.id,
+  );
+
+test('loop_header_is_member_of_selected_iteration_region', () => {
+  const source =
+    'function run() {\n while (more) {\n  tick();\n }\n return done;\n}';
+  const events = [
+    ['enter', 1],
+    ['loop', 2],
+    ['statement', 3],
+    ['loop', 2],
+    ['statement', 3],
+    ['return', 5],
+  ].map(([kind, line], i) => ({
+    id: `event-${i}`,
+    kind,
+    source: { file: 'loop.ts', line },
+    callId: 'run',
+    symbolId: 'run',
+    label: kind,
+    values: {},
+    stack: [],
+    certainty: 'mock',
+  }));
+  const method = buildSemanticFlow({
+    trace: { events, sourceFiles: { 'loop.ts': source } },
+  }).methods[0];
+  assert.equal(typeof topology.prepareControlFlow, 'function');
+  const loop = method.items.find((node) => node.type === 'loop');
+  const prepared = topology.prepareControlFlow(method.items, {
+    cursor: 5,
+    visits: new Map([[loop.id, 1]]),
+  });
+  const selected = prepared.regions.find(
+    (region) => region.type === 'loop' && region.selected,
+  );
+  assert.ok(selected, 'second prepared loop visit owns a frame');
+  assert.equal(
+    prepared.cards.find((card) => card.index === 4).parentRegionId,
+    selected.id,
+    'loop header must be inside its visit, not above the region',
+  );
+  assert.deepEqual(
+    prepared.cards.map((card) => card.index).sort((a, b) => a - b),
+    [1, 2, 3, 4, 5, 6],
+  );
+});
+
+test('branch_arms_have_true_parent', () => {
+  const source = `function run() {
+  while (ready) {
+    if (ok) {
+      yes();
+    } else {
+      no();
+    }
+  }
+  return done;
+}`;
+  const nodes = methodItems(source, [
+    ['enter', 1],
+    ['loop', 2],
+    ['branch', 3, { values: { condition: true } }],
+    ['statement', 4],
+    ['return', 9],
+  ]);
+  const prepared = topology.prepareControlFlow(nodes);
+  const loop = prepared.regions.find((region) => region.type === 'loop');
+  const decision = prepared.regions.find(
+    (region) => region.type === 'decision',
+  );
+  const arms = prepared.regions.filter((region) => region.type === 'branch');
+  assert.ok(loop && decision);
+  assert.equal(decision.parentRegionId, loop.id);
+  assert.equal(arms.length, 2);
+  assert.ok(arms.every((region) => region.parentRegionId === decision.id));
+  assert.equal(cardAt(prepared, 4).parentRegionId, arms[0].id);
+  assert.equal(edgeAt(prepared, 3, 4)?.status, 'prepared');
+  const parents = new Map(
+    prepared.regions.map((region) => [region.id, region.parentRegionId]),
+  );
+  for (const region of prepared.regions) {
+    const seen = new Set();
+    for (let at = region.id; at; at = parents.get(at)) {
+      assert.ok(!seen.has(at), 'region ancestry must be acyclic');
+      seen.add(at);
+    }
+  }
+});
+
+test('normal_try_skips_unexecuted_catch', () => {
+  const source = `function run() {
+  try {
+    work();
+  } catch (error) {
+    recover();
+  } finally {
+    cleanup();
+  }
+  return done;
+}`;
+  const prepared = topology.prepareControlFlow(
+    methodItems(source, [
+      ['enter', 1],
+      ['statement', 3],
+      ['statement', 7],
+      ['return', 9],
+    ]),
+  );
+  assert.deepEqual(
+    prepared.cards.map((card) => card.index),
+    [1, 2, 3, 4],
+  );
+  assert.equal(edgeAt(prepared, 2, 3)?.status, 'prepared');
+  assert.equal(edgeAt(prepared, 2, 3)?.kind, 'finally');
+  assert.ok(!prepared.cards.some((card) => card.node.event?.kind === 'catch'));
+  assert.ok(
+    !prepared.edges.some(
+      (edge) => !prepared.cards.some((card) => card.id === edge.target),
+    ),
+  );
+});
+
+test('prepared_exception_visits_catch_and_finally', () => {
+  const source = `function run() {
+  try {
+    risky();
+  } catch (error) {
+    recover(error);
+  } finally {
+    cleanup();
+  }
+  return done;
+}`;
+  const prepared = topology.prepareControlFlow(
+    methodItems(source, [
+      ['enter', 1],
+      ['statement', 3],
+      ['catch', 4],
+      ['statement', 5],
+      ['statement', 7],
+      ['return', 9],
+    ]),
+  );
+  assert.equal(edgeAt(prepared, 2, 3)?.status, 'prepared');
+  assert.equal(edgeAt(prepared, 2, 3)?.kind, 'catch');
+  assert.equal(edgeAt(prepared, 4, 5)?.kind, 'finally');
+  const catchRegion = prepared.regions.find((region) =>
+    region.label?.startsWith('Catch'),
+  );
+  assert.ok(catchRegion);
+  assert.equal(cardAt(prepared, 3).parentRegionId, catchRegion.id);
+  assert.deepEqual(
+    prepared.cards.map((card) => card.index),
+    [1, 2, 3, 4, 5, 6],
+  );
+});
+
+test('next_iteration_loopback_requires_evidence', () => {
+  const source = `function run() {
+  while (ready) {
+    tick();
+  }
+  return done;
+}`;
+  const repeated = topology.prepareControlFlow(
+    methodItems(source, [
+      ['enter', 1],
+      ['loop', 2],
+      ['statement', 3],
+      ['loop', 2],
+      ['statement', 3],
+      ['return', 5],
+    ]),
+  );
+  assert.equal(edgeAt(repeated, 3, 4)?.kind, 'loopback');
+  assert.equal(edgeAt(repeated, 3, 4)?.status, 'prepared');
+  const once = topology.prepareControlFlow(
+    methodItems(source, [
+      ['enter', 1],
+      ['loop', 2],
+      ['statement', 3],
+      ['return', 5],
+    ]),
+  );
+  assert.ok(!once.edges.some((edge) => edge.kind === 'loopback'));
+});
+
+test('return_or_throw_terminates_loopback', () => {
+  const source = `function run() {
+  while (ready) {
+    work();
+  }
+  return done;
+}`;
+  for (const terminal of ['return', 'throw']) {
+    const prepared = topology.prepareControlFlow(
+      methodItems(source, [
+        ['enter', 1],
+        ['loop', 2],
+        [terminal, 3],
+        ['loop', 2],
+        ['statement', 3],
+      ]),
+    );
+    assert.equal(
+      edgeAt(prepared, 3, 4),
+      undefined,
+      `${terminal} must not invent another prepared loop visit`,
+    );
+    assert.ok(!prepared.edges.some((edge) => edge.kind === 'loopback'));
+    assert.deepEqual(
+      prepared.cards.map((card) => card.index),
+      [1, 2, 3, 4, 5],
+      'even contradictory later prepared events stay inspectable',
+    );
+  }
+});
+
+test('repeated_source_lines_keep_distinct_invocation_edges', () => {
+  const source = 'function run() {\n  ping(); ping();\n  return ok;\n}';
+  const nodes = methodItems(source, [
+    ['enter', 1, { id: 'duplicated' }],
+    ['call', 2, { id: 'same-event' }],
+    ['call', 2, { id: 'same-event' }],
+    ['return', 3, { id: 'duplicated' }],
+  ]);
+  const a = topology.prepareControlFlow(nodes, {
+    methodCallId: 'invocation-a',
+    cursor: 1,
+  });
+  const b = topology.prepareControlFlow(nodes, {
+    methodCallId: 'invocation-b',
+    cursor: 4,
+  });
+  assert.deepEqual(
+    a.cards.map((card) => card.index),
+    [1, 2, 3, 4],
+  );
+  assert.equal(new Set(a.cards.map((card) => card.id)).size, 4);
+  assert.equal(new Set(a.edges.map((edge) => edge.id)).size, a.edges.length);
+  assert.ok(a.cards.every((card) => card.id.startsWith('invocation-a:')));
+  assert.ok(b.cards.every((card) => card.id.startsWith('invocation-b:')));
+  assert.notEqual(a.topologyKey, b.topologyKey, 'invocations do not alias');
+  assert.equal(edgeAt(a, 2, 3)?.status, 'prepared');
+  assert.equal(cardAt(a, 2).evidenceIdentity, nodes[1].evidenceIdentity);
+  assert.equal(cardAt(a, 3).evidenceIdentity, nodes[2].evidenceIdentity);
+  assert.equal(
+    topology.prepareControlFlow(nodes, {
+      methodCallId: 'invocation-a',
+      cursor: 4,
+    }).topologyKey,
+    a.topologyKey,
+    'cursor-only highlighting does not invalidate topology',
+  );
+});
+
+test('all_events_and_unknown_paths_preserved', () => {
+  const nodes = methodItems(
+    'function run() {\n  if (ok) work();\n  after();\n}',
+    [
+      ['enter', 1],
+      ['branch', 2],
+      ['statement', 3],
+      ['return', 3],
+    ],
+  );
+  const snapshot = JSON.stringify(nodes);
+  const prepared = topology.prepareControlFlow(nodes);
+  assert.deepEqual(
+    prepared.cards.map((card) => card.index),
+    [1, 2, 3, 4],
+  );
+  assert.equal(new Set(prepared.cards.map((card) => card.id)).size, 4);
+  assert.equal(
+    JSON.stringify(nodes),
+    snapshot,
+    'translator cannot mutate input',
+  );
+  assert.ok(prepared.cards.every((card) => !card.placeholder));
+  const ids = new Set(prepared.cards.map((card) => card.id));
+  assert.ok(
+    prepared.edges.every(
+      (edge) => ids.has(edge.source) && ids.has(edge.target),
+    ),
+  );
+  assert.ok(
+    prepared.edges.every((edge) => typeof edge.id === 'string' && edge.id),
+  );
+  assert.equal(cardAt(prepared, 2).node.ownershipStatus, 'unresolved');
+  assert.equal(edgeAt(prepared, 2, 3)?.status, 'unknown');
+});
+
+test('unproven_source_uses_neutral_lane_and_unknown_edge_status', () => {
+  const nodes = methodItems('', [
+    ['branch', 8, { certainty: 'unresolved' }],
+    ['statement', 9, { certainty: 'unresolved', source: undefined }],
+  ]);
+  const prepared = topology.prepareControlFlow(nodes);
+  const lane = prepared.regions.find((region) => region.type === 'unresolved');
+  assert.ok(lane, 'unproven events remain in a neutral unresolved lane');
+  assert.equal(cardAt(prepared, 1).parentRegionId, lane.id);
+  assert.equal(cardAt(prepared, 2).parentRegionId, lane.id);
+  assert.equal(edgeAt(prepared, 1, 2)?.status, 'unknown');
+  assert.ok(!prepared.edges.some((edge) => edge.status === 'prepared'));
+});
+
+test('source_proven_empty_false_arm_exposes_typed_candidate_not_fabricated_step', () => {
+  const source = `function run() {
+  if (ok) {
+    work();
+  }
+  after();
+}`;
+  for (const [condition, expected] of [
+    [true, 'not-selected'],
+    [undefined, 'possible'],
+  ]) {
+    const nodes = methodItems(source, [
+      ['branch', 2, condition === undefined ? {} : { values: { condition } }],
+      ['statement', 3],
+      ['statement', 5],
+    ]);
+    const prepared = topology.prepareControlFlow(nodes);
+    const bypass = edgeAt(prepared, 1, 3);
+    assert.equal(bypass?.status, expected);
+    assert.equal(bypass?.kind, 'branch');
+    assert.match(bypass?.label ?? '', /No/);
+    assert.deepEqual(
+      prepared.cards.map((card) => card.index),
+      [1, 2, 3],
+    );
+    assert.ok(prepared.cards.every((card) => !card.placeholder));
+  }
+});
+
+test('unresolved_mock_outcome_never_claims_prepared_decision_transition', () => {
+  const source = `function run() {
+  if (ready) {
+    work();
+  }
+  return done;
+}`;
+  const prepared = topology.prepareControlFlow(
+    methodItems(source, [
+      ['branch', 2, { certainty: 'unresolved', values: { condition: true } }],
+      ['statement', 3],
+      ['return', 5],
+    ]),
+  );
+  assert.equal(cardAt(prepared, 1).unresolved, true);
+  assert.equal(edgeAt(prepared, 1, 2)?.status, 'unknown');
+  assert.ok(
+    !prepared.edges.some(
+      (edge) =>
+        edge.status === 'prepared' && edge.source === cardAt(prepared, 1).id,
+    ),
+  );
+});
+
+test('return_in_prepared_try_keeps_evidenced_finally_cleanup_without_loopback', () => {
+  const source = `function run() {
+  try {
+    return done;
+  } finally {
+    cleanup();
+  }
+}`;
+  const prepared = topology.prepareControlFlow(
+    methodItems(source, [
+      ['return', 3],
+      ['statement', 5],
+    ]),
+  );
+  assert.equal(edgeAt(prepared, 1, 2)?.kind, 'finally');
+  assert.equal(edgeAt(prepared, 1, 2)?.status, 'prepared');
+  assert.ok(!prepared.edges.some((edge) => edge.kind === 'loopback'));
+});
+
+test('terminal_through_finally_does_not_prepare_a_later_sibling', () => {
+  for (const terminal of ['return', 'throw']) {
+    const source = `function run() {
+  try {
+    ${terminal === 'return' ? 'return value;' : 'throw error;'}
+  } finally {
+    cleanup();
+  }
+  after();
+}`;
+    const prepared = topology.prepareControlFlow(
+      methodItems(source, [
+        [terminal, 3],
+        ['statement', 5],
+        ['statement', 7],
+      ]),
+    );
+    assert.equal(edgeAt(prepared, 1, 2)?.kind, 'finally');
+    assert.equal(edgeAt(prepared, 1, 2)?.status, 'prepared');
+    assert.deepEqual(
+      prepared.cards.map((card) => card.index),
+      [1, 2, 3],
+      'contradictory later prepared event remains inspectable',
+    );
+    assert.ok(
+      !prepared.edges.some(
+        (edge) =>
+          edge.source === cardAt(prepared, 2).id &&
+          edge.target === cardAt(prepared, 3).id &&
+          edge.status === 'prepared',
+      ),
+      `${terminal} cannot become a normal prepared continuation after cleanup`,
+    );
+  }
+});
+
+test('caught_throw_can_resume_after_prepared_catch_and_finally', () => {
+  const source = `function run() {
+  try {
+    throw error;
+  } catch (error) {
+    recover();
+  } finally {
+    cleanup();
+  }
+  after();
+}`;
+  const prepared = topology.prepareControlFlow(
+    methodItems(source, [
+      ['throw', 3],
+      ['catch', 4],
+      ['statement', 5],
+      ['statement', 7],
+      ['statement', 9],
+    ]),
+  );
+  assert.equal(edgeAt(prepared, 1, 2)?.kind, 'catch');
+  assert.equal(edgeAt(prepared, 1, 2)?.status, 'prepared');
+  assert.equal(edgeAt(prepared, 4, 5)?.status, 'prepared');
+});
+
+test('structural_explicit_visit_selection_changes_topology_key_but_cursor_styling_does_not', () => {
+  const source = `function run() {
+  while (ready) {
+    tick();
+  }
+  return done;
+}`;
+  const nodes = methodItems(source, [
+    ['enter', 1],
+    ['loop', 2],
+    ['statement', 3],
+    ['loop', 2],
+    ['statement', 3],
+    ['return', 5],
+  ]);
+  const loopId = nodes.find((node) => node.type === 'loop').id;
+  const options = (visit, cursor) => ({
+    cursor,
+    visits: new Map([[loopId, visit]]),
+  });
+  const first = topology.prepareControlFlow(nodes, options(0, 0));
+  const second = topology.prepareControlFlow(nodes, options(1, 0));
+  assert.equal(
+    first.regions.filter((region) => region.type === 'loop' && region.selected)
+      .length,
+    1,
+  );
+  assert.equal(
+    second.regions.filter((region) => region.type === 'loop' && region.selected)
+      .length,
+    1,
+  );
+  assert.notEqual(first.topologyKey, second.topologyKey);
+  assert.equal(
+    topology.prepareControlFlow(nodes, options(0, 1)).topologyKey,
+    first.topologyKey,
+    'cursor-only highlight within the same selected structure is stable',
+  );
+  assert.equal(
+    topology.prepareControlFlow(nodes, options(0, 4)).topologyKey,
+    topology.prepareControlFlow(nodes, options(0, 2)).topologyKey,
+    'seeking across prepared events does not change explicitly selected geometry',
+  );
+});
+
+test('mutually_exclusive_decision_arms_never_create_prepared_cross_arm_edge', () => {
+  const source = `function run() {
+  if (ready) {
+    yes();
+  } else {
+    no();
+  }
+  return done;
+}`;
+  const prepared = topology.prepareControlFlow(
+    methodItems(source, [
+      ['branch', 2],
+      ['statement', 3],
+      ['statement', 5],
+      ['return', 7],
+    ]),
+  );
+  assert.deepEqual(
+    prepared.cards.map((card) => card.index),
+    [1, 2, 3, 4],
+  );
+  assert.equal(edgeAt(prepared, 2, 3)?.status, 'unknown');
+  assert.ok(
+    !prepared.edges.some(
+      (edge) =>
+        edge.source === cardAt(prepared, 2).id &&
+        edge.target === cardAt(prepared, 3).id &&
+        edge.status === 'prepared',
+    ),
+  );
+});
 
 test('horizontal layout wraps within the viewport without losing steps or groups', () => {
   const leaf = (id) => ({

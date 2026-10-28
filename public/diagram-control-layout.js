@@ -1,4 +1,290 @@
 // Source structure only; outcomes and visit boundaries come from prepared events.
+export function prepareControlFlow(
+  nodes,
+  { cursor = 0, visits = new Map(), methodCallId } = {},
+) {
+  const cards = [],
+    regions = [],
+    edges = [];
+  const byIndex = new Map();
+  const bypasses = [];
+  const scope = (node) =>
+    methodCallId ?? node.invocationId ?? node.event?.callId ?? 'flow';
+  const regionId = (node, suffix) =>
+    `${encodeURIComponent(scope(node))}:region:${encodeURIComponent(node.id)}:${suffix}`;
+  function isUnresolved(node) {
+    return (
+      node.type === 'unresolved' ||
+      node.ownershipStatus === 'unresolved' ||
+      node.event?.certainty === 'unresolved' ||
+      !node.event?.source?.file ||
+      !Number.isInteger(node.event?.source?.line)
+    );
+  }
+  function addCard(
+    node,
+    index,
+    parentRegionId,
+    extra = {},
+    evidenceNode = node,
+  ) {
+    if (!Number.isInteger(index) || byIndex.has(index)) return;
+    const id = `${encodeURIComponent(scope(node))}:event:${index}:${encodeURIComponent(evidenceNode.evidenceIdentity ?? evidenceNode.eventId ?? evidenceNode.id)}`;
+    const card = {
+      id,
+      node,
+      index,
+      parentRegionId,
+      event: evidenceNode.event,
+      eventId: evidenceNode.eventId,
+      evidenceIdentity: evidenceNode.evidenceIdentity,
+      visitIdentity: evidenceNode.visitIdentity,
+      invocationId: evidenceNode.invocationId,
+      ...extra,
+      unresolved: isUnresolved(evidenceNode) || extra.unresolved === true,
+    };
+    byIndex.set(index, card);
+    cards.push(card);
+  }
+  function walk(items, parentRegionId, uncertain = false) {
+    let neutralRegionId;
+    for (const node of items ?? []) {
+      if (node.iterations) {
+        // Visit selection changes geometry; seeking the cursor alone does not.
+        const selected = Math.min(
+          node.iterations.length - 1,
+          Math.max(0, visits.get(node.id) ?? 0),
+        );
+        node.iterations.forEach((visit, i) => {
+          const id = regionId(node, `visit:${i}`);
+          regions.push({
+            id,
+            type: 'loop',
+            label: visit.label ?? `Prepared visit ${i + 1}`,
+            selected: i === selected,
+            parentRegionId,
+          });
+          const header =
+            visit.children?.find(
+              (child) => child.indices?.[0] === visit.indices[0],
+            ) ?? node;
+          addCard(
+            node,
+            visit.indices[0],
+            id,
+            { control: 'loop', visit: i, unresolved: uncertain },
+            header,
+          );
+          walk(visit.children, id, uncertain);
+        });
+      } else if (node.branches) {
+        const id = regionId(node, 'scope');
+        regions.push({
+          id,
+          type: node.type,
+          label: node.title ?? node.type,
+          parentRegionId,
+        });
+        addCard(node, node.indices[0], id, {
+          control: node.type,
+          unresolved: uncertain || node.ownershipStatus === 'unresolved',
+        });
+        walk(
+          node.children,
+          id,
+          uncertain || node.ownershipStatus === 'unresolved',
+        );
+        node.branches.forEach((branch, i) => {
+          const branchId = regionId(node, `arm:${i}`);
+          regions.push({
+            id: branchId,
+            type: node.type === 'decision' ? 'branch' : node.type,
+            label: branch.label,
+            selected: branch.selected,
+            parentRegionId: id,
+          });
+          walk(
+            branch.children,
+            branchId,
+            uncertain || node.ownershipStatus === 'unresolved',
+          );
+          if (
+            node.type === 'decision' &&
+            branch.label?.startsWith('No · continue without body') &&
+            !branch.indices?.length &&
+            !branch.children?.length
+          )
+            bypasses.push({ node, branch, regionId: id });
+        });
+      } else {
+        const unresolved = uncertain || isUnresolved(node);
+        let owner = parentRegionId;
+        if (unresolved) {
+          if (!neutralRegionId) {
+            neutralRegionId = regionId(node, 'unresolved');
+            regions.push({
+              id: neutralRegionId,
+              type: 'unresolved',
+              label: 'Unresolved · source ownership not proven',
+              parentRegionId,
+            });
+          }
+          owner = neutralRegionId;
+        }
+        addCard(node, node.indices?.[0], owner, { unresolved });
+        walk(node.children, owner, unresolved);
+      }
+    }
+  }
+  walk(nodes);
+  cards.sort((a, b) => a.index - b.index);
+  const regionById = new Map(regions.map((region) => [region.id, region]));
+  function enclosing(card, label) {
+    for (
+      let id = card.parentRegionId;
+      id;
+      id = regionById.get(id)?.parentRegionId
+    ) {
+      const region = regionById.get(id);
+      if (region?.label?.toLowerCase().startsWith(label)) return true;
+    }
+    return false;
+  }
+  function hasAncestor(card, regionId) {
+    for (
+      let id = card.parentRegionId;
+      id;
+      id = regionById.get(id)?.parentRegionId
+    )
+      if (id === regionId) return true;
+    return false;
+  }
+  function sharesTryScope(source, target) {
+    const sourceScopes = new Set();
+    for (
+      let id = source.parentRegionId;
+      id;
+      id = regionById.get(id)?.parentRegionId
+    )
+      if (regionById.get(id)?.type === 'try') sourceScopes.add(id);
+    for (
+      let id = target.parentRegionId;
+      id;
+      id = regionById.get(id)?.parentRegionId
+    )
+      if (sourceScopes.has(id)) return true;
+    return false;
+  }
+  function decisionArm(card) {
+    for (
+      let id = card.parentRegionId;
+      id;
+      id = regionById.get(id)?.parentRegionId
+    ) {
+      const region = regionById.get(id);
+      if (
+        region?.type === 'branch' &&
+        regionById.get(region.parentRegionId)?.type === 'decision'
+      )
+        return { id, parent: region.parentRegionId };
+    }
+  }
+  let pendingTerminal;
+  for (let i = 1; i < cards.length; i++) {
+    const source = cards[i - 1],
+      target = cards[i];
+    if (scope(source.node) !== scope(target.node)) continue;
+    if (source.event?.kind === 'return' || source.event?.kind === 'throw')
+      pendingTerminal = source;
+    const caught =
+      pendingTerminal?.event?.kind === 'throw' &&
+      target.event?.kind === 'catch' &&
+      sharesTryScope(pendingTerminal, target);
+    const cleanup =
+      pendingTerminal &&
+      enclosing(target, 'finally') &&
+      sharesTryScope(pendingTerminal, target);
+    if (pendingTerminal && !caught && !cleanup) continue;
+    if (caught) pendingTerminal = undefined;
+    const loopback =
+      target.control === 'loop' &&
+      target.visit > 0 &&
+      hasAncestor(source, regionId(target.node, `visit:${target.visit - 1}`));
+    const kind = loopback
+      ? 'loopback'
+      : target.event?.kind === 'catch'
+        ? 'catch'
+        : enclosing(target, 'finally')
+          ? 'finally'
+          : enclosing(target, 'yes') || enclosing(target, 'no')
+            ? 'branch'
+            : 'step';
+    const sourceArm = decisionArm(source),
+      targetArm = decisionArm(target);
+    const conflictingArms =
+      sourceArm &&
+      targetArm &&
+      sourceArm.parent === targetArm.parent &&
+      sourceArm.id !== targetArm.id;
+    edges.push({
+      id: `${source.id}->${target.id}`,
+      source: source.id,
+      target: target.id,
+      kind,
+      status:
+        source.unresolved ||
+        target.unresolved ||
+        conflictingArms ||
+        target.index !== source.index + 1
+          ? 'unknown'
+          : 'prepared',
+    });
+  }
+  for (const { node, branch, regionId: id } of bypasses) {
+    const header = byIndex.get(node.indices[0]);
+    const last = Math.max(...node.indices);
+    const continuation = cards.find(
+      (card) =>
+        card.index > last &&
+        scope(card.node) === scope(node) &&
+        !hasAncestor(card, id),
+    );
+    if (
+      !header ||
+      !continuation ||
+      edges.some(
+        (edge) => edge.source === header.id && edge.target === continuation.id,
+      )
+    )
+      continue;
+    edges.push({
+      id: `${header.id}->${continuation.id}:branch:${branch.label}`,
+      source: header.id,
+      target: continuation.id,
+      kind: 'branch',
+      label: branch.label,
+      status:
+        header.unresolved || continuation.unresolved
+          ? 'unknown'
+          : branch.selected === false
+            ? 'not-selected'
+            : branch.selected === undefined
+              ? 'possible'
+              : 'prepared',
+    });
+  }
+  const topologyKey = JSON.stringify([
+    cards.map(({ id, parentRegionId }) => [id, parentRegionId]),
+    regions.map(({ id, parentRegionId, selected }) => [
+      id,
+      parentRegionId,
+      selected,
+    ]),
+    edges.map(({ id, kind, status }) => [id, kind, status]),
+  ]);
+  return { cards, regions, edges, topologyKey };
+}
+
 export function layoutControlFlow(
   nodes,
   {
