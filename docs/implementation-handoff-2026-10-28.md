@@ -7,7 +7,7 @@ an authorization to skip the approved design, Council, tests, or human gates.
 
 **Last verified application/ledger HEAD before this documentation work:**
 [`471e68e5a24da3585ad55d85e640893fae63ada8`](https://github.com/EmpRider/code-anime/commit/471e68e5a24da3585ad55d85e640893fae63ada8).
-Later documentation-only commits move HEAD. On resume, read the *actual* branch
+Later documentation-only commits move HEAD. On resume, read the _actual_ branch
 HEAD and its diff; do not assume the SHA above remains current.
 
 ## Source reconciliation addendum — user uploads, 2026-10-28
@@ -31,7 +31,7 @@ The owner supplied **two files** after the initial handoff was written:
   remains LOW_PRIORITY; removal is not automatically authorized.
 - **T1 — conservative semantic source ownership:** `CI_VERIFIED`, **not DONE**.
   The RED tests and recovered source fix are pushed; full CI is GREEN, but a
-  genuine independent *final* review against the exact recovered source and
+  genuine independent _final_ review against the exact recovered source and
   task acceptance reconciliation have not been documented as complete.
 - **T1a — Prettier CI regression:** DONE, including temporary diagnostic
   deletion and exact-head cross-platform CI verification.
@@ -58,8 +58,8 @@ The owner supplied **two files** after the initial handoff was written:
   Chromium browser (1/1). Workflow checks out this exact commit.
 - **Node (Ubuntu 22 log):** 194 tests, **192 passed, 0 failed, 2 opt-in
   skipped**; static/mock boundary, typecheck, build and Prettier all passed.
-- **Chromium:** **71/71 passed** at that HEAD. This is the *current
-  checked-in suite*, not proof that previously removed/opt-in tests ran.
+- **Chromium:** **71/71 passed** at that HEAD. This is the _current
+  checked-in suite_, not proof that previously removed/opt-in tests ran.
 - **Packed package:** CI's `npm run package:check` passed installed npm
   CLI, MCP handshake, player assets and flow API. It does not publish npm.
 - Any future source/test/docs edit creates a new HEAD and needs its own
@@ -191,7 +191,7 @@ CodeGraph static evidence + AI mock trace
    stages as specified by the owner's agent-team skill. Inspect actual
    available delegation slots; never simulate or invent agent work.
 2. Re-read current HEAD and exact tests. Independent architecture, semantic
-   QA and adversarial reviewers must inspect the *committed formatted*
+   QA and adversarial reviewers must inspect the _committed formatted_
    `public/semantic-flow-model.js` plus focused assertions at HEAD.
 3. Explicitly examine missing/null/unbraced/comment/regex/method-named-if
    cases; repeated callId/event IDs; loop visits; `else if` nested No arm;
@@ -213,7 +213,7 @@ CodeGraph static evidence + AI mock trace
   `tests/diagram-control-layout.test.mjs`. Retain existing
   `layoutControlFlow(...)` and consumer compatibility until T5 migration.
 - **Proposed API:** `prepareControlFlow(method.items, { cursor = 0,
-  visits = new Map(), methodCallId } = {})` returns pure immutable
+visits = new Map(), methodCallId } = {})` returns pure immutable
   `{ cards, regions, edges, topologyKey }` without screen coordinates.
   Parent ownership via `parentRegionId`; edges have stable IDs and
   `prepared | possible | not-selected | unknown` status; key is
