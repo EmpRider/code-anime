@@ -1701,12 +1701,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
         const labelBox =
           label?.box ??
           (edgeLabel
-            ? reserveRouteLabel(
-                points,
-                edgeLabel,
-                obstacles,
-                reservedEdgeLabels,
-              )
+            ? reserveRouteLabel(points, edgeLabel, obstacles, reservedEdgeLabels)
             : null);
         if (label?.box) reservedEdgeLabels.push(label.box);
         edgeCells.push(

@@ -12,7 +12,10 @@ test('horizontal native route reserves a readable label outside cards', () => {
   const obstacles = [{ x: 140, y: 44, width: 80, height: 100 }];
   const reserved = [];
   const label = reserveRouteLabel(
-    [{ x: 0, y: 100 }, { x: 360, y: 100 }],
+    [
+      { x: 0, y: 100 },
+      { x: 360, y: 100 },
+    ],
     'No · path not selected',
     obstacles,
     reserved,
@@ -36,7 +39,12 @@ test('no free label region omits visual text without altering route', () => {
   const blockers = [{ x: -500, y: -500, width: 2000, height: 2000 }];
   const reserved = [];
   assert.equal(
-    reserveRouteLabel(route, 'Unresolved · source not proven', blockers, reserved),
+    reserveRouteLabel(
+      route,
+      'Unresolved · source not proven',
+      blockers,
+      reserved,
+    ),
     null,
   );
   assert.equal(reserved.length, 0);
@@ -46,7 +54,10 @@ test('no free label region omits visual text without altering route', () => {
 test('vertical native route can reserve a side label', () => {
   const reserved = [];
   const label = reserveRouteLabel(
-    [{ x: 100, y: 0 }, { x: 100, y: 340 }],
+    [
+      { x: 100, y: 0 },
+      { x: 100, y: 340 },
+    ],
     'FINALLY',
     [],
     reserved,

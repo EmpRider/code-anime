@@ -45,8 +45,9 @@ export function reserveRouteLabel(points, text, obstacles, reservations) {
           [...obstacles, ...reservations].some((other) =>
             overlaps(box, other),
           )
-        )
+        ) {
           continue;
+        }
         reservations.push(box);
         return box;
       }

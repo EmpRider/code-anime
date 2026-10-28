@@ -169,9 +169,7 @@ test(
       topologyKey: 'long-horizontal-sequence',
       cards,
       regions: [],
-      edges: cards
-        .slice(1)
-        .map((card, index) => ({
+      edges: cards.slice(1).map((card, index) => ({
           id: `edge-${index}`,
           source: cards[index].id,
           target: card.id,
