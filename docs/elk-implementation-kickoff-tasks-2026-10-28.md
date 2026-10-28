@@ -97,3 +97,31 @@
 **ISSUE-T6-WIN-ESBUILD-URL-PATH formatting follow-up (2026-10-28; CI pending):** GitHub Actions run `40703600408` proved the cross-platform `fileURLToPath` remedy removed the Windows esbuild resolution errors and reported 0 Node test failures on both OSes, but `npm run format:check` identified a single over-width `entryPoints` line in `tests/diagram-routing.test.mjs`. Apply only Prettier-compatible multiline wrapping; do not alter the tested file path expression or any tests. Re-run clean CI matrix before marking the issue DONE.
 
 **T9 non-browser scale checkpoint (2026-10-28; CI verification PENDING, NOT DONE):** Add synthetic, clearly labeled **mock-only** topology checks at 76, 500 and 1000 event counts using the existing pure `prepareControlFlow` API (not executing any analyzed user project). Assert all event indices/card identities survive with no arbitrary cap, an expected consecutive prepared-edge count, and identical `topologyKey` after cursor-only changes. These are Node tests; they do not measure native Worker/browser paint/memory nor certify full source/Values/stack/console/breakpoint continuation parity. Owner remains responsible for local browser/E2E acceptance. The T9 task remains PARTIAL until cross-platform non-browser CI and all remaining owner checks are reported; no release/merge/npm publish.
+
+## Four-job T9 cross-platform CI verified (2026-10-28)
+
+GitHub Actions [run 40704303758](https://github.com/EmpRider/code-anime/actions/runs/40704303758)
+at `688169e1518cb59ee579263f6795e909e181b709` has **SUCCESS**
+for all four non-browser jobs: Ubuntu Node 22 and 24, Windows Node 22
+and 24. Each job ran clean `npm ci`, `npm run check` (scope, typecheck,
+build, Node tests, formatting), and installed `npm run package:check`.
+The Ubuntu 24 log separately names PASS for T9 synthetic **76, 500,
+1000** mock-event topology cases. No browser result is counted.
+
+- **ISSUE-T3-CLEAN-CHECK-BUILD-ORDER — DONE (non-browser CI verified).**
+  Registered in `95dc259`, repaired in `8f04934`.
+- **ISSUE-T6-WIN-ESBUILD-URL-PATH — DONE (non-browser CI verified).**
+  Registered in `c9c24eb`, code fix `1bfca61`, formatting `4adf113`.
+- **T8 — IMPLEMENTED / OWNER_BROWSER_PENDING, NOT DONE.** Accessibility
+  `71afcee`, compact source/trace `104b246`, 4/4 non-browser CI
+  jobs accepted. Native Worker/200%-zoom visual acceptance is not verified.
+- **T9 — PARTIAL NON-BROWSER VERIFIED / OWNER_BROWSER_PENDING, NOT DONE.**
+  Three scale cases `688169e`; full owner original fixture/visual,
+  performance, integration and final acceptance still outstanding.
+- **T1 — OPEN:** regex-literal grouping false negative and historical
+  checked-in versus rebuilt/installed bundle parity.
+- **T3 — technical Worker packaged; provenance OPEN.** User said
+  licensing settled, but this is not an independent legal certification.
+
+No browser signoff, merge, release, npm publish, deployment or task file
+deletion is authorized. Retain the previously recorded task histories.
