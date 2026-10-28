@@ -26697,58 +26697,58 @@ function GA(e, { cursor: t = 0, visits: n = /* @__PURE__ */ new Map(), methodCal
 		};
 		s.set(t, o), i.push(o);
 	}
-	function p(e, r, i = !1) {
-		let o;
-		for (let s of e ?? []) if (s.iterations) {
-			let e = Math.min(s.iterations.length - 1, Math.max(0, n.get(s.id) ?? 0)), o = s.iterations.findIndex((e) => e.indices.includes(t));
-			o >= 0 && (e = o), e = Math.min(e, s.iterations.length - 1), s.iterations.forEach((t, n) => {
-				let o = u(s, `visit:${n}`);
+	function p(e, t, r = !1) {
+		let i;
+		for (let o of e ?? []) if (o.iterations) {
+			let e = Math.min(o.iterations.length - 1, Math.max(0, n.get(o.id) ?? 0));
+			o.iterations.forEach((n, i) => {
+				let s = u(o, `visit:${i}`);
 				a.push({
-					id: o,
+					id: s,
 					type: "loop",
-					label: t.label ?? `Prepared visit ${n + 1}`,
-					selected: n === e,
-					parentRegionId: r
+					label: n.label ?? `Prepared visit ${i + 1}`,
+					selected: i === e,
+					parentRegionId: t
 				});
-				let c = t.children?.find((e) => e.indices?.[0] === t.indices[0]) ?? s;
-				f(s, t.indices[0], o, {
+				let c = n.children?.find((e) => e.indices?.[0] === n.indices[0]) ?? o;
+				f(o, n.indices[0], s, {
 					control: "loop",
-					visit: n,
-					unresolved: i
-				}, c), p(t.children, o, i);
+					visit: i,
+					unresolved: r
+				}, c), p(n.children, s, r);
 			});
-		} else if (s.branches) {
-			let e = u(s, "scope");
+		} else if (o.branches) {
+			let e = u(o, "scope");
 			a.push({
 				id: e,
-				type: s.type,
-				label: s.title ?? s.type,
-				parentRegionId: r
-			}), f(s, s.indices[0], e, {
-				control: s.type,
-				unresolved: i || s.ownershipStatus === "unresolved"
-			}), p(s.children, e, i || s.ownershipStatus === "unresolved"), s.branches.forEach((t, n) => {
-				let r = u(s, `arm:${n}`);
+				type: o.type,
+				label: o.title ?? o.type,
+				parentRegionId: t
+			}), f(o, o.indices[0], e, {
+				control: o.type,
+				unresolved: r || o.ownershipStatus === "unresolved"
+			}), p(o.children, e, r || o.ownershipStatus === "unresolved"), o.branches.forEach((t, n) => {
+				let i = u(o, `arm:${n}`);
 				a.push({
-					id: r,
-					type: s.type === "decision" ? "branch" : s.type,
+					id: i,
+					type: o.type === "decision" ? "branch" : o.type,
 					label: t.label,
 					selected: t.selected,
 					parentRegionId: e
-				}), p(t.children, r, i || s.ownershipStatus === "unresolved"), s.type === "decision" && t.label?.startsWith("No · continue without body") && !t.indices?.length && !t.children?.length && c.push({
-					node: s,
+				}), p(t.children, i, r || o.ownershipStatus === "unresolved"), o.type === "decision" && t.label?.startsWith("No · continue without body") && !t.indices?.length && !t.children?.length && c.push({
+					node: o,
 					branch: t,
 					regionId: e
 				});
 			});
 		} else {
-			let e = i || d(s), t = r;
-			e && (o || (o = u(s, "unresolved"), a.push({
-				id: o,
+			let e = r || d(o), n = t;
+			e && (i || (i = u(o, "unresolved"), a.push({
+				id: i,
 				type: "unresolved",
 				label: "Unresolved · source ownership not proven",
-				parentRegionId: r
-			})), t = o), f(s, s.indices?.[0], t, { unresolved: e }), p(s.children, t, e);
+				parentRegionId: t
+			})), n = i), f(o, o.indices?.[0], n, { unresolved: e }), p(o.children, n, e);
 		}
 	}
 	p(e), i.sort((e, t) => e.index - t.index);
@@ -26872,18 +26872,18 @@ function XA(e, t, n) {
 		edges: []
 	}, i = /* @__PURE__ */ new Map([["", r]]);
 	for (let n of e.regions) {
-		let e = {
+		let r = e.cards.filter((e) => e.parentRegionId === n.id).length + e.regions.filter((e) => e.parentRegionId === n.id).length, a = {
 			id: n.id,
 			layoutOptions: {
 				"elk.algorithm": "layered",
 				"elk.direction": qA[t],
-				"elk.layered.wrapping.strategy": t === "horizontal" ? "MULTI_EDGE" : "OFF",
+				"elk.layered.wrapping.strategy": t === "horizontal" && r >= 8 ? "MULTI_EDGE" : "OFF",
 				"elk.aspectRatio": 2,
 				"elk.padding": "[top=40,left=16,bottom=16,right=16]"
 			},
 			children: []
 		};
-		i.set(n.id, e);
+		i.set(n.id, a);
 	}
 	for (let t of e.regions) i.get(t.parentRegionId || "").children.push(i.get(t.id));
 	for (let t of e.cards) {
@@ -27101,20 +27101,67 @@ function QA({ workerUrl: e = "/vendor/elk-worker.min.js" } = {}) {
 		}
 	};
 }
+// public/diagram-label-placement.js
+var $A = (e, t) => e.x < t.x + t.width + 6 && e.x + e.width + 6 > t.x && e.y < t.y + t.height + 6 && e.y + e.height + 6 > t.y;
+function ej(e, t, n, r) {
+	if (!Array.isArray(e) || e.length < 2 || !t) return null;
+	let i = String(t).split("\n"), a = Math.max(46, ...i.map((e) => e.length * 6 + 20)), o = i.length * 14 + 12, s = [];
+	for (let t = 1; t < e.length; t++) {
+		let n = e[t - 1], r = e[t];
+		if (![
+			n.x,
+			n.y,
+			r.x,
+			r.y
+		].every(Number.isFinite)) return null;
+		let i = n.y === r.y, a = n.x === r.x, o = Math.abs(n.x - r.x) + Math.abs(n.y - r.y);
+		!i && !a || o < 32 || s.push({
+			a: n,
+			b: r,
+			horizontal: i,
+			length: o
+		});
+	}
+	s.sort((e, t) => t.length - e.length);
+	for (let { a: e, b: t, horizontal: i } of s) for (let s of [
+		.5,
+		.25,
+		.75,
+		.125,
+		.875
+	]) {
+		let c = e.x + (t.x - e.x) * s, l = e.y + (t.y - e.y) * s;
+		for (let e of [-1, 1]) {
+			let t = i ? {
+				x: c - a / 2,
+				y: l + (e < 0 ? -o - 10 : 10),
+				width: a,
+				height: o
+			} : {
+				x: c + (e < 0 ? -a - 10 : 10),
+				y: l - o / 2,
+				width: a,
+				height: o
+			};
+			if (![...n, ...r].some((e) => $A(t, e))) return r.push(t), t;
+		}
+	}
+	return null;
+}
 // public/diagram.js
 J.autoInsertCSS = !1;
-var $A = 260, ej = 116, tj = 64, nj = 3, $ = (e, t, n) => {
+var tj = 260, nj = 116, rj = 64, ij = 3, $ = (e, t, n) => {
 	let r = document.createElement(e);
 	return r.textContent = t, n && (r.className = n), r;
-}, rj = (e) => {
+}, aj = (e) => {
 	if (e?.output !== void 0) return AA(e.output);
 	let t = e && Object.hasOwn(e, "result") ? e.result : e?.after ?? e?.inputs;
 	return t === void 0 ? "No value snapshot" : JSON.stringify(t, null, 2);
 };
 SS.register({
 	shape: "code-anime-card",
-	width: $A,
-	height: ej,
+	width: tj,
+	height: nj,
 	effect: ["data"],
 	html(e) {
 		let t = e.getData();
@@ -27189,7 +27236,7 @@ SS.register({
 		return r.title = r.textContent, n.append(r), n;
 	}
 });
-function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
+function oj(e, { onSelect: t, onSeek: n, onPause: r }) {
 	e.className = "diagram-canvas";
 	let i = $("div", "", "diagram-heading"), a = $("strong", "Execution path"), o = $("span", "Prepared steps · not runtime execution");
 	i.append(a, o);
@@ -27476,13 +27523,13 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 				kind: e.kind === "step" ? e.event.kind : e.kind,
 				expandLabel: e.kind === "class" ? "Expand class " + e.owner : e.kind === "step" ? "Go to source step " + e.index : "Expand method " + e.symbol,
 				expandable: e.kind !== "step",
-				value: e.kind === "class" ? `${e.count} method invocations` : rj(e.event),
+				value: e.kind === "class" ? `${e.count} method invocations` : aj(e.event),
 				active: v > 0 && (e.kind === "class" ? e.owner === De.owner(M) : e.kind === "method" ? L.kind === "class" ? M === e.callId : De.contains(M, e.callId) : e.index === v)
 			})), b && !O) {
 				let e = Te.findIndex((e) => e.active);
-				e >= 0 && (D = Math.floor(e / nj));
+				e >= 0 && (D = Math.floor(e / ij));
 			}
-			D = Math.max(0, Math.min(D, Math.ceil(Te.length / nj) - 1)), P = Te.slice(D * nj, (D + 1) * nj), de = P.slice(1).map((e, t) => [P[t].id, e.id]), a.textContent = L.kind === "classes" ? "Classes / modules" : L.kind === "class" ? L.id : (fe.get(L.id)?.symbol ?? L.id) + " · " + L.id, o.textContent = L.kind === "classes" ? "Class-level playback · expand a class" : L.kind === "class" ? "Method-level playback · expand an invocation" : "Source-step playback · expand nested calls", o.textContent += " · arrows: " + (L.kind === "method" ? "prepared step order" : "first appearance order, not calls"), v > 0 && !Te.some((e) => e.active) && (o.textContent += " · cursor outside this scope");
+			D = Math.max(0, Math.min(D, Math.ceil(Te.length / ij) - 1)), P = Te.slice(D * ij, (D + 1) * ij), de = P.slice(1).map((e, t) => [P[t].id, e.id]), a.textContent = L.kind === "classes" ? "Classes / modules" : L.kind === "class" ? L.id : (fe.get(L.id)?.symbol ?? L.id) + " · " + L.id, o.textContent = L.kind === "classes" ? "Class-level playback · expand a class" : L.kind === "class" ? "Method-level playback · expand an invocation" : "Source-step playback · expand nested calls", o.textContent += " · arrows: " + (L.kind === "method" ? "prepared step order" : "first appearance order, not calls"), v > 0 && !Te.some((e) => e.active) && (o.textContent += " · cursor outside this scope");
 		} else {
 			a.textContent = "Execution path", o.textContent = "Prepared steps · not runtime execution", P = pe.functions.filter((e) => !_e.has(e.invocations[0].className)).map((e) => {
 				let t = v > 0 && e.id === Ce;
@@ -27503,7 +27550,7 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 					source: t && re?.callId === i.callId ? re.source : a?.source,
 					kind: "function",
 					certainty: o ? re?.certainty : i.certainty,
-					value: rj(o ? re : a),
+					value: aj(o ? re : a),
 					inputs: a?.inputs ?? C[i.callSiteIndex - 1]?.inputs,
 					expanded: ve.has(e.id),
 					steps: ve.has(e.id) ? De.steps(i.callId).filter((e) => e.kind === "step" && (e.event.kind !== "enter" || e.certainty === "unresolved")) : [],
@@ -27560,7 +27607,7 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 				}
 			}
 		}
-		let Re = [], Be = [], Ve = /* @__PURE__ */ new Set([...P.map((e) => e.id), ...[...Ie.values()].map((e) => e.id)]), He = [], Ue = [], We = /* @__PURE__ */ new Map(), Ge = !1;
+		let Re = [], Be = [], Ve = /* @__PURE__ */ new Set([...P.map((e) => e.id), ...[...Ie.values()].map((e) => e.id)]), He = [], Ue = [], We = /* @__PURE__ */ new Set(), Ge = /* @__PURE__ */ new Map(), Ke = !1;
 		for (let e of P) {
 			let t = xe.methods.find((t) => t.id === e.callId);
 			if (e.expanded && t) {
@@ -27568,43 +27615,51 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 					cursor: b ? v : 0,
 					visits: be,
 					methodCallId: e.callId
-				}), a = /* @__PURE__ */ new Map();
+				}), a = new Map(i.regions.map((e) => [e.id, e]));
+				for (let e of i.cards) for (let t = e.parentRegionId; t; t = a.get(t)?.parentRegionId) {
+					let n = a.get(t);
+					if (n?.type === "loop" && n.selected === !1) {
+						We.add(e.index);
+						break;
+					}
+				}
+				let o = /* @__PURE__ */ new Map();
 				for (let t of i.cards) {
 					let n = we(JSON.stringify([
 						"control",
 						e.id,
 						t.id
 					]));
-					a.set(t.node.id, Math.max(a.get(t.node.id) ?? 0, n));
+					o.set(t.node.id, Math.max(o.get(t.node.id) ?? 0, n));
 				}
-				let o = JSON.stringify([
+				let s = JSON.stringify([
 					ue,
 					e.id,
 					i.topologyKey,
 					m,
 					c.clientWidth,
-					[...a]
+					[...o]
 				]);
-				We.set(o, {
+				Ge.set(s, {
 					prepared: i,
 					direction: m,
-					extraHeights: a
+					extraHeights: o
 				});
-				let s = ce.get(o);
-				if (!s) {
-					le.has(o) || (Ge = !0);
+				let l = ce.get(s);
+				if (!l) {
+					le.has(s) || (Ke = !0);
 					continue;
 				}
-				e.controlLayout = s, e.width = Math.max($A, s.width + 32);
-				let l = new Map(s.cards.map((t) => [t.id, JSON.stringify([
+				e.controlLayout = l, e.width = Math.max(tj, l.width + 32);
+				let u = new Map(l.cards.map((t) => [t.id, JSON.stringify([
 					"control",
 					e.id,
 					t.id
 				])]));
-				for (let t of s.cards) {
+				for (let t of l.cards) {
 					if (t.placeholder) {
 						Re.push({
-							id: l.get(t.id),
+							id: u.get(t.id),
 							parentId: e.id,
 							placeholder: !0,
 							label: t.node.title,
@@ -27617,7 +27672,7 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 					}
 					let i = t.index ?? t.node.indices[0], a = C[i - 1] ?? t.event, o = e.steps.find((e) => e.index === i);
 					Re.push({
-						id: l.get(t.id),
+						id: u.get(t.id),
 						parentId: e.id,
 						parentRegionId: t.parentRegionId ? JSON.stringify([e.id, t.parentRegionId]) : void 0,
 						index: i,
@@ -27638,21 +27693,21 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 						height: t.height,
 						expandLabel: "Go to source step " + i,
 						expandable: !1,
-						value: rj(a),
+						value: aj(a),
 						unresolved: t.unresolved || !C[i - 1],
 						active: v === i,
-						visits: t.control === "loop" && t.visit === be.get(t.node.id) ? t.node.iterations : void 0,
+						visits: t.control === "loop" ? t.node.iterations : void 0,
 						visit: t.visit,
 						onVisit: (e) => {
 							r?.(), be.set(t.node.id, e), n(t.node.iterations[e].indices[0]), ie = "", ze(E, !1);
 						}
 					});
 				}
-				Ue.push(...s.edges.map((e) => ({
+				Ue.push(...l.edges.map((e) => ({
 					...e,
-					source: l.get(e.source),
-					target: l.get(e.target)
-				}))), He.push(...s.regions.map((t) => ({
+					source: u.get(e.source),
+					target: u.get(e.target)
+				}))), He.push(...l.regions.map((t) => ({
 					...t,
 					id: JSON.stringify([e.id, t.id]),
 					parentId: e.id,
@@ -27660,7 +27715,7 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 				})));
 				continue;
 			}
-			if (e.columns = Math.min(e.steps?.length || 1, N ? 2 : 4), e.width = e.expanded ? e.columns * 324 - tj + 32 : $A, !e.expanded) continue;
+			if (e.columns = Math.min(e.steps?.length || 1, N ? 2 : 4), e.width = e.expanded ? e.columns * 324 - rj + 32 : tj, !e.expanded) continue;
 			let i;
 			for (let [t, n] of e.steps.entries()) {
 				let r = JSON.stringify([
@@ -27681,13 +27736,13 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 					label: n.event.kind === "call" ? n.label || n.event.label || "Call" : n.event.label || n.event.kind,
 					expandLabel: "Go to source step " + n.index,
 					expandable: !1,
-					value: rj(n.event),
+					value: aj(n.event),
 					active: v > 0 && n.index === v
 				};
 				Re.push(a), i && Be.push([i, r]), i = r;
 			}
 		}
-		if (he(We, s), Ge || [...We.keys()].some((e) => le.has(e))) {
+		if (he(Ge, s), Ke || [...Ge.keys()].some((e) => le.has(e))) {
 			if (se === ue) {
 				let e = /* @__PURE__ */ new Set();
 				for (let [t, n] of F) {
@@ -27710,7 +27765,7 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 			return;
 		}
 		for (let e of P) {
-			e.headerHeight = ej + we(e.id) + (e.invocations?.length > 1 ? 36 : 0);
+			e.headerHeight = nj + we(e.id) + (e.invocations?.length > 1 ? 36 : 0);
 			let t = Re.filter((t) => t.parentId === e.id);
 			if (e.controlLayout) {
 				for (let n of t) n.offsetY = e.headerHeight + 16 + n.layoutY;
@@ -27718,17 +27773,17 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 				continue;
 			}
 			let n = [];
-			for (let e of t) e.height = ej + we(e.id), n[e.row] = Math.max(n[e.row] ?? 0, e.height);
-			for (let r of t) r.offsetY = e.headerHeight + 16 + n.slice(0, r.row).reduce((e, t) => e + t + tj, 0);
-			e.height = e.headerHeight + (t.length ? n.reduce((e, t) => e + t + tj, 16) : 0);
+			for (let e of t) e.height = nj + we(e.id), n[e.row] = Math.max(n[e.row] ?? 0, e.height);
+			for (let r of t) r.offsetY = e.headerHeight + 16 + n.slice(0, r.row).reduce((e, t) => e + t + rj, 0);
+			e.height = e.headerHeight + (t.length ? n.reduce((e, t) => e + t + rj, 16) : 0);
 		}
-		let Ke = [...P, ...Re];
-		for (let e of Ke) e.inline = Fe, e.valuesOpen = Se.has(e.id), e.onValues = Ee;
-		let qe = JSON.stringify([
+		let qe = [...P, ...Re];
+		for (let e of qe) e.inline = Fe, e.valuesOpen = Se.has(e.id), e.onValues = Ee;
+		let Je = JSON.stringify([
 			_,
 			N,
 			N ? null : c.clientWidth,
-			Ke.map((e) => [
+			qe.map((e) => [
 				e.id,
 				e.width,
 				e.height,
@@ -27736,9 +27791,9 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 			]),
 			[...Ie.values()],
 			de
-		]), Je = qe !== ie;
-		if (Je) {
-			ie = qe, x.clearCells(), F = /* @__PURE__ */ new Map(), ge = /* @__PURE__ */ new Map(), I = [];
+		]), Ye = Je !== ie;
+		if (Ye) {
+			ie = Je, x.clearCells(), F = /* @__PURE__ */ new Map(), ge = /* @__PURE__ */ new Map(), I = [];
 			let e = new OA.default.graphlib.Graph({ compound: Fe }).setGraph({
 				rankdir: N ? "TB" : "LR",
 				align: "UL",
@@ -27835,7 +27890,7 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 					shape: "code-anime-card",
 					x: i.x + 16 + (e.x ?? e.column * 324),
 					y: i.y + e.offsetY,
-					width: e.width ?? $A,
+					width: e.width ?? tj,
 					height: e.height,
 					zIndex: 2,
 					data: {
@@ -27856,7 +27911,7 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 					width: t.width,
 					height: t.height
 				};
-			}, a = Ke.map((e) => {
+			}, a = qe.map((e) => {
 				let t = F.get(e.id).getBBox();
 				return {
 					id: e.id,
@@ -27894,7 +27949,7 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 			}));
 			for (let [e, t, n] of [...Be, ...de]) {
 				let i = !!F.get(t).getData().parentId, a = n ?? t, o = fe.get(a), s = Fe && !i, c = !Fe && !i && L?.kind !== "method";
-				if (Fe && !i && F.get(e).getData().expanded && o?.callSiteIndex && !r.has(o.callSiteIndex)) continue;
+				if (Fe && !i && F.get(e).getData().expanded && o?.callSiteIndex && (!r.has(o.callSiteIndex) || We.has(o.callSiteIndex))) continue;
 				let l = Fe && !i ? r.get(o?.callSiteIndex) ?? e : e, d = Fe && !i ? r.get(o?.index) ?? t : t;
 				if (u.push({
 					source: l,
@@ -27914,7 +27969,7 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 					...e
 				});
 			}
-			let d = [], f = 0, p = (e, t) => {
+			let d = [], f = [], p = 0, m = (e, t) => {
 				let n = i(e);
 				return {
 					cell: e,
@@ -27931,40 +27986,40 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 			for (let e of u) {
 				let t = F.get(e.source), n = F.get(e.target);
 				if (!t || !n) {
-					f++, d.push(`${e.kind}: missing prepared endpoint; no route drawn`);
+					p++, d.push(`${e.kind}: missing prepared endpoint; no route drawn`);
 					continue;
 				}
-				let r = t.getData(), i = n.getData(), a = r.parentId && r.parentId === i.parentId, s = F.get(r.parentId)?.position(), c = F.get(r.parentId)?.getData(), u = e.points?.map((e) => ({
-					x: e.x + s.x + 16,
-					y: e.y + s.y + c.headerHeight + 16
-				})), m = u ? u.length >= 2 ? { points: u } : null : l.route({
+				let r = t.getData(), i = n.getData(), s = r.parentId && r.parentId === i.parentId, c = F.get(r.parentId)?.position(), u = F.get(r.parentId)?.getData(), h = e.points?.map((e) => ({
+					x: e.x + c.x + 16,
+					y: e.y + c.y + u.headerHeight + 16
+				})), g = h ? h.length >= 2 ? { points: h } : null : l.route({
 					...o.get(e.source),
 					...r.control === "decision" ? { shape: "diamond" } : {},
-					...a ? {
+					...s ? {
 						sides: !N && e.kind === "branch" ? ["right", "bottom"] : [e.sourceSide ?? (N ? "bottom" : "right")],
 						centered: !0
 					} : {}
 				}, e.kind === "call" && F.get(e.target).getData().expanded ? {
 					...o.get(e.target),
-					height: ej,
+					height: nj,
 					sides: ["left", "right"]
 				} : {
 					...o.get(e.target),
 					...i.control === "decision" ? { shape: "diamond" } : {},
-					...a ? {
+					...s ? {
 						sides: !N && e.kind === "branch" ? ["left", "top"] : [e.targetSide ?? (N ? "top" : "left")],
 						centered: !0
 					} : {}
 				}, e.label);
-				if (!m) {
-					f++, d.push(`${e.kind} (${e.status ?? "unavailable"}): ${r.symbol ?? e.source} to ${i.symbol ?? e.target}; no route drawn`);
+				if (!g) {
+					p++, d.push(`${e.kind} (${e.status ?? "unavailable"}): ${r.symbol ?? e.source} to ${i.symbol ?? e.target}; no route drawn`);
 					continue;
 				}
-				let { points: h, label: g } = m, _ = g?.box, v = e.status ?? (e.inactive ? "not-selected" : "prepared"), y = e.fallback, b = e.label ?? (e.kind === "branch" ? "BRANCH" : e.kind === "catch" ? "EXCEPTION" : e.kind === "finally" ? "FINALLY" : e.kind === "loopback" ? "LOOP" : void 0);
-				I.push(x.addEdge({
-					source: p(e.source, h[0]),
-					target: p(e.target, h.at(-1)),
-					vertices: h.slice(1, -1),
+				let { points: _, label: v } = g, y = e.status ?? (e.inactive ? "not-selected" : "prepared"), b = e.fallback, S = e.label ?? (e.kind === "branch" ? "BRANCH" : e.kind === "catch" ? "EXCEPTION" : e.kind === "finally" ? "FINALLY" : e.kind === "loopback" ? "LOOP" : void 0), C = v?.box ?? (S ? ej(_, S, a, f) : null);
+				v?.box && f.push(v.box), I.push(x.addEdge({
+					source: m(e.source, _[0]),
+					target: m(e.target, _.at(-1)),
+					vertices: _.slice(1, -1),
 					connector: {
 						name: "jumpover",
 						args: {
@@ -27979,23 +28034,23 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 						index: e.index,
 						callId: e.callId,
 						inactive: e.inactive,
-						status: v
+						status: y
 					},
 					attrs: {
 						root: {
-							"aria-label": `${e.description ?? `${b ?? e.kind}: ${e.source} to ${e.target}`} · ${v}${y ? ` · ${y}` : ""}`,
+							"aria-label": `${e.description ?? `${S ?? e.kind}: ${e.source} to ${e.target}`} · ${y}${b ? ` · ${b}` : ""}`,
 							"data-edge-kind": e.kind,
-							"data-edge-status": v,
-							"data-fallback": y ?? "",
+							"data-edge-status": y,
+							"data-fallback": b ?? "",
 							"data-source-node": e.source,
 							"data-target-node": e.target,
-							"data-route": JSON.stringify(h),
-							"data-label-box": _ ? JSON.stringify(_) : ""
+							"data-route": JSON.stringify(_),
+							"data-label-box": C ? JSON.stringify(C) : ""
 						},
 						line: {
 							stroke: "#64748b",
 							strokeWidth: 1.5,
-							strokeDasharray: v === "unknown" ? "8 4 2 4" : v === "possible" ? "4 4" : v === "not-selected" ? "2 6" : e.kind === "return" || e.kind === "first-appearance" ? "5 7" : "",
+							strokeDasharray: y === "unknown" ? "8 4 2 4" : y === "possible" ? "4 4" : y === "not-selected" ? "2 6" : e.kind === "return" || e.kind === "first-appearance" ? "5 7" : "",
 							targetMarker: {
 								name: "block",
 								width: 7,
@@ -28003,17 +28058,17 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 							}
 						}
 					},
-					labels: b ? [{
-						position: _ ? {
+					labels: S && C ? [{
+						position: {
 							distance: 0,
 							offset: {
-								x: _.x + _.width / 2 - h[0].x,
-								y: _.y + _.height / 2 - h[0].y
+								x: C.x + C.width / 2 - _[0].x,
+								y: C.y + C.height / 2 - _[0].y
 							}
-						} : .5,
+						},
 						attrs: {
 							label: {
-								text: b,
+								text: S,
 								fontSize: 10,
 								fill: "var(--diagram-ink)"
 							},
@@ -28028,14 +28083,14 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 				}));
 			}
 			if (y.replaceChildren(), y.hidden = d.length === 0, d.length) {
-				let e = $("summary", `${f} connections not drawn`);
+				let e = $("summary", `${p} connections not drawn`);
 				e.setAttribute("aria-live", "polite");
 				let t = $("ul");
 				for (let e of d) t.append($("li", e));
 				y.append(e, $("p", "Collapse unrelated methods or filter owners to free routing space. Inspect a method for its prepared return value."), t);
 			}
 			k && ee(k), s && Pe(), se = ue, me();
-		} else if (v !== ae) for (let e of Ke) F.get(e.id)?.setData({
+		} else if (v !== ae) for (let e of qe) F.get(e.id)?.setData({
 			...e,
 			onSelect: t,
 			onSeek: n,
@@ -28045,15 +28100,15 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 			...e,
 			active: v > 0 && e.members.includes(Fe ? Ce : M)
 		});
-		let Ye = Re.find((e) => e.active && e.level === "step") ?? P.find((e) => e.active), Xe = new Set(Ke.filter((e) => e.active).map((e) => e.id));
+		let Xe = Re.find((e) => e.active && e.level === "step") ?? P.find((e) => e.active), Ze = new Set(qe.filter((e) => e.active).map((e) => e.id));
 		for (let e of I) {
-			let t = e.getData().kind === "return", n = e.getData().kind === "first-appearance", r = e.getData().status !== "prepared" || n ? !1 : t ? e.getData().index === v : Fe && e.getData().kind === "call" ? v > 0 && re?.kind !== "return" && e.getData().callId === M : Xe.has(e.getTargetCellId());
+			let t = e.getData().kind === "return", n = e.getData().kind === "first-appearance", r = e.getData().status !== "prepared" || n ? !1 : t ? e.getData().index === v : Fe && e.getData().kind === "call" ? v > 0 && re?.kind !== "return" && e.getData().callId === M : Ze.has(e.getTargetCellId());
 			e.attr("line/stroke", r ? "#4f46e5" : "#64748b"), e.attr("line/strokeWidth", r ? 2.5 : 1.5), e.attr("line/class", r && (t || !Fe) && !A ? "diagram-edge-active" : ""), e.attr("line/strokeDasharray", e.getData().status === "unknown" ? "8 4 2 4" : e.getData().status === "possible" ? "4 4" : e.getData().status === "not-selected" ? "2 6" : t || n || e.getData().inactive || !Fe && r && !A ? "5 7" : "");
 		}
-		if (te(), !Je && b && v !== ae && Ye) {
+		if (te(), !Ye && b && v !== ae && Xe) {
 			if (L) Pe();
 			else {
-				let e = F.get(Ye.id), t = x.localToClient(e.getBBox()), n = c.getBoundingClientRect(), r = d.getBoundingClientRect();
+				let e = F.get(Xe.id), t = x.localToClient(e.getBBox()), n = c.getBoundingClientRect(), r = d.getBoundingClientRect();
 				if (t.x + t.width > r.left && t.x < r.right && t.y + t.height > r.top || t.x < n.left + 12 || t.y < n.top + 12 || t.x + t.width > n.right - 12 || t.y + t.height > n.bottom - 12) {
 					x.centerCell(e);
 					let t = x.localToClient(e.getBBox());
@@ -28061,12 +28116,12 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 				}
 			}
 		}
-		if (ae = v, Je || !u.childNodes.length) {
+		if (ae = v, Ye || !u.childNodes.length) {
 			if (u.replaceChildren(), L) {
 				let e = Te?.length ?? Me ?? S.steps.length, t = (e) => {
 					D += e, O = !0, ze(E);
 				}, n = f("‹", "Previous diagram page", () => t(-1)), r = f("›", "Next diagram page", () => t(1));
-				n.disabled = D === 0, r.disabled = (D + 1) * nj >= e, u.append(n, $("span", e ? `${D * nj + 1}–${Math.min((D + 1) * nj, e)} / ${e}` : "No steps"), r);
+				n.disabled = D === 0, r.disabled = (D + 1) * ij >= e, u.append(n, $("span", e ? `${D * ij + 1}–${Math.min((D + 1) * ij, e)} / ${e}` : "No steps"), r);
 			} else u.append($("span", `${P.length} visible · drag to pan`));
 		}
 		if (h && !l.isConnected) {
@@ -28086,4 +28141,4 @@ function ij(e, { onSelect: t, onSeek: n, onPause: r }) {
 		advance: Me
 	};
 }
-export { ij as createDiagram };
+export { oj as createDiagram };

@@ -10,10 +10,12 @@ Pinned upstream snapshots: Superpowers `2ce8aa15`, Council `a7565e21`, Caveman `
 
 ## CA-001 — Selected loop call-edge route (P0)
 
-- Owner: development specialist; TL supervisor. Status: `WAITING_ON_REPRO`. Lock: `public/diagram.js` and related tests.
+- Owner: development specialist; TL supervisor. Status: `VERIFIED/AWAITING_BROWSER_CI`. Lock: `public/diagram.js` and generated diagram bundle. Remote browser verification pending; not `DONE`.
 - Observed: expected one selected call edge, got two (`tests/browser/player.spec.ts:880–948`). Expected exact Visit route with all recorded iterations preserved.
-- Hypothesis: filtering by retained `stepNodes` (`public/diagram.js:1538–1550`); not proven.
-- Reproduce identity/edge trace across Visit switching. Acceptance: targeted desktop/mobile and full browser suite green; selected Visit, cursor, call, source, Values refer to same prepared event.
+- Root-cause evidence: `prepareControlFlow` retains every prepared loop visit and marks its region selected/unselected. The renderer previously filtered call routes by `stepNodes` existence, which cannot distinguish retained unselected visits (`public/diagram-control-layout.js:52–80`, `public/diagram.js:1538–1550`). Council/TL accepted an edge-only projection fix while keeping all prepared event cards available.
+- Implemented: collect indices whose prepared-card region ancestry contains an unselected loop; omit only their grouped expanded call/return connections, preserving canonical events, cursor navigation and the cards themselves. Generated player bundle rebuilt.
+- Verification: `npm run check` exit 0 outside filesystem/network sandbox restrictions: scope guard, typecheck, Vite build, Node 250 PASS / 0 FAIL / 2 SKIP, Prettier PASS. `git diff --check` PASS. Independent QA source review approved conditionally. Local browser RED/GREEN unavailable because Playwright Chromium is not installed; CI baseline `40725527807` proves RED (2 edges, expected 1), but remote post-push Chromium remains required.
+- Acceptance pending: targeted desktop/mobile and full browser suite green; selected Visit, cursor, call, source and Values refer to the same prepared event. If remote CI fails, keep task open and investigate rather than weakening assertions.
 
 ## CA-002 — Loop picker identity/options (P0)
 

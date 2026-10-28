@@ -1059,6 +1059,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
     ]);
     const controlRegions = [];
     const controlEdges = [];
+    const inactiveLoopSteps = new Set();
     const wanted = new Map();
     let waitingForGeometry = false;
     for (const card of cards) {
@@ -1069,6 +1070,22 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
           visits: selectedVisits,
           methodCallId: card.callId,
         });
+        const regionsById = new Map(
+          prepared.regions.map((region) => [region.id, region]),
+        );
+        for (const item of prepared.cards) {
+          for (
+            let regionId = item.parentRegionId;
+            regionId;
+            regionId = regionsById.get(regionId)?.parentRegionId
+          ) {
+            const region = regionsById.get(regionId);
+            if (region?.type === 'loop' && region.selected === false) {
+              inactiveLoopSteps.add(item.index);
+              break;
+            }
+          }
+        }
         const extraHeights = new Map();
         for (const item of prepared.cards) {
           const height = valueHeight(
@@ -1541,7 +1558,8 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
           !internal &&
           nodeCells.get(from).getData().expanded &&
           entry?.callSiteIndex &&
-          !stepNodes.has(entry.callSiteIndex)
+          (!stepNodes.has(entry.callSiteIndex) ||
+            inactiveLoopSteps.has(entry.callSiteIndex))
         )
           continue;
         const source =
