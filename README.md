@@ -1,5 +1,7 @@
 # Code Anime
 
+> **Development handoff (2026-10-28):** See [current branch implementation status, verified CI, T1–T9 next steps, blockers and restart guide](docs/implementation-handoff-2026-10-28.md). This is a development snapshot, not a release announcement.
+
 **Watch code execute with mock values, one step at a time.**
 
 CodeGraph retrieves the active project's source and relationships. Your AI agent supplies source-grounded mock steps directly through MCP calls. Code Anime assembles the trace, manages frames and snapshots, and animates objects with their fields, before/after changes and source locations in a localhost player.
