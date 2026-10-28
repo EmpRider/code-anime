@@ -91,8 +91,9 @@ Pinned upstream snapshots: Superpowers `2ce8aa15`, Council `a7565e21`, Caveman `
 
 ## CA-011 — Measured graph geometry and guarded layout correction (Geometry)
 
-- Owner: graph-development/geometry specialist; TL supervisor. Status: `READY_AFTER_CA-010`. Exclusive lock: `public/diagram-elk-layout.js`, relevant geometry composition in `public/diagram.js`, generated bundle when rebuilt.
+- Owner: graph-development/geometry specialist; TL supervisor. Status: `BLOCKED/WAITING_ON_BROWSER_GEOMETRY`; CA-010 remote visual commit `8fdf84c36e2f4103f151261327eda58d232ad942` is available for user feedback. Exclusive lock when resumed: `public/diagram-elk-layout.js`, relevant geometry composition in `public/diagram.js`, generated bundle when rebuilt.
 - Objective: measure critical card/label bounds instead of relying only on fixed heuristics; invalidate geometry on applicable font/theme/Values changes; preserve ELK/Dagre/X6 ownership and Worker stale-response guards. Only make corrections backed by rendered geometry evidence; no unrequested auto-fit or panel changes.
 - Acceptance: unchanged semantic edge tuples, deterministic ordering, containment and camera/selection preservation, targeted existing smoke, `npm run check`; unresolved browser-only geometry remains labelled `AWAITING_BROWSER_CI` rather than DONE. Separate task-specific commit/push.
+- Read-only finding: ELK's static decision/loop height estimates appear 3–5px smaller than CSS lower bounds; title clipping is also present. Actual browser scrollHeight, ports, active values and stable layout bounds were unavailable because local Playwright Chromium is absent. Council's evidence gate forbids selecting an irreversible geometry correction from the static discrepancy alone. No CA-011 source edit or visual PASS. Resume when real browser geometry evidence is supplied; do not block independent theme tokens or narrow routing investigation.
 
 Every newly discovered issue receives a separate ledger entry pushed **before** implementation. Each completed task receives its own verified commit/push and later `DONE` status update. Retain task files until user explicitly approves completion and cleanup.
