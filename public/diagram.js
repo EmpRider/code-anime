@@ -460,9 +460,12 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
       zoom(event.key === '-' ? -0.15 : 0.15);
     }
   });
-  graph.on('scale', () =>
-    container.classList.toggle('diagram-overview', graph.zoom() < 0.6),
-  );
+  let viewportRevision = 0;
+  graph.on('translate', () => ++viewportRevision);
+  graph.on('scale', () => {
+    ++viewportRevision;
+    container.classList.toggle('diagram-overview', graph.zoom() < 0.6);
+  });
   let signature = '',
     previousCursor = -1,
     disposed = false;
@@ -474,6 +477,8 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
   let runningGeometry;
   let traceRevision = 0;
   let pendingFit = false;
+  let pendingFitRevision = 0;
+  let pendingFitFull = false;
   function showGeometryStatus() {
     const failures = [...wantedGeometry.keys()].filter((key) =>
       geometryFailures.has(key),
@@ -483,9 +488,11 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
     );
     layoutStatus.hidden = !pending.length && !failures.length;
     const previousSnapshot =
-      pending.length && renderedTraceRevision !== traceRevision;
+      (pending.length || failures.length) &&
+      nodeCells.size > 0 &&
+      renderedTraceRevision !== traceRevision;
     layoutStatus.textContent = failures.length
-      ? `ELK Worker layout failed: ${geometryFailures.get(failures[0])}. Prepared playback remains available; no route was invented.`
+      ? `ELK Worker layout failed: ${geometryFailures.get(failures[0])}. Prepared playback remains available; no route was invented.${previousSnapshot ? ' Previous trace layout shown; not current prepared evidence.' : ''}`
       : pending.length
         ? `ELK Worker layout pending for ${pending.length} expanded method${pending.length === 1 ? '' : 's'}. ${previousSnapshot ? 'Previous trace layout shown; not current prepared evidence until replacement finishes.' : 'Existing diagram retained.'}`
         : '';
@@ -505,8 +512,13 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
     const unfinished = keys.some(
       (key) => !geometryCache.has(key) && !geometryFailures.has(key),
     );
-    if (unfinished) pendingFit ||= fitLayout;
-    else if (!runningGeometry) pendingFit = false;
+    if (unfinished) {
+      if (fitLayout && !pendingFit) {
+        pendingFit = true;
+        pendingFitFull = false;
+        pendingFitRevision = viewportRevision;
+      }
+    } else if (!runningGeometry) pendingFit = false;
     showGeometryStatus();
     if (runningGeometry) return;
     const key = keys.find(
@@ -555,9 +567,12 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
         );
         if (remaining) requestGeometry(wantedGeometry, pendingFit);
         else {
-          const shouldFit = pendingFit;
+          const shouldFit =
+            pendingFit && pendingFitRevision === viewportRevision;
+          const fullFit = pendingFitFull;
           pendingFit = false;
-          render(options, shouldFit);
+          render(options, false);
+          if (shouldFit && !disposed) fit({ full: fullFit });
         }
       });
   }
@@ -615,6 +630,8 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
   }
   const onValues = (id) => {
     onPause?.();
+    pendingFit = false;
+    pendingFitFull = false;
     const opening = !openValues.has(id);
     if (opening) openValues.add(id);
     else openValues.delete(id);
@@ -687,6 +704,15 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
       // Explicit Fit includes the full map; automatic refits keep readable focus.
       if (full) {
         graph.zoomToFit({ padding: 24, maxScale: 1 });
+        if (
+          [...wantedGeometry.keys()].some(
+            (key) => !geometryCache.has(key) && !geometryFailures.has(key),
+          )
+        ) {
+          pendingFit = true;
+          pendingFitFull = true;
+          pendingFitRevision = viewportRevision;
+        }
         return;
       }
       graph.zoomToFit({ padding: 24, minScale: 0.9, maxScale: 1 });
@@ -726,6 +752,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
     geometryFailures.clear();
     wantedGeometry = new Map();
     pendingFit = false;
+    pendingFitFull = false;
     runningGeometry?.abort.abort();
     ++valuesRevision;
     flow = value;
@@ -1056,6 +1083,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
           card.id,
           prepared.topologyKey,
           direction,
+          surface.clientWidth,
           [...extraHeights],
         ]);
         wanted.set(layoutKey, { prepared, direction, extraHeights });
@@ -1184,7 +1212,50 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
       }
     }
     requestGeometry(wanted, fitLayout);
-    if (waitingForGeometry && nodeCells.size) return;
+    if (
+      waitingForGeometry ||
+      [...wanted.keys()].some((key) => geometryFailures.has(key))
+    ) {
+      // Keep the last complete geometry, but never freeze current cursor styling.
+      if (renderedTraceRevision === traceRevision) {
+        const activeCards = new Set();
+        for (const [id, cell] of nodeCells) {
+          const data = cell.getData();
+          const active =
+            data.level === 'step'
+              ? data.index === cursor
+              : data.kind === 'function'
+                ? id === activeFunctionId && cursor > 0
+                : data.active;
+          if (active) activeCards.add(id);
+          if (active !== data.active) cell.setData({ ...data, active });
+        }
+        for (const edge of edgeCells) {
+          const data = edge.getData();
+          const active =
+            data.status === 'prepared' &&
+            (data.kind === 'return'
+              ? data.index === cursor
+              : data.kind === 'call' && grouped
+                ? cursor > 0 &&
+                  current?.kind !== 'return' &&
+                  data.callId === activeId
+                : data.kind !== 'first-appearance' &&
+                  activeCards.has(edge.getTargetCellId()));
+          edge.attr('line/stroke', active ? '#4f46e5' : '#64748b');
+          edge.attr('line/strokeWidth', active ? 2.5 : 1.5);
+        }
+        previousCursor = cursor;
+      }
+      if (focusSelector && !focused.isConnected) {
+        const replacement = container.querySelector(focusSelector);
+        (replacement && !replacement.disabled
+          ? replacement
+          : controls.querySelector('button[aria-label="Fit diagram"]')
+        ).focus({ preventScroll: true });
+      }
+      return;
+    }
     for (const card of cards) {
       card.headerHeight =
         HEIGHT + valueHeight(card.id) + (card.invocations?.length > 1 ? 36 : 0);

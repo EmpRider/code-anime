@@ -235,9 +235,9 @@ export class Graph {
   getCellById(id) { return this.cells.get(id); }
   findViewByCell(cell) { return { container: cell.view }; }
   zoom(value) { return this.scale; }
-  zoomTo(value) { this.scale = value; }
-  zoomToFit() { this.scale = 1; this.fitCalls = (this.fitCalls ?? 0) + 1; }
-  translate(x, y) { if (x === undefined) return this.offset; this.offset = { tx: x, ty: y }; }
+  zoomTo(value) { this.scale = value; this.events.get('scale')?.(); }
+  zoomToFit() { this.scale = 1; this.fitCalls = (this.fitCalls ?? 0) + 1; this.events.get('scale')?.(); }
+  translate(x, y) { if (x === undefined) return this.offset; this.offset = { tx: x, ty: y }; this.events.get('translate')?.(); }
   localToClient(bounds) { return bounds; }
   resize() {}
   centerCell() {}
@@ -438,8 +438,8 @@ async function mounted(flow = fixture()) {
   });
   const surface = document.querySelector('.diagram-surface');
   Object.defineProperties(surface, {
-    clientWidth: { value: 1366 },
-    clientHeight: { value: 768 },
+    clientWidth: { value: 1366, configurable: true },
+    clientHeight: { value: 768, configurable: true },
   });
   diagram.setFlow(flow);
   diagram.render({ mode: 'map', cursor: 0 });
@@ -806,6 +806,372 @@ test('same-line repeated child invocations keep both distinct directed call/retu
     h.sought.at(-1),
     6,
     'selecting second same-line invocation seeks its own entry',
+  );
+  h.diagram.dispose();
+});
+
+// T6 race regressions exercise the actual public renderer and real T4 adapter;
+// only the native browser Worker/X6 presentation boundary is simulated here.
+const activeStepIndices = (graph) =>
+  [...graph.cells.values()]
+    .filter((cell) => cell.data.level === 'step' && cell.data.active)
+    .map((cell) => cell.data.index);
+
+test('T6 cursor-only 5 to 9 updates current step immediately during a pending layout without a second Worker request', async (t) => {
+  const nine = [
+    ...events.slice(0, 6),
+    event('statement', 6, 7),
+    event('statement', 7, 8),
+    event('return', 9, 9),
+  ].map((item) => ({ ...item, after: { value: item.id } }));
+  const h = await mounted(fixture(nine));
+  t.after(() => h.diagram.dispose());
+  await h.expand();
+  const worker = PendingWorker.instances[0];
+  worker.resolve();
+  await flush();
+  h.diagram.render({ mode: 'map', cursor: 5 }, false);
+  assert.deepEqual(activeStepIndices(h.graph), [5]);
+  const values = [...h.graph.cells.values()]
+    .find((cell) => cell.data.control === 'loop')
+    ?.view.querySelector('.diagram-values-summary');
+  assert.ok(
+    values,
+    JSON.stringify(
+      [...h.graph.cells.values()]
+        .filter((cell) => cell.data.control === 'loop')
+        .map((cell) => [
+          cell.data.value,
+          cell.data.event?.after,
+          Boolean(cell.view.querySelector('.diagram-values-summary')),
+        ]),
+    ),
+  );
+  values.click();
+  assert.equal(worker.requests.length, 1, 'geometry change is in flight');
+  const visit = [...h.graph.cells.values()]
+    .find((cell) => cell.data.control === 'loop' && cell.data.index === 5)
+    ?.view.querySelector('.diagram-visit');
+  assert.ok(
+    visit,
+    'focused native visit picker belongs to formerly active card',
+  );
+  visit.focus();
+  assert.equal(document.activeElement, visit);
+  assert.equal(h.diagram.render({ mode: 'map', cursor: 9 }, false), undefined);
+  assert.equal(
+    worker.requests.length,
+    1,
+    'cursor only never starts a second layout',
+  );
+  assert.deepEqual(
+    activeStepIndices(h.graph),
+    [9],
+    'current styling must not wait for ELK',
+  );
+  assert.ok(
+    document.activeElement?.classList.contains('diagram-visit'),
+    'pending cursor repaint keeps keyboard focus in the native picker',
+  );
+  h.diagram.dispose();
+});
+
+test('T6 same-object in-place continuation invalidates an old Worker reply', async (t) => {
+  const flow = fixture();
+  const h = await mounted(flow);
+  t.after(() => h.diagram.dispose());
+  await h.expand();
+  const old = PendingWorker.instances[0];
+  flow.trace.events.push(event('statement', 8, 8));
+  flow.steps.push({ from: 'run', to: 'run', dtoName: 'statement 8' });
+  h.diagram.setFlow(flow, true);
+  h.diagram.render({ mode: 'map', cursor: 8 }, false);
+  assert.equal(document.querySelector('#canvas').dataset.layoutState, 'stale');
+  old.resolve();
+  await flush();
+  assert.equal(document.querySelector('#canvas').dataset.layoutState, 'stale');
+  const latest = PendingWorker.instances.at(-1);
+  assert.notEqual(latest, old);
+  latest.resolve();
+  await flush();
+  assert.ok(
+    [...h.graph.cells.values()].some((cell) => cell.data.index === 8),
+    'continued prepared event is present in the new atomic layout',
+  );
+  h.diagram.dispose();
+});
+
+test('T6 same flow ID and count with altered evidence never accepts stale geometry or calls old evidence current after failure', async (t) => {
+  const original = fixture();
+  original.id = 'unchanged-session';
+  original.sourceHash = 'unchanged-source';
+  const h = await mounted(original);
+  t.after(() => h.diagram.dispose());
+  await h.expand();
+  const old = PendingWorker.instances[0];
+  const changed = fixture(
+    events.map((item) => ({ ...item, label: `NEW ${item.label}` })),
+  );
+  changed.id = original.id;
+  changed.sourceHash = original.sourceHash;
+  h.diagram.setFlow(changed, true);
+  h.diagram.render({ mode: 'map', cursor: 5 }, false);
+  assert.equal(document.querySelector('#canvas').dataset.layoutState, 'stale');
+  old.resolve();
+  await flush();
+  const newest = PendingWorker.instances.at(-1);
+  newest.fail('offline');
+  await flush();
+  assert.match(
+    document.querySelector('.diagram-layout-status').textContent,
+    /previous trace|not current prepared evidence/i,
+    'old graph is explicitly disclosed as stale even after latest Worker failure',
+  );
+  assert.equal(document.querySelector('#canvas').dataset.layoutState, 'stale');
+  assert.equal(h.diagram.render({ mode: 'map', cursor: 6 }, false), undefined);
+  assert.ok(
+    document.querySelector('.diagram-card .diagram-name'),
+    'native controls survive failure',
+  );
+  h.diagram.dispose();
+});
+
+test('T6 two expanded methods commit together; second Worker error leaves the old coherent graph', async (t) => {
+  const items = [
+    event('enter', 1, 1, 'root', 'run'),
+    event('call', 4, 2, 'root', 'run'),
+    event('enter', 11, 3, 'child', 'helper', {
+      parentCallId: 'root',
+      stack: ['root', 'child'],
+    }),
+    event('return', 12, 4, 'child', 'helper', { stack: ['root'], result: 4 }),
+    event('return', 9, 5, 'root', 'run', { stack: [] }),
+  ];
+  const h = await mounted(fixture(items));
+  t.after(() => h.diagram.dispose());
+  await h.expand(0);
+  await h.expand(1);
+  const worker = PendingWorker.instances[0];
+  assert.equal(activeStepIndices(h.graph).length, 0);
+  worker.resolve();
+  await flush();
+  assert.equal(
+    [...h.graph.cells.values()].filter((cell) => cell.data.level === 'step')
+      .length,
+    0,
+    'first method response cannot paint half-new inner content',
+  );
+  worker.fail('second method failed');
+  await flush();
+  assert.equal(
+    [...h.graph.cells.values()].filter((cell) => cell.data.level === 'step')
+      .length,
+    0,
+    'failure preserves old coherent map rather than painting only first method',
+  );
+  assert.match(
+    document.querySelector('.diagram-layout-status').textContent,
+    /failed/i,
+  );
+  h.diagram.dispose();
+});
+
+test('T6 explicit Fit survives both serial method layouts and fits only their combined geometry', async (t) => {
+  const items = [
+    event('enter', 1, 1, 'root', 'run'),
+    event('call', 4, 2, 'root', 'run'),
+    event('enter', 11, 3, 'child', 'helper', {
+      parentCallId: 'root',
+      stack: ['root', 'child'],
+    }),
+    event('return', 12, 4, 'child', 'helper', { stack: ['root'] }),
+    event('return', 9, 5, 'root', 'run', { stack: [] }),
+  ];
+  const h = await mounted(fixture(items));
+  t.after(() => h.diagram.dispose());
+  await h.expand(0);
+  await h.expand(1);
+  const worker = PendingWorker.instances[0];
+  document.querySelector('button[aria-label="Fit diagram"]').click();
+  const afterClick = h.graph.fitCalls ?? 0;
+  worker.resolve();
+  await flush();
+  assert.equal(worker.requests.length, 1, 'second method remains pending');
+  assert.equal(
+    h.graph.fitCalls ?? 0,
+    afterClick,
+    'a partial first geometry cannot fit before second method',
+  );
+  worker.resolve();
+  await flush();
+  assert.ok(
+    (h.graph.fitCalls ?? 0) > afterClick,
+    'newest combined layout receives explicit Fit',
+  );
+  h.diagram.dispose();
+});
+
+test('T6 visit, orientation, Values and resized surface invalidate the latest geometry request', async (t) => {
+  const h = await mounted(
+    fixture(events.map((item) => ({ ...item, after: { value: item.id } }))),
+  );
+  t.after(() => h.diagram.dispose());
+  await h.expand();
+  let worker = PendingWorker.instances.at(-1);
+  worker.resolve();
+  await flush();
+  const visit = document.querySelector('.diagram-visit');
+  visit.value = '1';
+  visit.dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.equal(
+    worker.requests.length,
+    1,
+    'visit choice changes topology geometry',
+  );
+  document.querySelector('.diagram-orientation').click();
+  await flush();
+  assert.ok(worker.terminated, 'old selected visit layout is cancelled');
+  worker = PendingWorker.instances.at(-1);
+  assert.equal(
+    worker.requests[0].graph.layoutOptions['elk.direction'],
+    'RIGHT',
+  );
+  worker.resolve();
+  await flush();
+  const before = h.graph.fitCalls ?? 0;
+  const values = [...h.graph.cells.values()]
+    .find((cell) => cell.data.control === 'loop')
+    ?.view.querySelector('.diagram-values-summary');
+  assert.ok(values, 'rendered control card exposes Values');
+  values.click();
+  assert.equal(
+    worker.requests.length,
+    1,
+    'Values height triggers fresh geometry',
+  );
+  worker.resolve();
+  await flush();
+  assert.equal(
+    h.graph.fitCalls ?? 0,
+    before,
+    'Values cannot auto-fit the camera',
+  );
+  const surface = document.querySelector('.diagram-surface');
+  Object.defineProperty(surface, 'clientWidth', {
+    configurable: true,
+    value: 900,
+  });
+  h.diagram.render({ mode: 'map', cursor: 0 }, false);
+  assert.equal(
+    worker.requests.length,
+    1,
+    'surface width change invalidates layout geometry',
+  );
+  h.diagram.dispose();
+});
+
+test('T6 manual pan and zoom while Worker is pending supersede auto fit; explicit latest Fit still applies', async (t) => {
+  const h = await mounted(
+    fixture(events.map((item) => ({ ...item, after: { value: item.id } }))),
+  );
+  t.after(() => h.diagram.dispose());
+  await h.expand();
+  let worker = PendingWorker.instances[0];
+  h.diagram.render({ mode: 'map', cursor: 5 }, true);
+  const beforeFit = h.graph.fitCalls ?? 0;
+  h.graph.translate(137, -65); // native graph translate, as emitted by user drag
+  document.querySelector('button[aria-label="Zoom in"]').click();
+  const beforeScale = h.graph.zoom();
+  worker.resolve();
+  await flush();
+  assert.equal(
+    h.graph.fitCalls ?? 0,
+    beforeFit,
+    'old automatic fit cannot steal camera',
+  );
+  assert.deepEqual(h.graph.translate(), { tx: 137, ty: -65 });
+  assert.equal(h.graph.zoom(), beforeScale);
+  const values = [...h.graph.cells.values()]
+    .find((cell) => cell.data.control === 'loop')
+    ?.view.querySelector('.diagram-values-summary');
+  assert.ok(values, 'rendered control card exposes Values');
+  values.click();
+  worker = PendingWorker.instances.at(-1);
+  const beforeExplicit = h.graph.fitCalls ?? 0;
+  document.querySelector('button[aria-label="Fit diagram"]').click();
+  const afterClickFit = h.graph.fitCalls ?? 0;
+  assert.equal(
+    afterClickFit,
+    beforeExplicit + 1,
+    'explicit Fit responds immediately',
+  );
+  worker.resolve();
+  await flush();
+  assert.ok(
+    (h.graph.fitCalls ?? 0) > afterClickFit,
+    'explicit user Fit applies again to newest layout',
+  );
+  h.diagram.dispose();
+});
+
+test('T6 Values opening cancels an older queued automatic Fit before its replacement geometry commits', async (t) => {
+  const h = await mounted(
+    fixture(events.map((item) => ({ ...item, after: { value: item.id } }))),
+  );
+  t.after(() => h.diagram.dispose());
+  await h.expand();
+  PendingWorker.instances[0].resolve();
+  await flush();
+  document.querySelector('.diagram-orientation').click(); // automatic layout Fit queued
+  await flush();
+  const obsolete = PendingWorker.instances.at(-1);
+  assert.equal(obsolete.requests.length, 1);
+  const values = [...h.graph.cells.values()]
+    .find((cell) => cell.data.control === 'loop')
+    ?.view.querySelector('.diagram-values-summary');
+  assert.ok(values);
+  const before = h.graph.fitCalls ?? 0;
+  values.click(); // later Values intent must not replay older automatic Fit
+  await flush();
+  const current = PendingWorker.instances.at(-1);
+  assert.notEqual(current, obsolete);
+  obsolete.resolve();
+  current.resolve();
+  await flush();
+  assert.equal(
+    h.graph.fitCalls ?? 0,
+    before,
+    'Values should not inherit older auto-fit',
+  );
+  h.diagram.dispose();
+});
+
+test('T6 delayed reply/error from an aborted Worker epoch never mutates the newer trace', async (t) => {
+  const h = await mounted();
+  t.after(() => h.diagram.dispose());
+  await h.expand();
+  const obsolete = PendingWorker.instances[0];
+  h.diagram.setFlow(
+    fixture(
+      events.map((item) => ({ ...item, label: `epoch-two ${item.label}` })),
+    ),
+    true,
+  );
+  h.diagram.render({ mode: 'map', cursor: 2 }, false);
+  await flush();
+  const latest = PendingWorker.instances.at(-1);
+  latest.resolve();
+  await flush();
+  const graphSize = h.graph.cells.size;
+  obsolete.resolve();
+  obsolete.fail('old epoch error');
+  await flush();
+  assert.equal(h.graph.cells.size, graphSize);
+  assert.equal(document.querySelector('#canvas').dataset.layoutState, 'ready');
+  assert.ok(
+    [...h.graph.cells.values()]
+      .filter((cell) => cell.data.event)
+      .every((cell) => cell.data.event.label.startsWith('epoch-two')),
   );
   h.diagram.dispose();
 });
