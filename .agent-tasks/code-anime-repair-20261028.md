@@ -42,9 +42,9 @@ Pinned upstream snapshots: Superpowers `2ce8aa15`, Council `a7565e21`, Caveman `
 
 ## CA-005 — Branch labels/collision (P1)
 
-- Owner: graph specialist. Status: `WAITING_ON_REPRO`. Depends on CA-001..004 stabilization and measured nested fixture.
+- Owner: routing specialist; TL supervisor. Status: `READY_AFTER_CA-011`. Depends on CA-010/011 and a measured nested fixture; CA-004 remains independently browser-diagnostic blocked.
 - Observed code allows missing labels and lacks edge-segment obstacles (`public/diagram-label-placement.js:9–54`, `tests/diagram-label-placement.test.mjs:40–57`). Expected labels discoverable and no unintended node/label/edge collisions.
-- Minimal evidenced fix only; broad geometry redesign requires separate approval. Acceptance: rendered DOM/SVG geometry and full interaction tests.
+- User-approved visual scope: orthogonal paths, meaningful label clearance, optional bounded correction when measured conflicts justify it. Preserve exact semantic edge identities and endpoints; no silent label drop. Max three strictly improving deterministic passes, then accessible unresolved fallback. Existing targeted semantic smoke plus a focused assertion for any new routing logic; user manual visual feedback is the aesthetics gate. Do not imply browser green.
 
 ## CA-006 — Follow-off/keyboard UX (P1)
 
@@ -56,14 +56,40 @@ Pinned upstream snapshots: Superpowers `2ce8aa15`, Council `a7565e21`, Caveman `
 
 ## CA-007 — Text clipping/legibility (P1/P2)
 
-- Owner: UX/UI specialist. Status: `WAITING_ON_REPRO`.
+- Owner: theme specialist; TL supervisor. Status: `READY_AFTER_CA-005`. Lock: `public/styles.css` only; graph CSS owned by CA-010. No other UI files without separate Council scope check.
 - Risks: 9–10px metadata, clipped decision labels (`public/diagram.css:301–410,829–841`), contradictory legacy CSS (`public/styles.css:2908–3170`). Expected compact readable desktop flow.
-- Measure 1366×768/200% zoom and apply only proven localized correction; wholesale redesign `BLOCKED` pending design/plan approval. Acceptance: browser screenshot/bounds and accessibility checks.
+- Approved scope: darker theme tokens, clean panel separation, and only safe internal spacing reductions. All existing component locations, arrangements, panel/control outer bounds, functionality, zoom/pan and keyboard targets are locked. EDO defers risky control padding unless browser measurement proves outer bounds remain unchanged (±1 CSS px). User manual visual review is required. No new panels or component relocations.
 
 ## CA-008 — Browser visual/full verification (QA)
 
-- Owner: QA specialist. Status: `WAITING_ON_REPRO`. Depends on applicable fixes.
+- Owner: independent QA specialist. Status: `READY_AFTER_CA-007`. Depends on approved visual changes.
 - Baseline GitHub Actions `40725527807`: Node 4/4 pass, Chromium browser 64 pass / 8 fail. Expected full green tests, zero unintended overlap, semantic route correctness, desktop 1366×768 100%/200% zoom, keyboard/focus and dark/light visual acceptance.
-- Do not remove/relax failing assertions or claim pixel-perfect acceptance without browser evidence.
+- User revised verification: do not create a large cosmetic unit/snapshot suite. Keep existing essential semantic smoke, typecheck/build/format/bundle parity, and a focused assertion for new nontrivial route logic. User will run UI and provide visual feedback; leave `WAITING_ON_USER_VISUAL` and `AWAITING_BROWSER_CI` as applicable. Do not remove/relax existing failing assertions or claim pixel-perfect/browser acceptance without evidence.
+
+## Approved visual-implementation kickoff — 2026-10-29
+
+- User approved the reference-inspired graph design and separate Implementation Plan v1; then explicitly instructed implementation with minimal new unit testing for visual appearance and user-led manual visual review. No merge, publish, release, or deploy.
+- Hard lock: all existing desktop component locations, arrangements, panel sizes, controls, interaction behavior, manual zoom/pan and camera. Only darker theme tokens and measured safe internal padding/margin/gap reductions outside the graph. No automatic zoom-to-fill. Graph work: semantic shapes, AST-backed grouping, alignment, orthogonal connectors and mandatory labels.
+- Fresh task skill manifest: Superpowers `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b`, Engineering Council `a7565e21d5ab03551fe66e36818e05af245467b8`, Caveman `9b68f7ed12b05e7efaff18e65c5a3fc2849fd0a4`, Ponytail `09c434ab73ca43761c5d8b0c5d341926c2fba710`, ADHD `1ecea1993b7fce257ffbd686c070948b5e07eda6`, Attention Span `8a6e2250dbc1dfb1b4186e03a92484d8c799c1b0` (full file hashes in skill-loader task evidence).
+- Real BA `/root` → PM `/root/impl_pm` → TL `/root/impl_pm/tl`; specialists: graph development, independent QA, skills/provenance, theme. Kickoff Council: five independent lenses, five anonymous peer reviews, three owner-led challenges/rebuttals. EDO recommendation staged graph visual changes, conditional measured geometry/routing, then conservative theme. Accepted reduced visual testing but rejected zero semantic checks and broad cosmetic test creation.
+- Safety gate per task: existing semantic checks plus `npm run check` (scope guard, typecheck, build, Node, Prettier) and `git diff --check`; preserve node/edge IDs, source/target/Visit/Values/Worker epochs and camera. Do not claim visual PASS until user manual approval. If local Chromium stays unavailable, record browser CI unverified. No material engine rewrite under this authorization.
+
+## CA-009 — Minimal visual safety baseline (QA)
+
+- Owner: QA specialist; TL supervisor. Status: `READY`. Resources: read-only inspection and minimal scoped test changes only if a proved semantic gap requires them. No broad cosmetic unit/snapshot suite.
+- Objective: capture existing semantic route, Visit/Values, keyboard/focus, camera and locked component-boundary expectations; identify a suitable representative nested execution fixture. Visual acceptance remains user-led.
+- Dependencies: kickoff ledger remote push. Acceptance: baseline evidence and targeted existing checks recorded, no test assertions removed/relaxed. Browser geometry remains unverified until an actual browser run.
+
+## CA-010 — Semantic chart nodes and AST grouping (Graph UI)
+
+- Owner: graph-development specialist; TL supervisor. Status: `READY_AFTER_CA-009`. Exclusive lock: `public/diagram.css`, relevant card constructors in `public/diagram.js`, generated diagram bundle only when rebuilt.
+- Objective: dark-theme-compatible distinct decision/loop/try/catch/return shapes, legible concise headings, subtle AST-grounded group boundaries, consistent node spacing. Do not fabricate architecture nodes or alter execution topology. Preserve the existing desktop component arrangement and zoom behavior.
+- Acceptance: exact semantic node/edge identity, no false grouping, no missing control region/card, existing semantic checks and build parity; user normal-zoom visual critique pending. Separate task-specific commit/push.
+
+## CA-011 — Measured graph geometry and guarded layout correction (Geometry)
+
+- Owner: graph-development/geometry specialist; TL supervisor. Status: `READY_AFTER_CA-010`. Exclusive lock: `public/diagram-elk-layout.js`, relevant geometry composition in `public/diagram.js`, generated bundle when rebuilt.
+- Objective: measure critical card/label bounds instead of relying only on fixed heuristics; invalidate geometry on applicable font/theme/Values changes; preserve ELK/Dagre/X6 ownership and Worker stale-response guards. Only make corrections backed by rendered geometry evidence; no unrequested auto-fit or panel changes.
+- Acceptance: unchanged semantic edge tuples, deterministic ordering, containment and camera/selection preservation, targeted existing smoke, `npm run check`; unresolved browser-only geometry remains labelled `AWAITING_BROWSER_CI` rather than DONE. Separate task-specific commit/push.
 
 Every newly discovered issue receives a separate ledger entry pushed **before** implementation. Each completed task receives its own verified commit/push and later `DONE` status update. Retain task files until user explicitly approves completion and cleanup.
