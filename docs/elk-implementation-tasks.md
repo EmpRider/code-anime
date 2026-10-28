@@ -462,7 +462,7 @@ release, publish or remove this task ledger without owner authorization.
   architect review, PM/TL and full Council. **Dependencies:** scoped B0b–B0h
   and T7 browser acceptance at 71/71 Chromium, four check/package matrix
   jobs and packed MCP smoke; no active reproducible B0 functional RED.
-- **Current status:** `IN_PROGRESS — tests-first RED pending`. The
+- **Current status:** `IMPLEMENTED_CANDIDATE — exact-head CI and independent final acceptance pending`. The
   file-based preflight was pushed before T1 source/test edits. The owner
   asked to complete the reviewed ELK task list ASAP; this does not authorize
   redistributing the T3 dual-licensed ELK Worker or the final npm release.
@@ -491,6 +491,13 @@ release, publish or remove this task ledger without owner authorization.
   review the diff; rerun focused and full Node/Chromium/package acceptance
   at the exact remote commit; mark T1 DONE only after proven evidence.
   T2 follows T1; T3 licensing/distribution remains a separate owner gate.
+
+#### T1 source delivery checkpoint — 2026-10-28
+
+- **Source-only implementation commit:** [`1b219b7702e978ea7c23a3f88ceb9c324b7a0013`](https://github.com/EmpRider/code-anime/commit/1b219b7702e978ea7c23a3f88ceb9c324b7a0013), pushed via the GitHub connector and independently read back at the exact SHA. This follows the RED test commit `e4c5b97`.
+- **Implemented candidate:** conservative multiline/else-if ancestry, malformed/comment/string-source masking, declaration-impostor rejection, event provenance identities and unresolved fallback for contradictory/missing evidence. Public method roots and one-based prepared cursor contract retained. No ELK Worker, runtime analysis or release change.
+- **Verification state:** previous RED evidence was Node 6 expected failures; earlier local workspace reported 207 passing / 2 skipped before recovery, but this recovered exact remote commit has **not** yet passed exact-head Node, browser, formatting, build or package CI. GitHub workflow listing did not yet surface a run for this commit at this checkpoint.
+- **Closure gates:** exact-head CI Node matrix and Chromium green; independent review against committed file; provenance/loop/branch regression tests; package integrity; record resulting run and commit SHA. Keep T1 **not DONE** until all gates are verified. T2 remains blocked by T1, and T3 retains its separate licensing/distribution gate.
 
 ### Owner-resolved B0e/B0f contracts — implementation gate
 
