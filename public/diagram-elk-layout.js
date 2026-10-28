@@ -59,6 +59,10 @@ function elkGraph(prepared, direction, extraHeight) {
     layoutOptions: {
       'elk.algorithm': 'layered',
       'elk.direction': DIRECTIONS[direction],
+      // Wrap the flat outer event sequence, not nested decision/try scopes.
+      'elk.layered.wrapping.strategy':
+        direction === 'horizontal' ? 'MULTI_EDGE' : 'OFF',
+      'elk.aspectRatio': 2,
       'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
       'elk.edgeRouting': 'ORTHOGONAL',
       'elk.padding': '[top=16,left=16,bottom=16,right=16]',
