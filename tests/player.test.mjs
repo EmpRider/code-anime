@@ -23,6 +23,115 @@ function evaluatePlayer(window, source) {
   );
 }
 
+test('legacy fallback Follow off preserves manual canvas and source scrolling', async () => {
+  const [html, source] = await Promise.all([
+    readFile(new URL('../public/index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../public/player.js', import.meta.url), 'utf8'),
+  ]);
+  const events = [1, 2, 3].map((line) => ({
+    kind: 'statement',
+    symbolId: 'run',
+    callId: 'run',
+    stack: ['run'],
+    label: `Step ${line}`,
+    source: { file: 'run.ts', line },
+    values: {},
+  }));
+  const flow = {
+    endpoint: 'run',
+    trace: { events, sourceFiles: { 'run.ts': 'a();\nb();\nc();' } },
+    steps: events.map((entry) => ({
+      from: 'run',
+      to: 'run',
+      dtoName: entry.label,
+    })),
+  };
+  const dom = new JSDOM(html, {
+    url: 'http://127.0.0.1/flow/test',
+    runScripts: 'outside-only',
+  });
+  try {
+    const { window } = dom;
+    const get = (id) => window.document.getElementById(id);
+    const legacySource = window.document.createElement('div');
+    legacySource.id = 'source-lines';
+    legacySource.innerHTML =
+      '<div class="source-line" aria-current="step">line</div>';
+    window.document.body.append(legacySource);
+    window.replayState = replayState;
+    window.prepareSourceHighlighting = prepareSourceHighlighting;
+    window.buildFlowOverview = buildFlowOverview;
+    window.describeFlowTransition = describeFlowTransition;
+    window.preparePlainTerminalOutput = preparePlainTerminalOutput;
+    window.fetch = async () => ({ ok: true, json: async () => flow });
+    window.matchMedia = () => ({ matches: true });
+    window.HTMLElement.prototype.scrollIntoView = () => {};
+    const calls = { canvas: [], source: [] };
+    for (const [id, key, axis] of [
+      ['canvas', 'canvas', 'left'],
+      ['source-lines', 'source', 'top'],
+    ]) {
+      const element = get(id);
+      element.scrollTo = (options) => {
+        calls[key].push(options);
+        element[axis === 'left' ? 'scrollLeft' : 'scrollTop'] = options[axis];
+      };
+    }
+    evaluatePlayer(window, source);
+    for (let i = 0; i < 20 && get('progress').textContent !== '0 / 3'; i++)
+      await new Promise((r) => setTimeout(r, 5));
+    get('next').click();
+    assert.ok(
+      get('canvas').querySelector('.packet'),
+      'legacy fallback packet path',
+    );
+    assert.ok(
+      calls.canvas.length > 0 && calls.source.length > 0,
+      'Follow on auto-centers both',
+    );
+    get('follow').checked = false;
+    get('follow').dispatchEvent(new window.Event('change'));
+    get('canvas').scrollLeft = 71;
+    get('source-lines').scrollTop = 37;
+    calls.canvas.length = 0;
+    calls.source.length = 0;
+    get('next').click();
+    assert.equal(get('progress').textContent, '2 / 3');
+    assert.equal(
+      get('canvas').scrollLeft,
+      71,
+      'manual canvas pan survives playback',
+    );
+    assert.equal(
+      get('source-lines').scrollTop,
+      37,
+      'manual source scroll survives playback',
+    );
+    assert.deepEqual(
+      calls,
+      { canvas: [], source: [] },
+      'Follow off makes no automatic scroll calls',
+    );
+    get('center-view').click();
+    assert.equal(
+      get('canvas').scrollLeft,
+      0,
+      'explicit Center View still acts with Follow off',
+    );
+    get('follow').checked = true;
+    get('follow').dispatchEvent(new window.Event('change'));
+    calls.canvas.length = 0;
+    calls.source.length = 0;
+    get('next').click();
+    assert.ok(
+      calls.canvas.length > 0 && calls.source.length > 0,
+      'Follow on re-enables auto-centering',
+    );
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('player renders evidence safely and Previous/seek restore local state', async () => {
   const html = await readFile(
     new URL('../public/index.html', import.meta.url),

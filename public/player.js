@@ -2712,7 +2712,7 @@ export function mountPlayer(root = document, createDiagram) {
       .matches
       ? 'instant'
       : 'smooth';
-    if (cursor > 0 && flow && flow.steps[cursor - 1]) {
+    if ($('follow').checked && cursor > 0 && flow && flow.steps[cursor - 1]) {
       const step = flow.steps[cursor - 1];
       const activeNode = nodes.get(step.to);
       const canvasEl = root.querySelector('#' + 'canvas');
@@ -2732,7 +2732,7 @@ export function mountPlayer(root = document, createDiagram) {
       '.source-line[aria-current="step"]',
     );
     const sourceContainerEl = root.querySelector('#' + 'source-lines');
-    if (activeSourceRow && sourceContainerEl) {
+    if ($('follow').checked && activeSourceRow && sourceContainerEl) {
       const rowTop = activeSourceRow.offsetTop;
       const rowHeight = activeSourceRow.offsetHeight;
       const containerHeight = sourceContainerEl.clientHeight;

@@ -48,9 +48,11 @@ Pinned upstream snapshots: Superpowers `2ce8aa15`, Council `a7565e21`, Caveman `
 
 ## CA-006 — Follow-off/keyboard UX (P1)
 
-- Owner: UX/development specialist. Status: `WAITING_ON_REPRO`.
-- Risks: auto-center despite Follow off (`public/player.js:2715–2743`), global keys (`:3347–3387`), hidden zoom actions (`public/diagram.css:479–485`). Expected intentional keyboard controls and stable manual viewport.
-- Reproduce first; acceptance: keyboard-only, Follow-off playback and regression tests.
+- Owner: UX/development specialist. Status: `VERIFIED/AWAITING_BROWSER_CI` for the narrowly scoped Follow-off fallback auto-scroll fix; keyboard/zoom items remain separate and unimplemented.
+- Root cause: despite the existing Follow guard on the packet's first canvas scroll, the later legacy fallback centering called canvas `scrollTo` and optional source-lines `scrollTo` unconditionally (`public/player.js:2715–2743`). This overrode manual pan/source inspection during playback. Explicit stack source reveal in `renderSource` and the Center View button are separate user intents.
+- Council decision and fix: guard only both legacy automatic centering paths with `Follow.checked`; retain Follow-on behavior, explicit source reveal and Center View regardless of Follow. Deterministic JSDOM fallback harness injects optional historical `source-lines`, verifies actual packet path and spies both `scrollTo` methods: RED manual canvas offset `0 !== 71`, then GREEN Follow-off preserved 71/37 offsets, Follow-on both centering calls resume, Center View works independently.
+- Verification: focused `node tests/player.test.mjs` 7 PASS / 0 FAIL; full `npm run check` scope guard, typecheck, Vite build and Node 251 PASS / 0 FAIL / 2 SKIP, Prettier PASS; `git diff --check` PASS. Independent QA approved. Remote browser CI still required before DONE.
+- Acceptance pending: browser fallback Follow-off/manual viewport and Follow-on centering regressions. No keyboard or zoom changes in this commit.
 
 ## CA-007 — Text clipping/legibility (P1/P2)
 
