@@ -42,9 +42,10 @@ Pinned upstream snapshots: Superpowers `2ce8aa15`, Council `a7565e21`, Caveman `
 
 ## CA-005 — Branch labels/collision (P1)
 
-- Owner: routing specialist; TL supervisor. Status: `READY_AFTER_CA-011`. Depends on CA-010/011 and a measured nested fixture; CA-004 remains independently browser-diagnostic blocked.
+- Owner: routing specialist; TL supervisor. Status: `BLOCKED/WAITING_ON_BROWSER_ROUTE_EVIDENCE`. Depends on actual rendered connector/label geometry; CA-004 and CA-011 remain independently browser-diagnostic blocked.
 - Observed code allows missing labels and lacks edge-segment obstacles (`public/diagram-label-placement.js:9–54`, `tests/diagram-label-placement.test.mjs:40–57`). Expected labels discoverable and no unintended node/label/edge collisions.
 - User-approved visual scope: orthogonal paths, meaningful label clearance, optional bounded correction when measured conflicts justify it. Preserve exact semantic edge identities and endpoints; no silent label drop. Max three strictly improving deterministic passes, then accessible unresolved fallback. Existing targeted semantic smoke plus a focused assertion for any new routing logic; user manual visual feedback is the aesthetics gate. Do not imply browser green.
+- Read-only finding: `reserveRouteLabel` omits route segments from obstacles; saturation returns `null`, causing the renderer to emit `labels:[]`. Existing tests explicitly permit omission. A visible, permanent collision-free routing fix cannot be proven without browser path/bounds. No CA-005 source edit. A text-only ARIA fallback is not a substitute for the user's visible clean-connection design; requires separate Council decision if proposed later.
 
 ## CA-006 — Follow-off/keyboard UX (P1)
 
@@ -56,9 +57,10 @@ Pinned upstream snapshots: Superpowers `2ce8aa15`, Council `a7565e21`, Caveman `
 
 ## CA-007 — Text clipping/legibility (P1/P2)
 
-- Owner: theme specialist; TL supervisor. Status: `READY_AFTER_CA-005`. Lock: `public/styles.css` only; graph CSS owned by CA-010. No other UI files without separate Council scope check.
+- Owner: theme specialist; TL supervisor. Status: `VERIFIED/WAITING_ON_USER_VISUAL/AWAITING_PUSH` (not DONE). Lock: `public/styles.css` only; graph CSS owned by CA-010. No other UI files without separate Council scope check.
 - Risks: 9–10px metadata, clipped decision labels (`public/diagram.css:301–410,829–841`), contradictory legacy CSS (`public/styles.css:2908–3170`). Expected compact readable desktop flow.
 - Approved scope: darker theme tokens, clean panel separation, and only safe internal spacing reductions. All existing component locations, arrangements, panel/control outer bounds, functionality, zoom/pan and keyboard targets are locked. EDO defers risky control padding unless browser measurement proves outer bounds remain unchanged (±1 CSS px). User manual visual review is required. No new panels or component relocations.
+- Implemented locally: exactly seven values in existing `:root[data-theme='dark']` selector: `--bg #070d16`, `--panel #101a29`, `--raised #17263a`, `--border #304159`, `--ink #e7f1ff`, `--muted #a9bed2`, `--accent #6ed8ff`. No selector/spacing/geometry changes; one source file `public/styles.css` only. Independent QA APPROVED. `npm run check` escalated after sandbox loopback failures: Node 251 PASS / 0 FAIL / 2 SKIP, typecheck/build/scope/Prettier PASS; `git diff --check` PASS. Static text contrast high; border/panel contrast 1.69:1 is a user-visual-review watch item, not claimed pixel acceptance. Task-specific remote commit pending.
 
 ## CA-008 — Browser visual/full verification (QA)
 

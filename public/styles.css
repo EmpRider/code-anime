@@ -3196,15 +3196,15 @@ svg.flow-arrows polygon {
 }
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0b1020;
-  --panel: #141d2e;
-  --border: #3b4b65;
-  --ink: #e7edf7;
-  --muted: #a8b8ce;
-  --accent: #a5b4fc;
+  --bg: #070d16;
+  --panel: #101a29;
+  --border: #304159;
+  --ink: #e7f1ff;
+  --muted: #a9bed2;
+  --accent: #6ed8ff;
   --mint: #6ee7b7;
   --amber: #fbbf24;
-  --raised: #1e2c43;
+  --raised: #17263a;
   --selected: #29365b;
   background: var(--bg);
   color: var(--ink);
