@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 import { build } from 'esbuild';
 import { createRoutePlanner } from '../public/diagram-routing.js';
@@ -249,7 +250,7 @@ let rendererImport;
 async function renderer() {
   if (!rendererImport) {
     const result = await build({
-      entryPoints: [new URL('../public/diagram.js', import.meta.url).pathname],
+      entryPoints: [fileURLToPath(new URL('../public/diagram.js', import.meta.url))],
       bundle: true,
       platform: 'browser',
       format: 'esm',
