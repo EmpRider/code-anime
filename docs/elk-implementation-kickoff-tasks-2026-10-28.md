@@ -125,3 +125,5 @@ The Ubuntu 24 log separately names PASS for T9 synthetic **76, 500,
 
 No browser signoff, merge, release, npm publish, deployment or task file
 deletion is authorized. Retain the previously recorded task histories.
+
+**ISSUE-DOC-HANDOVER-PRETTIER — OPEN (2026-10-28; P2 docs-only CI failure):** Expected: newly committed owner technical handover markdown passes the repository's pinned `npm run format:check`. OBSERVED: GitHub Actions run `40705166797` Ubuntu Node 24 reports **245 Node PASS, 0 FAIL, 2 optional SKIP**, but Prettier flags only `docs/elk-implementation-technical-handover-2026-10-28.md`. No source/runtime issue proven. Remedy: apply only Markdown formatting/line normalization to the handover file without changing acceptance meaning, source, tests or scope, then verify four non-browser matrix checks. No browser acceptance claimed.
