@@ -76,9 +76,10 @@ Pinned upstream snapshots: Superpowers `2ce8aa15`, Council `a7565e21`, Caveman `
 
 ## CA-009 — Minimal visual safety baseline (QA)
 
-- Owner: QA specialist; TL supervisor. Status: `READY`. Resources: read-only inspection and minimal scoped test changes only if a proved semantic gap requires them. No broad cosmetic unit/snapshot suite.
+- Owner: QA specialist; TL supervisor. Status: `VERIFIED/AWAITING_PUSH`. Resources: read-only inspection; no source or test files changed. No broad cosmetic unit/snapshot suite.
 - Objective: capture existing semantic route, Visit/Values, keyboard/focus, camera and locked component-boundary expectations; identify a suitable representative nested execution fixture. Visual acceptance remains user-led.
 - Dependencies: kickoff ledger remote push. Acceptance: baseline evidence and targeted existing checks recorded, no test assertions removed/relaxed. Browser geometry remains unverified until an actual browser run.
+- Verification at remote ledger baseline `392a104`: targeted existing semantic suite `node --import tsx --test --test-concurrency=1 tests/semantic-flow-model.test.mjs tests/diagram-routing.test.mjs tests/diagram-elk-layout.test.mjs tests/diagram-label-placement.test.mjs` PASS, 4 files/0 FAIL (3.58s); `npm run typecheck` PASS (2.94s); `npm run check:scope` PASS (.12s). Independent QA evidence. No browser or build run for this read-only baseline; not a visual acceptance result. Task-specific ledger commit/remote confirmation pending.
 
 ## CA-010 — Semantic chart nodes and AST grouping (Graph UI)
 
