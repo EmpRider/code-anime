@@ -27,7 +27,7 @@
     "test:browser": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "npm run check:scope && npm run typecheck && npm test && npm run build && npm run format:check",
+    "check": "npm run check:scope && npm run typecheck && npm run build && npm test && npm run format:check",
     "prepack": "npm run build",
     "package:check": "node scripts/verify-package.mjs"
   },
