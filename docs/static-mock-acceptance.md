@@ -287,3 +287,36 @@ The indexed provider did **not** report a callee for Java's
 is a discovered CodeGraph relationship boundary, not evidence that every
 Java invocation style works. The mock scenarios do not prove real runtime
 values, all branches, arbitrary language coverage, or release readiness.
+
+## October 28 — current branch evidence reconciliation (not a release approval)
+
+The October 15 sections above preserve historical investigations and test
+reports; do not read their old typecheck/CI failures or file inventories as
+claims about the current branch. The current `fix/react-layout-collapse`
+source/test HEAD `25efa689` passed
+[GitHub Actions #40604735431](https://github.com/EmpRider/code-anime/actions/runs/40604735431):
+**71/71 Chromium browser tests** and **4/4 check/package matrix jobs**
+(Ubuntu/Windows, Node 22/24). Local static/mock scope, TypeScript, 185 unit
+tests (two opt-in real CodeGraph integration skips), generated build,
+formatting and packed MCP/CLI/player smoke checks also passed. The B0b–B0h
+browser contracts are accepted at their documented, scoped interaction level;
+this does not convert every remaining requirement above to `Verified`.
+
+The **active** `tests/browser/` inventory contains only `player.spec.ts`.
+The previously described `large-trace.spec.ts`, `codegraph-mock-flow.spec.ts`,
+and `codegraph-multilang-mock.spec.ts` are **not present** in this branch.
+The active eight-event prepared-map fixture and bounded console/source
+overflow tests are not equivalent to historical 20,000-event / 1,500-call /
+five-continuation or indexed TypeScript/Kotlin/Java CodeGraph-to-MCP-to-browser
+acceptance. Real CodeGraph integration tests are opt-in and are skipped by
+default CI; the release workflow does not independently run Chromium.
+
+**Open T9/release evidence:** Implement static-only equivalents of those
+multi-language indexed and long mock-trace browser scenarios; prove replay
+does not requery AI/CodeGraph; require appropriate browser and package gates
+for publication; and obtain human PC visual density, contrast, keyboard,
+screen-reader and original-scenario acceptance. Never restore runtime
+recorders or execute analyzed user code to satisfy historical tests.
+Current all-green automation is strong evidence for the bounded flows it
+actually runs, **not full product accessibility, large-scale performance, or
+release readiness**.
