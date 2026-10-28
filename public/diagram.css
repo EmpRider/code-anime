@@ -719,6 +719,11 @@
   --decision: #ea733c;
   --loop: #2089dd;
   --recovery: #139e7a;
+  --return: #8463c6;
+  --return-fill: #f1edfb;
+  --throw: #cd5674;
+  --throw-fill: #fff0f4;
+  --call: #248eab;
 }
 :root[data-theme='dark'] #canvas.diagram-canvas {
   --diagram-bg: #0a1322;
@@ -733,6 +738,11 @@
   --loop-fill: #102b42;
   --recovery: #40d9aa;
   --recovery-fill: #10342d;
+  --return: #b59aff;
+  --return-fill: #302747;
+  --throw: #ff859d;
+  --throw-fill: #3c2233;
+  --call: #6ad3e9;
 }
 #canvas.diagram-canvas .diagram-surface {
   background-color: var(--diagram-bg);
@@ -797,8 +807,9 @@
   border: 1px solid var(--diagram-border);
 }
 #canvas .diagram-control-region {
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--decision-fill) 50%, transparent);
+  border-radius: 12px;
+  border-color: var(--decision);
+  background: color-mix(in srgb, var(--decision-fill) 34%, transparent);
 }
 #canvas .diagram-control-region > span {
   display: block;
@@ -811,20 +822,47 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border: 1px solid var(--diagram-border);
+  border: 1px solid var(--decision);
   border-radius: 0 0 8px 8px;
-  color: var(--diagram-ink);
-  background: var(--diagram-card);
+  color: var(--decision);
+  background: var(--diagram-bg);
   box-shadow: 0 3px 12px #0000001a;
   font:
     650 11px/22px 'Segoe UI',
     sans-serif;
 }
 #canvas .diagram-control-region[data-control-type='loop'] {
-  background: color-mix(in srgb, var(--loop-fill) 55%, transparent);
+  border-color: var(--loop);
+  background: color-mix(in srgb, var(--loop-fill) 42%, transparent);
 }
 #canvas .diagram-control-region[data-control-type='try'] {
-  background: color-mix(in srgb, var(--recovery-fill) 55%, transparent);
+  border-color: var(--recovery);
+  background: color-mix(in srgb, var(--recovery-fill) 42%, transparent);
+}
+#canvas .diagram-control-region[data-control-type='branch'] {
+  border-color: var(--decision);
+  border-style: dashed;
+  background: color-mix(in srgb, var(--decision-fill) 24%, transparent);
+}
+#canvas .diagram-control-region[data-control-type='unresolved'] {
+  border-color: var(--diagram-muted);
+  background: color-mix(in srgb, var(--diagram-border) 6%, transparent);
+}
+#canvas .diagram-control-region[data-control-type='loop'] > span {
+  border-color: var(--loop);
+  color: var(--loop);
+}
+#canvas .diagram-control-region[data-control-type='try'] > span {
+  border-color: var(--recovery);
+  color: var(--recovery);
+}
+#canvas .diagram-control-region[data-control-type='unresolved'] > span {
+  border-color: var(--diagram-muted);
+  color: var(--diagram-muted);
+}
+#canvas .diagram-control-region[data-selected='false'] {
+  border-style: dashed;
+  background: transparent;
 }
 #canvas .diagram-card[data-control-type='decision'] .diagram-name {
   max-height: 52px;
@@ -840,6 +878,38 @@
 }
 #canvas .diagram-card[data-control-type='loop'] {
   border-radius: 20px;
+  border-color: var(--loop);
+  background: var(--loop-fill);
+}
+#canvas .diagram-card[data-control-type='try'],
+#canvas .diagram-card[data-control-type='catch'] {
+  border: 1px solid var(--recovery);
+  border-left-width: 5px;
+  background: var(--recovery-fill);
+  border-radius: 5px 14px 14px 5px;
+}
+#canvas .diagram-card[data-control-type='throw'] {
+  border: 1px solid var(--throw);
+  border-left-width: 5px;
+  background: var(--throw-fill);
+  border-radius: 5px 14px 14px 5px;
+}
+#canvas .diagram-card[data-control-type='return'] {
+  border-color: var(--return);
+  border-radius: 28px;
+  background: var(--return-fill);
+}
+#canvas .diagram-card[data-control-type='call'] {
+  border-left: 4px solid var(--call);
+}
+#canvas .diagram-card[data-source-ownership='unresolved'] {
+  border-style: dashed;
+  border-color: var(--diagram-muted);
+}
+#canvas .diagram-card.diagram-control.is-active {
+  filter: drop-shadow(
+    0 0 8px color-mix(in srgb, var(--diagram-accent) 55%, transparent)
+  );
 }
 #canvas .diagram-visit,
 #canvas .diagram-invocation {

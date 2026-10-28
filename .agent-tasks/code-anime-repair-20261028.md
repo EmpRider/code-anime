@@ -83,9 +83,11 @@ Pinned upstream snapshots: Superpowers `2ce8aa15`, Council `a7565e21`, Caveman `
 
 ## CA-010 — Semantic chart nodes and AST grouping (Graph UI)
 
-- Owner: graph-development specialist; TL supervisor. Status: `READY_AFTER_CA-009`. Exclusive lock: `public/diagram.css`, relevant card constructors in `public/diagram.js`, generated diagram bundle only when rebuilt.
+- Owner: graph-development specialist; TL supervisor. Status: `VERIFIED/WAITING_ON_USER_VISUAL/AWAITING_PUSH` (not DONE). Exclusive lock: `public/diagram.css`, generated diagram CSS bundle. No JS/card constructor changes needed; existing semantic data attributes were sufficient.
 - Objective: dark-theme-compatible distinct decision/loop/try/catch/return shapes, legible concise headings, subtle AST-grounded group boundaries, consistent node spacing. Do not fabricate architecture nodes or alter execution topology. Preserve the existing desktop component arrangement and zoom behavior.
 - Acceptance: exact semantic node/edge identity, no false grouping, no missing control region/card, existing semantic checks and build parity; user normal-zoom visual critique pending. Separate task-specific commit/push.
+- Implemented locally: semantic dark/light tokens and card treatments for decision, loop, try/catch, throw, return, call, and unresolved states; type-specific tinted AST-backed region borders/headings, selected/unselected distinction. Existing node identities, card layouts and canvas sizing untouched. Files: `public/diagram.css`, generated `public/diagram/diagram.css` only.
+- Verification: focused QA 5/5 PASS, generated bundle parity/format/diff 8/8 PASS, full `npm run check` escalated after sandbox-only EPERM failures: 251 Node PASS / 0 FAIL / 2 optional SKIP, typecheck/build/scope/Prettier PASS. Independent QA source review APPROVED. No local rendered browser acceptance; user will manually judge visual shapes/colors before DONE. Remote task-specific commit pending.
 
 ## CA-011 — Measured graph geometry and guarded layout correction (Geometry)
 
