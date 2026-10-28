@@ -51,15 +51,10 @@ export function prepareControlFlow(
     for (const node of items ?? []) {
       if (node.iterations) {
         // Visit selection changes geometry; seeking the cursor alone does not.
-        let selected = Math.min(
+        const selected = Math.min(
           node.iterations.length - 1,
           Math.max(0, visits.get(node.id) ?? 0),
         );
-        const active = node.iterations.findIndex((item) =>
-          item.indices.includes(cursor),
-        );
-        if (active >= 0) selected = active;
-        selected = Math.min(selected, node.iterations.length - 1);
         node.iterations.forEach((visit, i) => {
           const id = regionId(node, `visit:${i}`);
           regions.push({

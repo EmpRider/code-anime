@@ -59,9 +59,6 @@ function elkGraph(prepared, direction, extraHeight) {
     layoutOptions: {
       'elk.algorithm': 'layered',
       'elk.direction': DIRECTIONS[direction],
-      'elk.layered.wrapping.strategy':
-        direction === 'horizontal' ? 'MULTI_EDGE' : 'OFF',
-      'elk.aspectRatio': 2,
       'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
       'elk.edgeRouting': 'ORTHOGONAL',
       'elk.padding': '[top=16,left=16,bottom=16,right=16]',
@@ -76,9 +73,6 @@ function elkGraph(prepared, direction, extraHeight) {
       layoutOptions: {
         'elk.algorithm': 'layered',
         'elk.direction': DIRECTIONS[direction],
-        'elk.layered.wrapping.strategy':
-          direction === 'horizontal' ? 'MULTI_EDGE' : 'OFF',
-        'elk.aspectRatio': 2,
         'elk.padding': '[top=40,left=16,bottom=16,right=16]',
       },
       children: [],
