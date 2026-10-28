@@ -6,3 +6,5 @@ coverage/
 *.tgz
 test-results/
 playwright-report/
+public/vendor/elk-worker.min.js
+public/vendor/elkjs/LICENSE.md

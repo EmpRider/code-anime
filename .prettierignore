@@ -7,3 +7,5 @@ public/diagram/
 public/vendor/cytoscape.min.js
 public/vendor/cytoscape-dagre.min.js
 public/vendor/dagre.min.js
+public/vendor/elk-worker.min.js
+public/vendor/elkjs/LICENSE.md

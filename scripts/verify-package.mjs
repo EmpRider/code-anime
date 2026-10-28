@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -33,6 +35,10 @@ try {
     'public/diagram/diagram.css',
     'public/player.js',
     'public/styles.css',
+    'public/vendor/elk-worker.min.js',
+    'public/vendor/elkjs/LICENSE.md',
+    'public/vendor/elkjs/SOURCE-AVAILABILITY.md',
+    'public/vendor/elkjs/NOTICE.md',
     'public/replay.js',
     'skills/code-anime/SKILL.md',
     'AGENTS.md',
@@ -70,11 +76,24 @@ try {
     '--no-fund',
     join(temporary, packed.filename),
   );
+  assert.ok(
+    !existsSync(join(temporary, 'node_modules/elkjs')),
+    'The built Worker must not cause redundant elkjs runtime installation',
+  );
   const installed = join(
     temporary,
     'node_modules',
     '@empirerider',
     'code-anime',
+  );
+  const packedWorker = await readFile(
+    join(installed, 'public/vendor/elk-worker.min.js'),
+  );
+  assert.equal(packedWorker.byteLength, 1595334);
+  assert.equal(
+    createHash('sha256').update(packedWorker).digest('hex'),
+    'e4f5c51c6f2fd564bb64e52e81c4a85a316ef2f24f8b90e1db5eb886c765b030',
+    'Installed package changed the original upstream Worker bytes',
   );
   assert.match(
     await readFile(join(installed, 'dist/index.js'), 'utf8'),
@@ -307,6 +326,25 @@ try {
     '/diagram/diagram.css',
   ])
     assert.equal((await fetch(new URL(asset, session.url))).status, 200);
+  const worker = await fetch(new URL('/vendor/elk-worker.min.js', session.url));
+  assert.equal(worker.status, 200, 'Installed native Worker URL must exist');
+  assert.match(worker.headers.get('content-type') ?? '', /javascript/i);
+  assert.equal(worker.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(
+    worker.headers.get('content-security-policy'),
+    "default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+  );
+  assert.equal(
+    createHash('sha256')
+      .update(Buffer.from(await worker.arrayBuffer()))
+      .digest('hex'),
+    'e4f5c51c6f2fd564bb64e52e81c4a85a316ef2f24f8b90e1db5eb886c765b030',
+  );
+  assert.equal(
+    (await fetch(new URL('/vendor/elk-worker-does-not-exist.js', session.url)))
+      .status,
+    404,
+  );
   console.log(
     'Packed npm package: installed CLI, MCP handshake, player assets and flow API passed.',
   );
