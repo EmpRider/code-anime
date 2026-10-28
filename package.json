@@ -26,7 +26,7 @@
     "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts tests/*.test.mjs",
     "test:browser": "playwright test",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format:check": "node scripts/format-diff-report.mjs && prettier --check .",
     "check": "npm run check:scope && npm run typecheck && npm run build && npm test && npm run format:check",
     "prepack": "npm run build",
     "package:check": "node scripts/verify-package.mjs"
