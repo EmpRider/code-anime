@@ -19,7 +19,7 @@ code must never execute to construct animations.
 | B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DONE — diagnostic; independently fixed and verified in T7  |
 | B0j  | Review accidental trailing README test line                        | B0 gate; owner priority          | LOW_PRIORITY                                               |
 | B0k  | Verify grouped boundaries after method collapse                    | B0f; CI 40602271424              | DONE — 08dfc5b, Chromium 63/63 + Node 4/4                  |
-| T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | IN_PROGRESS — Council conditional GO; tests-first RED next |
+| T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | CI VERIFIED — independent final review pending             |
 | T2   | Pure logical compound topology and truthful execution edges        | T1                               | Pending                                                    |
 | T3   | Real same-origin ELK Worker and distributable package              | B0 gate; dependency/license gate | PAUSED — owner/license distribution gate                   |
 | T4   | Nested ELK geometry and robust Worker protocol                     | T2, T3                           | Pending                                                    |
@@ -462,7 +462,7 @@ release, publish or remove this task ledger without owner authorization.
   architect review, PM/TL and full Council. **Dependencies:** scoped B0b–B0h
   and T7 browser acceptance at 71/71 Chromium, four check/package matrix
   jobs and packed MCP smoke; no active reproducible B0 functional RED.
-- **Current status:** `IMPLEMENTED_CANDIDATE — exact-head CI and independent final acceptance pending`. The
+- **Current status:** `CI_VERIFIED — independent final review and T1 acceptance reconciliation pending`. The
   file-based preflight was pushed before T1 source/test edits. The owner
   asked to complete the reviewed ELK task list ASAP; this does not authorize
   redistributing the T3 dual-licensed ELK Worker or the final npm release.
@@ -492,12 +492,19 @@ release, publish or remove this task ledger without owner authorization.
   at the exact remote commit; mark T1 DONE only after proven evidence.
   T2 follows T1; T3 licensing/distribution remains a separate owner gate.
 
+##### T1a closeout evidence — exact-head CI, 2026-10-28
+
+- **Format-only source commit:** [`1cf0e2f3f6da2307a71cc3f51b68bbc7f8de1fbe`](https://github.com/EmpRider/code-anime/commit/1cf0e2f3f6da2307a71cc3f51b68bbc7f8de1fbe). Recovered actual output of the pinned Prettier formatter from temporary CI diagnostic; unchanged semantic test expectations.
+- **Cleanup commit:** [`e67ef30d58e2ba07b72e71534757046e83156baa`](https://github.com/EmpRider/code-anime/commit/e67ef30d58e2ba07b72e71534757046e83156baa) removes the temporary `tests/t1a-format-diagnostic.test.mjs` entirely.
+- **Remote CI:** [Actions run 40624072126](https://github.com/EmpRider/code-anime/actions/runs/40624072126) at exact cleanup HEAD `e67ef30`, **SUCCESS**: Ubuntu Node 22/24 and Windows Node 22/24 = 4/4; Chromium browser 71/71 PASS. Each Node matrix check includes scope, typecheck, unit, build, formatting and packed MCP/package check. This closes the T1a regression only.
+- **T1 distinction:** T1 semantic grouping source and RED→GREEN tests have CI evidence, but no claim of a new independent review of recovered exact source or all T1-specific manual evidence in this session. Keep T1 `CI_VERIFIED`, **not DONE**, until its remaining independently reviewed acceptance evidence is confirmed. T2 remains dependent on verified T1 completion.
+
 #### T1a — CI Prettier format gate regression (2026-10-28)
 
 - **Observed:** [Actions run 40615276143](https://github.com/EmpRider/code-anime/actions/runs/40615276143) at exact HEAD `becb768` passed Chromium browser and Node semantic tests (192 PASS, 2 optional SKIP), static boundary, TypeScript and build. Four Node matrix jobs failed only because `prettier --check .` reported `public/semantic-flow-model.js`.
 - **Expected:** repository Prettier check, package smoke and all four platform matrix jobs GREEN while semantic source/event behavior stays unchanged.
 - **Root cause:** reconstructed T1 semantic source commit `1b219b7` did not preserve the repository's exact Prettier serialization; this is a formatting-only delivery regression, not a failing semantic test.
-- **Severity/owner:** P2 CI blocker; semantic delivery specialist with independent formatting/QA gate; T1 prerequisite. **Status:** `IN_PROGRESS — format-only recovery and exact-head CI pending`.
+- **Severity/owner:** P2 CI blocker; semantic delivery specialist with independent formatting/QA gate; T1 prerequisite. **Status:** `DONE — formatting and diagnostic cleanup remotely verified; exact-head CI GREEN`.
 - **Remedy and rollback:** obtain the authoritative Prettier output using the repository's existing locked devDependency in GitHub Actions (temporary, non-mutating diagnostic test only if local formatter unavailable), update only `public/semantic-flow-model.js`, remove the temporary diagnostic, and prove no semantic test changes. No bypass of formatter, tests, license gate, or static/mock scope. GitHub plugin is required for every remote write.
 - **Acceptance:** exact-head Node 4/4 + browser GREEN, package smoke; document output and commits; keep T1 `IMPLEMENTED_CANDIDATE` until final independent acceptance and T1a complete. Temporary diagnostics must not remain in the deliverable.
 
