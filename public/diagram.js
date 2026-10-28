@@ -281,6 +281,8 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
   const footer = element('div', '', 'diagram-footer');
   const pages = element('div', '', 'diagram-pages');
   const controls = element('div', '', 'diagram-controls');
+  controls.setAttribute('role', 'group');
+  controls.setAttribute('aria-label', 'Diagram navigation controls');
   const button = (label, name, action) => {
     const node = element('button', label);
     node.type = 'button';

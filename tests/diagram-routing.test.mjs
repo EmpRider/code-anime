@@ -1175,3 +1175,31 @@ test('T6 delayed reply/error from an aborted Worker epoch never mutates the newe
   );
   h.diagram.dispose();
 });
+
+test('T8 diagram icon controls form a labeled keyboard-accessible group', async (t) => {
+  const h = await mounted();
+  t.after(() => h.diagram.dispose());
+  const controls = document.querySelector('.diagram-controls');
+  assert.equal(controls.getAttribute('role'), 'group');
+  assert.equal(
+    controls.getAttribute('aria-label'),
+    'Diagram navigation controls',
+  );
+  assert.equal(
+    controls.querySelector('.diagram-pan-buttons').getAttribute('role'),
+    'group',
+  );
+  for (const name of [
+    'Horizontal layout',
+    'Pan up',
+    'Pan down',
+    'Pan left',
+    'Pan right',
+    'Fit diagram',
+    'Zoom in',
+    'Zoom out',
+  ]) {
+    const action = controls.querySelector(`button[aria-label="${name}"]`);
+    assert.ok(action && action.type === 'button', name);
+  }
+});
