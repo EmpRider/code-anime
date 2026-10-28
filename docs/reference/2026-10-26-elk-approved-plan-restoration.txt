@@ -1,0 +1,83 @@
+# Code Anime X6 + ELK.js Compound Flow — Approved Implementation Plan
+
+**Restored 2026-10-27 from the already user-approved plan recorded in conversation after scratch reset.**
+This is a faithful scope/acceptance reconstruction; it is not a newly proposed design, and no extra features were authorized.
+Original plan approval: user explicitly replied "approved" to BA's full implementation-and-push request, on 2026-10-26.
+Target branch: fix/react-layout-collapse (GitHub base 2a7f5cc3f6543d051f2e692c629ce1dfffad1652).
+
+## Goal and architecture
+
+Render source-proven, visually distinguishable nested for/while, if/else, try/catch/finally scopes in DOWN and RIGHT orientations, with directed arrows between regions and all current user controls preserved. Use existing X6 Shape.HTML renderer for HTML cards, select inputs, interaction, arrows, labels, and accessibility. ELK.js version 0.12.0 calculates geometry inside a self-hosted, same-origin browser Worker; never run ELK layout on main thread as silent fallback. Preserve outer Dagre method placement and synchronous public diagram.render API with internally async, generation-guarded layout.
+
+Preserve CodeGraph plus AI-labeled mock simulation data as sole source. Never execute, import, evaluate, instrument or compile/run analyzed user project code. Do not truncate prepared events or impose arbitrary total step caps. Keep shared cursor, source-line highlights, stack, variable/return values, mock console, breakpoints, visit/invocation native dropdowns, code-and-call action buttons, expand/collapse, focus/selection, pan/zoom, return arrows and user-supplied continuation.
+
+Unsupported/ambiguous source must remain visible in prepared sequence with unknown labels, never invented group membership or solid executed branches. Color augments textual group type/status, shape/border/dash and arrowheads. Preserve script-src self and style-src self CSP and do not add blobs or inline scripts. If worker fails, warn accessibly and keep source, console, cursor and playback usable.
+
+## Task ownership, dependency and tests
+
+### T1. Source-proven nested grouping
+
+Files: public/semantic-flow-model.js and tests/semantic-flow-model.test.mjs.
+Keep buildSemanticFlow(flow) output {methods,roots,byEvent}, existing method item/branch/iteration IDs and prepared indices. Test-first: multiline if(a){x()} else if(b){y()} else {z()}, else-if after closing brace on its own line, nested loop/try ownership and damaged/same-line/unbraced/missing/unsupported sources. Every prepared event index appears exactly once among semantic leaves. Only group when source evidence uniquely proves line ranges and branch. Ambiguous examples remain linear with explicit note. No AST/parser package or runtime execution.
+Focused RED then GREEN: node --test tests/semantic-flow-model.test.mjs. Independent review and cohesive scoped commit.
+
+### T2. Logical compound graph and truthful paths
+
+Files: public/diagram-control-layout.js and tests/diagram-control-layout.test.mjs.
+Add synchronous pure prepareControlFlow(nodes,{cursor=0,visits=new Map()}={}) -> {cards,regions,edges,topologyKey}.
+Card {id,node,index?,control?,visit?,placeholder?,parentRegionId?}; region {id,type,label,selected?,parentRegionId?}; edge {id,source,target,kind,label?,status:'prepared'|'possible'|'not-selected'|'unknown',sourceSide?,targetSide?}. Topology key deterministic for selected-visit structure, not cursor-only styling.
+RED tests: loop header WITHIN selected iteration region; if/else arm containment; nested parent ancestry; normal try goes to finally without falsely executing catch; exception traverses catch/finally only when prepared evidence; unknown paths not fabricated; loop-back solid only if next prepared visit exists and never after terminal return/throw; stable IDs and every prepared event preserved.
+GREEN: transform existing semantic structure into logical cards/regions/edges, no coordinate guessing. Remove legacy custom geometry when T5 migrates renderer, not earlier if breaking intermediate build.
+Focused RED then GREEN: node --test tests/diagram-control-layout.test.mjs. Independent review/commit.
+
+### T3. Self-hosted, distributable ELK browser Worker
+
+Files: package.json, package-lock.json, scripts/build.mjs, scripts/verify-package.mjs, generated public/vendor/elk-worker.min.js and appropriate complete license/source notices, tests/browser/player.spec.ts or separate owned browser Worker spec.
+Install exact elkjs@0.12.0. Build copies original published Worker bytes to public/vendor; package verifier ensures worker and license/source notice shipped and served, correct content type and CSP headers. Avoid broad build rewrite. Host page must instantiate actual same-origin native Worker; test success and 404/abort/CSP-denial failure without main-thread fallback, while player controls remain usable. Preserve existing CSP.
+License: elkjs worker is EPL-2.0 OR GPL-3.0-or-later; ship its license and a prominent notice describing source availability and how to obtain corresponding source. Independent source/license review; human project-owner/legal obligations are separate public distribution gate, not silently inferred from test success.
+RED package/browser assertions then GREEN. Review generated bundles as well as source. Scoped commit.
+
+### T4. Hierarchical geometry and safe Worker protocol
+
+Create public/diagram-elk-layout.js and tests/diagram-elk-layout.test.mjs.
+createControlLayout({workerUrl:'/vendor/elk-worker.min.js'}={}) returns {layout(prepared,{direction='vertical',extraHeight=()=>0}={}):Promise<{cards,regions,edges,width,height}>, dispose():void}. Export pure flattenElkLayout(elkGraph,prepared) for deterministic coordinate tests only (not alternate layout engine).
+Set elk.algorithm layered; direction DOWN or RIGHT; hierarchyHandling INCLUDE_CHILDREN; edgeRouting ORTHOGONAL. Recursive children use explicit parentRegionId and nested child offsets flatten to absolute X6 positions. Parent header including loop header is INSIDE its frame. Values +160px grows ancestor. All 76 prepared events preserved. Preserve source-target direction/status.
+RED fixed geometry tests and malformed Worker response/error/disposal tests. Official ELK Worker sends an id-only register ACK; allow that only for verified outstanding register command, not for layout response. Reject malformed/unmatched layout messages so Promises cannot hang. No silent main-thread fallback. Full Node plus browser Worker proof; independent review and scoped commit.
+
+### T5. X6 compound groups, directed arrows, warning labels
+
+Modify public/diagram.js, public/diagram.css; tests/diagram-routing.test.mjs and tests/browser/player.spec.ts. Use T2 logical data and T4 geometry to render X6 HTML compound frames/cards. Keep native selects interactive, non-intercepting region backgrounds, theme styles, header labels and visible type/status at glance in both orientations.
+Preserve original entry/call/return semantics and source-to-target direction. Draw real targetMarker arrowheads; distinguish prepared solid, alternatives possible/unknown dashed or muted, return dashed. Never draw solid normal try->catch. Label loop-back honestly. Calee exact enter card missing: attach to method overview with explicit aria-label calling it method overview, not hidden exact entry. Keep route planner obstruction, include scope header strips; narrow port choices only if test-proven to recover arrow without erasing title. Missing full routes and drawn arrows with labels omitted must have separate accessible routing status and source/target lists.
+Test-first desktop/mobile DOWN/RIGHT visible loop/if/try frames, arrow direction and SVG marker, native select keyboard and pointer interaction, fallback call edge, route-with-points-but-no-label disclosure. Preserve 9/9 real directed connections; never invent fallback edges. Build current generated public/diagram assets and review. Scoped commit.
+
+### T6. Async layout races and all player interactions
+
+Modify public/diagram.js and tests/browser/player.spec.ts; avoid public/player.js unless a failing reproduction requires change. Public createDiagram().render(next={},fitLayout=true):void remains synchronous.
+Compute prepareControlFlow and topologyKey synchronously; add orientation, width, expanded set, selected visit/invocation, Values/card heights to structural layout key. Cursor-only seeks update active styling without launching ELK. Changed key awaits Worker; use generation token plus flow ID. Commit only newest whole coherent multi-method X6 geometry. On commit derive active cursor from current player state, not captured stale cursor. Dispose cancels/invalidates pending.
+Browser RED then GREEN: genuine native visit/invocation select pointer/keyboard/touch, source/stack/console and breakpoint after seek; rapid cursor 5->9 while layout in flight uses cursor 9; rapid seek/orientation/Values/expansion newest wins, no lost events. Expansion anchor stays within 1 CSS pixel only when user has not subsequently panned/zoomed/refocused; if user moves viewport, async completion must not reverse their movement. Values expands without fit or focus theft. Worker failure displays accessible status with continued playback. Independent review/commit.
+
+### T7. Separate diagram orientation storage preference (P2)
+
+Files: public/diagram.js and tests/browser/player.spec.ts; do not change public/player.js JSON panel state unless failing proof.
+New storage key code-anime-diagram-orientation. Existing code-anime-layout remains JSON for panel split sizing. When new key absent, read legacy raw vertical/horizontal once and migrate to new key, never overwrite valid panel JSON. Unknown/new values default vertical; guard unavailable throwing localStorage.
+RED browser regressions cover both persistence orders, raw legacy values and legacy JSON preservation with divider aria-valuenow after reload. GREEN narrow migration, independent review/commit.
+
+### T8. Accessibility and responsive compound scopes
+
+Files: public/diagram.css and only proven-necessary public/styles.css / diagram.js; tests/browser/player.spec.ts. Native selects remain native; 44px minimum coarse-pointer hit area for .diagram-visit and .diagram-invocation. Visible keyboard focus, non-intercepting backgrounds, border/shape/type/status cues across dark and forced-colors, reduced-motion. Test at 1366x768, 390x844 and genuine 200% browser zoom with both orientations; retain pan reachability, no Values auto-fit/focus theft. Avoid new design system, minimap or semantic zoom. RED then GREEN; review and scoped commit.
+
+### T9. Full 76/500/1000 event acceptance, package and branch delivery
+
+Files: test-only additions to tests/browser/player.spec.ts and tests/diagram-elk-layout.test.mjs, package verification already T3; change CI only if existing gate provably omits new relevant validation.
+Use synthetic AI-labeled static/mock trace fixtures: nested 76-step loop/if/else/try/catch/finally with separate prepared normal+exception cases, 500 and 1000 events. No executing analyzed source. Test 1366x768 fit readable grouping without zoom, 390x844, 200% zoom, dark, forced-colors, native controls and arrows. Every cursor remains reachable, playback/source/stack/console/breakpoints synchronize; no arbitrary count caps. Worker 404/abort/CSP violation accessibility and honest status. Record timing but do not invent SLA.
+Run npm run check:scope, npm run typecheck, npm test, npm run build, npm run format:check, npm run test:browser, npm run package:check; inspect exact Git diff/status including generated public/diagram artifacts and bundled Worker/license. Full release suite must not be called green if old baseline failures remain; keep ten preexisting failures separate and seek user scope decision, no skips or blanket whitelists. Independent feature/UX/security/license review and gated final delivery; no npm publish, no merge.
+
+## Dependency / scheduling
+
+Parallel after approval: T1, T3, T7 with exclusive paths (serialize any shared diagram.js and tests/browser/player.spec.ts). T2 after T1; T4 after T2+T3; T5 after T4; T6 after T5; T8 after T5+T6; T9 after all. Test scaffolding can proceed read-only or in disjoint owned paths.
+
+## Non-negotiable stop gates
+
+Worker cannot run under unchanged strict CSP; real Worker failed/blocked but layout silently ran on main thread; source ambiguity falsely assigned control; fabricated executed catch/loop visit; dropped prepared events/cursor; native selector, call/return or click actions broken; severe viewport jump; license/source notice not distributable; final suite red; independent reviewer Important findings not resolved; missing human scope or public distribution approval.
+
+Deliver scoped reviewed local commits and, only once every required test and public licensing gate passes, push to authorized fix/react-layout-collapse branch. Report exact verified results and unsupported syntax or preexisting failures. Rollback via reverting scoped UI adapter/Worker commits; preserve Code Anime stored mock sessions. The previous reset lost six unpushed local commits and T5 WIP; do not assert they survived. Reconstruct through genuine tests and fresh code review.
