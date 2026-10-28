@@ -170,11 +170,11 @@ test(
       cards,
       regions: [],
       edges: cards.slice(1).map((card, index) => ({
-          id: `edge-${index}`,
-          source: cards[index].id,
-          target: card.id,
-          kind: 'step',
-        })),
+        id: `edge-${index}`,
+        source: cards[index].id,
+        target: card.id,
+        kind: 'step',
+      })),
     };
     const control = adapter.createControlLayout();
     try {

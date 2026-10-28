@@ -42,9 +42,7 @@ export function reserveRouteLabel(points, text, obstacles, reservations) {
               height,
             };
         if (
-          [...obstacles, ...reservations].some((other) =>
-            overlaps(box, other),
-          )
+          [...obstacles, ...reservations].some((other) => overlaps(box, other))
         ) {
           continue;
         }

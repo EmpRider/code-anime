@@ -1701,7 +1701,12 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
         const labelBox =
           label?.box ??
           (edgeLabel
-            ? reserveRouteLabel(points, edgeLabel, obstacles, reservedEdgeLabels)
+            ? reserveRouteLabel(
+                points,
+                edgeLabel,
+                obstacles,
+                reservedEdgeLabels,
+              )
             : null);
         if (label?.box) reservedEdgeLabels.push(label.box);
         edgeCells.push(
@@ -1749,32 +1754,33 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
                 targetMarker: { name: 'block', width: 7, height: 6 },
               },
             },
-            labels: edgeLabel && labelBox
-              ? [
-                  {
-                    position: {
-                      distance: 0,
-                      offset: {
-                        x: labelBox.x + labelBox.width / 2 - points[0].x,
-                        y: labelBox.y + labelBox.height / 2 - points[0].y,
+            labels:
+              edgeLabel && labelBox
+                ? [
+                    {
+                      position: {
+                        distance: 0,
+                        offset: {
+                          x: labelBox.x + labelBox.width / 2 - points[0].x,
+                          y: labelBox.y + labelBox.height / 2 - points[0].y,
+                        },
+                      },
+                      attrs: {
+                        label: {
+                          text: edgeLabel,
+                          fontSize: 10,
+                          fill: 'var(--diagram-ink)',
+                        },
+                        body: {
+                          fill: 'var(--diagram-card)',
+                          stroke: 'var(--diagram-border)',
+                          rx: 3,
+                          ry: 3,
+                        },
                       },
                     },
-                    attrs: {
-                      label: {
-                        text: edgeLabel,
-                        fontSize: 10,
-                        fill: 'var(--diagram-ink)',
-                      },
-                      body: {
-                        fill: 'var(--diagram-card)',
-                        stroke: 'var(--diagram-border)',
-                        rx: 3,
-                        ry: 3,
-                      },
-                    },
-                  },
-                ]
-              : [],
+                  ]
+                : [],
           }),
         );
       }

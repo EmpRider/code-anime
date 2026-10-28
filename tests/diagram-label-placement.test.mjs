@@ -26,7 +26,10 @@ test('horizontal native route reserves a readable label outside cards', () => {
 });
 
 test('two labels on a shared route never overlap', () => {
-  const route = [{ x: 0, y: 100 }, { x: 320, y: 100 }];
+  const route = [
+    { x: 0, y: 100 },
+    { x: 320, y: 100 },
+  ];
   const reserved = [];
   const first = reserveRouteLabel(route, 'Yes', [], reserved);
   const second = reserveRouteLabel(route, 'No', [], reserved);
@@ -35,7 +38,10 @@ test('two labels on a shared route never overlap', () => {
 });
 
 test('no free label region omits visual text without altering route', () => {
-  const route = [{ x: 0, y: 100 }, { x: 320, y: 100 }];
+  const route = [
+    { x: 0, y: 100 },
+    { x: 320, y: 100 },
+  ];
   const blockers = [{ x: -500, y: -500, width: 2000, height: 2000 }];
   const reserved = [];
   assert.equal(

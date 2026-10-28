@@ -747,7 +747,9 @@
       color-mix(in srgb, var(--diagram-muted) 24%, transparent) 0.7px,
       transparent 0.7px
     );
-  background-size: auto, 22px 22px;
+  background-size:
+    auto,
+    22px 22px;
 }
 #canvas .diagram-card:not(.diagram-control),
 #canvas .diagram-card.diagram-expanded-method {
@@ -863,7 +865,11 @@
 #canvas .diagram-footer button:hover,
 #canvas .diagram-navigation button:hover {
   border-color: var(--diagram-accent);
-  background: color-mix(in srgb, var(--diagram-accent) 13%, var(--diagram-card));
+  background: color-mix(
+    in srgb,
+    var(--diagram-accent) 13%,
+    var(--diagram-card)
+  );
 }
 #canvas .diagram-card :focus-visible,
 #canvas .diagram-footer button:focus-visible {
