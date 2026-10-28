@@ -915,3 +915,45 @@ test('graph controls split decision lanes and retain selectable loop visits', ()
     assert.equal(body.x, loop.x, 'loop body follows the header column');
   }
 });
+
+for (const count of [76, 500, 1000]) {
+  test(`T9 ${count} synthetic mock events retain stable topology`, () => {
+    const nodes = Array.from({ length: count }, (_, offset) => {
+      const index = offset + 1;
+      return {
+        id: `mock-node-${index}`,
+        eventId: `mock-event-${index}`,
+        evidenceIdentity: `mock-run:${index}`,
+        invocationId: 'mock-run',
+        type: 'step',
+        indices: [index],
+        event: {
+          id: `mock-event-${index}`,
+          kind: index === count ? 'return' : 'statement',
+          source: { file: 'synthetic.ts', line: index },
+          callId: 'mock-run',
+          symbolId: 'mock-run',
+          certainty: 'mock',
+          label: `Simulated statement ${index}`,
+        },
+      };
+    });
+    const early = topology.prepareControlFlow(nodes, {
+      cursor: 1,
+      methodCallId: 'mock-run',
+    });
+    const late = topology.prepareControlFlow(nodes, {
+      cursor: count,
+      methodCallId: 'mock-run',
+    });
+    assert.equal(early.cards.length, count);
+    assert.equal(early.edges.length, count - 1);
+    assert.equal(new Set(early.cards.map(({ id }) => id)).size, count);
+    assert.deepEqual(
+      early.cards.map(({ index }) => index),
+      Array.from({ length: count }, (_, offset) => offset + 1),
+    );
+    assert.ok(early.edges.every(({ status }) => status === 'prepared'));
+    assert.equal(early.topologyKey, late.topologyKey);
+  });
+}
