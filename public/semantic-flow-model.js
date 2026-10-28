@@ -2,15 +2,60 @@ import { buildMethodGroups } from './flow-overview.js';
 
 // Only brace-delimited structures with unambiguous line ranges are grouped.
 // Unsupported syntax stays in prepared order; source expressions are never run.
+// Mask comments and literals without changing source positions or line numbers.
+// If the lexical evidence is damaged, do not claim a source-proven structure.
+function maskSource(source) {
+  const output = source.split('');
+  let state = 'code';
+  const hide = (index) => {
+    if (source[index] !== '\n') output[index] = ' ';
+  };
+  for (let i = 0; i < source.length; i++) {
+    const character = source[i];
+    const next = source[i + 1];
+    if (state === 'code') {
+      if (character === '/' && next === '/') {
+        hide(i); hide(++i); state = 'line';
+      } else if (character === '/' && next === '*') {
+        hide(i); hide(++i); state = 'comment';
+      } else if (source.slice(i, i + 3) === '"""') {
+        hide(i); hide(++i); hide(++i); state = 'triple';
+      } else if (character === '"' || character === "'" || character === '\`') {
+        hide(i); state = character;
+      }
+    } else if (state === 'line') {
+      if (character === '\n') state = 'code';
+      else hide(i);
+    } else if (state === 'comment') {
+      hide(i);
+      if (character === '*' && next === '/') {
+        hide(++i); state = 'code';
+      }
+    } else if (state === 'triple') {
+      hide(i);
+      if (source.slice(i, i + 3) === '"""') {
+        hide(++i); hide(++i); state = 'code';
+      }
+    } else {
+      if (character === '\n' && state !== '\`') return;
+      hide(i);
+      if (character === '\\' && next !== undefined) hide(++i);
+      else if (character === state) state = 'code';
+    }
+  }
+  return state === 'code' || state === 'line' ? output.join('') : undefined;
+}
+
+// Group only brace-delimited source-proven regions. Unknown syntax remains
+// inspectable as prepared events; no expressions are evaluated.
 function structures(source, file) {
-  if (!/\.(?:[cm]?[jt]sx?|java|cs|kt|c|cpp|h|go|rs)$/.test(file)) return [];
-  const masked = source.replace(
-    /\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g,
-    (value) => value.replace(/[^\n]/g, ' '),
-  );
-  const pairs = new Map(),
-    stack = [],
-    lines = [];
+  if (
+    typeof source !== 'string' ||
+    !/\.(?:[cm]?[jt]sx?|java|cs|kt|c|cpp|h|go|rs)$/.test(file)
+  ) return [];
+  const masked = maskSource(source);
+  if (masked === undefined) return [];
+  const pairs = new Map(), stack = [], lines = [];
   let line = 1;
   for (let i = 0; i < masked.length; i++) {
     lines[i] = line;
@@ -22,18 +67,69 @@ function structures(source, file) {
         open !== undefined &&
         ((masked[open] === '(' && masked[i] === ')') ||
           (masked[open] === '{' && masked[i] === '}'))
-      )
-        pairs.set(open, i);
+      ) pairs.set(open, i);
       else return [];
     }
   }
   if (stack.length) return [];
+  const classBodies = new Set();
+  for (const match of masked.matchAll(/\bclass\b/g)) {
+    const open = masked.indexOf('{', match.index + match[0].length);
+    if (
+      open >= 0 && pairs.has(open) &&
+      !/[;{}]/.test(masked.slice(match.index + match[0].length, open))
+    ) classBodies.add(open);
+  }
+  const objectBodies = new Set();
+  for (const [open] of pairs) {
+    if (masked[open] !== '{' || classBodies.has(open)) continue;
+    let before = open - 1;
+    while (before >= 0 && /\s/.test(masked[before])) before--;
+    const character = masked[before];
+    const suffix = masked.slice(Math.max(0, before - 160), before + 1);
+    const isCaseBlock =
+      character === ':' && /\b(?:case\s+[^:;{}]*|default)\s*:$/.test(suffix);
+    if (
+      !isCaseBlock &&
+      ((character === '=' && masked[before - 1] !== '>') ||
+        character === ':' || character === '(' ||
+        /\b(?:return|default)$/.test(suffix))
+    ) objectBodies.add(open);
+  }
+  const braceScopes = [...pairs]
+    .filter(([open]) => masked[open] === '{')
+    .sort(([a], [b]) => a - b);
+  const activeScopes = [];
+  let scopeCursor = 0;
+  const directlyInsideDeclaration = (offset) => {
+    while (
+      scopeCursor < braceScopes.length &&
+      braceScopes[scopeCursor][0] < offset
+    ) {
+      const [open, close] = braceScopes[scopeCursor++];
+      while (activeScopes.length && activeScopes.at(-1)[1] < open)
+        activeScopes.pop();
+      activeScopes.push([open, close]);
+    }
+    while (activeScopes.length && activeScopes.at(-1)[1] <= offset)
+      activeScopes.pop();
+    const enclosing = activeScopes.at(-1)?.[0];
+    return classBodies.has(enclosing) || objectBodies.has(enclosing);
+  };
   const skip = (offset) => {
-    while (/\s/.test(masked[offset] ?? '') && offset < masked.length) offset++;
+    while (offset < masked.length && /\s/.test(masked[offset])) offset++;
     return offset;
   };
   function block(start, keyword) {
     let open = skip(start + keyword.length);
+    if (
+      keyword === 'try' && masked[open] !== '{' &&
+      !(file.endsWith('.java') && masked[open] === '(')
+    ) return;
+    if (
+      ['if', 'for', 'while', 'foreach', 'switch'].includes(keyword) &&
+      masked[open] !== '('
+    ) return;
     if (masked[open] === '(') {
       const close = pairs.get(open);
       if (close === undefined) return;
@@ -41,56 +137,80 @@ function structures(source, file) {
     }
     if (masked[open] !== '{' || !pairs.has(open)) return;
     return {
-      start,
-      open,
-      end: pairs.get(open),
-      line: lines[start],
-      bodyLine: lines[open],
-      title: source.slice(start, open).trim(),
-      keyword,
+      start, open, end: pairs.get(open), line: lines[start],
+      bodyLine: lines[open], title: source.slice(start, open).trim(), keyword,
+    };
+  }
+  function ifTail(main) {
+    const next = skip(main.end + 1);
+    if (!/^else\b/.test(masked.slice(next))) return { end: main.end };
+    const after = skip(next + 4);
+    if (!/^if\b/.test(masked.slice(after))) {
+      const alternative = block(next, 'else');
+      if (!alternative) return;
+      return {
+        end: alternative.end,
+        alternative: {
+          label: 'No · condition false',
+          start: alternative.open + 1,
+          end: alternative.end,
+          line: alternative.line,
+        },
+      };
+    }
+    const nestedStart = after;
+    let current = block(after, 'if');
+    if (!current) return;
+    let end = current.end;
+    while (true) {
+      const nextElse = skip(end + 1);
+      if (!/^else\b/.test(masked.slice(nextElse))) break;
+      const following = skip(nextElse + 4);
+      if (/^if\b/.test(masked.slice(following))) {
+        current = block(following, 'if');
+        if (!current) return;
+        end = current.end;
+      } else {
+        const finalElse = block(nextElse, 'else');
+        if (!finalElse) return;
+        end = finalElse.end;
+        break;
+      }
+    }
+    return {
+      end,
+      alternative: {
+        label: 'No · condition false',
+        start: nestedStart, end, line: lines[nestedStart],
+      },
     };
   }
   const all = [];
-  for (const match of masked.matchAll(
-    /\b(if|for|while|foreach|try|switch)\b/g,
-  )) {
+  for (const match of masked.matchAll(/\b(if|for|while|foreach|try|switch)\b/g)) {
+    if (directlyInsideDeclaration(match.index)) continue;
     const main = block(match.index, match[0]);
     if (!main) continue;
-    const branches = [
-      {
-        label:
-          main.keyword === 'if'
-            ? 'Yes · condition true'
-            : main.keyword === 'try'
-              ? 'Try · normal path'
-              : 'Body',
-        start: main.open + 1,
-        end: main.end,
-        line: main.line,
-      },
-    ];
+    const branches = [{
+      label: main.keyword === 'if' ? 'Yes · condition true' :
+        main.keyword === 'try' ? 'Try · normal path' : 'Body',
+      start: main.open + 1, end: main.end, line: main.line,
+    }];
     let end = main.end;
-    if (main.keyword === 'if' || main.keyword === 'try') {
+    if (main.keyword === 'if') {
+      const tail = ifTail(main);
+      if (!tail) continue;
+      if (tail.alternative) branches.push(tail.alternative);
+      end = tail.end;
+    } else if (main.keyword === 'try') {
       while (true) {
         const next = skip(end + 1);
         const keyword = /^(else|catch|finally)\b/.exec(masked.slice(next))?.[1];
-        if (
-          !keyword ||
-          (main.keyword === 'if' ? keyword !== 'else' : keyword === 'else')
-        )
-          break;
+        if (!keyword || keyword === 'else') break;
         const part = block(next, keyword);
         if (!part) break;
         branches.push({
-          label:
-            keyword === 'else'
-              ? 'No · condition false'
-              : keyword === 'catch'
-                ? 'Catch · recover'
-                : 'Finally · cleanup',
-          start: part.open + 1,
-          end: part.end,
-          line: part.line,
+          label: keyword === 'catch' ? 'Catch · recover' : 'Finally · cleanup',
+          start: part.open + 1, end: part.end, line: part.line,
         });
         end = part.end;
       }
@@ -98,17 +218,11 @@ function structures(source, file) {
     if (main.keyword === 'if' && branches.length === 1)
       branches.push({
         label: 'No · continue without body',
-        start: -1,
-        end: -1,
-        line: -1,
+        start: -1, end: -1, line: -1,
       });
-    const type = ['for', 'while', 'foreach'].includes(main.keyword)
-      ? 'loop'
-      : main.keyword === 'try'
-        ? 'try'
-        : main.keyword === 'switch'
-          ? 'switch'
-          : 'decision';
+    const type = ['for','while','foreach'].includes(main.keyword)
+      ? 'loop' : main.keyword === 'try' ? 'try'
+      : main.keyword === 'switch' ? 'switch' : 'decision';
     if (main.keyword === 'switch') {
       branches.length = 0;
       let depth = 0;
@@ -117,38 +231,31 @@ function structures(source, file) {
         if (masked[offset] === '}') depth--;
         if (depth || (offset > 0 && /[\w$]/.test(masked[offset - 1]))) continue;
         const label = /^(case\b[^:\n]*|default)\s*:/.exec(
-          masked.slice(offset, main.end),
+          masked.slice(offset, main.end)
         );
         if (!label) continue;
         if (branches.length) branches.at(-1).end = offset - 1;
         branches.push({
           label: source.slice(offset, offset + label[0].length).trim(),
-          start: offset,
-          end: main.end,
-          line: lines[offset],
+          start: offset, end: main.end, line: lines[offset],
         });
         offset += label[0].length - 1;
       }
       if (
         !branches.length ||
-        new Set(branches.map((b) => b.line)).size !== branches.length
-      )
-        continue;
+        new Set(branches.map(b => b.line)).size !== branches.length
+      ) continue;
     }
-    // ponytail: line-only trace locations cannot separate same-line arms; use prepared order until column evidence exists.
+    // Line-only traces cannot disambiguate same-line arms.
     if (lines[main.open] === lines[end]) continue;
     all.push({
-      ...main,
-      end,
-      endLine: lines[end],
-      type,
-      branches: branches.map((b) => ({
-        ...b,
-        endLine: b.end < 0 ? -1 : lines[b.end],
+      ...main, end, endLine: lines[end], type,
+      branches: branches.map(b => ({
+        ...b, endLine: b.end < 0 ? -1 : lines[b.end],
       })),
     });
   }
-  return all.sort((a, b) => a.start - b.start || b.end - a.end);
+  return all.sort((a,b) => a.start - b.start || b.end - a.end);
 }
 const typeOf = (kind) =>
   ({
@@ -206,7 +313,11 @@ export function buildSemanticFlow(flow) {
         stack: [],
         note: 'No trace evidence; prepared order only.',
       }));
-  const sources = flow.trace?.sourceFiles ?? {};
+  const suppliedSources = flow.trace?.sourceFiles;
+  const sources =
+    suppliedSources && typeof suppliedSources === 'object'
+      ? suppliedSources
+      : {};
   const parsed = new Map(
     Object.entries(sources).map(([file, source]) => [
       file,
@@ -222,23 +333,64 @@ export function buildSemanticFlow(flow) {
   );
   const byEvent = new Map(),
     owners = new Map();
+  const taskContexts = new Map();
+  const entryCounts = new Map();
+  const occurrences = new Map();
+  const occurrenceByIndex = events.map((event) => {
+    const key = JSON.stringify([
+      event.callId ?? event.symbolId ?? 'flow', event.id ?? null, event.kind,
+    ]);
+    const count = occurrences.get(key) ?? 0;
+    occurrences.set(key, count + 1);
+    return count;
+  });
   events.forEach((event, i) => {
     const id = event.callId || event.symbolId || 'flow';
     if (!owners.has(id)) owners.set(id, []);
     owners.get(id).push(i + 1);
     byEvent.set(i + 1, id);
+    const task = event.values?.task ?? event.values?.taskId ?? event.taskId;
+    const thread = event.values?.thread ?? event.thread;
+    if (!taskContexts.has(id)) taskContexts.set(id, new Set());
+    taskContexts.get(id).add(JSON.stringify([task ?? null, thread ?? null]));
+    if (event.kind === 'enter')
+      entryCounts.set(id, (entryCounts.get(id) ?? 0) + 1);
   });
+  const ambiguousTasks = new Set(
+    [...taskContexts]
+      .filter(([id, contexts]) =>
+        contexts.size > 1 || (entryCounts.get(id) ?? 0) > 1)
+      .map(([id]) => id),
+  );
+  function evidence(index) {
+    const event = events[index - 1];
+    const invocationId = event.callId ?? event.symbolId ?? 'flow';
+    const eventId = event.id ?? null;
+    const occurrence = occurrenceByIndex[index - 1];
+    return {
+      eventId, invocationId,
+      visitIdentity: JSON.stringify([
+        invocationId, eventId, event.kind, occurrence,
+      ]),
+      evidenceIdentity: JSON.stringify([
+        index, invocationId, eventId, occurrence,
+      ]),
+    };
+  }
   function leaf(index) {
     const event = events[index - 1];
+    const unresolved = event.kind === 'branch' || event.kind === 'loop';
     return {
       id: `event-${index}`,
-      type: typeOf(event.kind),
+      type: unresolved ? 'unresolved' : typeOf(event.kind),
       title: event.label || event.kind,
       indices: [index],
       event,
+      ...evidence(index),
+      ...(unresolved ? { ownershipStatus: 'unresolved' } : {}),
       ...(calls.has(index) ? { targetId: calls.get(index) } : {}),
-      ...(['branch', 'loop'].includes(event.kind)
-        ? { note: 'Control structure unavailable; prepared order only.' }
+      ...(unresolved
+        ? { note: 'Unresolved source ownership; prepared order only.' }
         : {}),
     };
   }
@@ -251,7 +403,11 @@ export function buildSemanticFlow(flow) {
         (s) =>
           event.source?.line >= s.line &&
           event.source.line <= s.endLine &&
-          event.kind !== 'enter',
+          event.kind !== 'enter' &&
+          (s.type !== 'decision' ||
+            (event.kind === 'branch' && event.source.line === s.line)) &&
+          (s.type !== 'loop' ||
+            (event.kind === 'loop' && event.source.line === s.line)),
       );
       if (!structure) {
         result.push(leaf(index));
@@ -278,7 +434,7 @@ export function buildSemanticFlow(flow) {
       }
       const own = indices.slice(position, end);
       const nested = candidates.filter(
-        (s) => s.start > structure.start && s.end < structure.end,
+        (s) => s.start > structure.start && s.end <= structure.end,
       );
       const node = {
         id: `structure-${index}`,
@@ -286,6 +442,7 @@ export function buildSemanticFlow(flow) {
         title: structure.title,
         indices: own,
         event,
+        ...evidence(index),
       };
       if (structure.type === 'loop') {
         const visits = [];
@@ -302,8 +459,9 @@ export function buildSemanticFlow(flow) {
           label: `${i + 1} · ${events[steps[0] - 1].label}`,
           indices: steps,
           children: groupSequence(steps, nested).map((child) =>
-            child.type === 'loop' && child.event.source?.line === structure.line
-              ? { ...child, type: 'step', note: undefined }
+            child.event.kind === 'loop' &&
+            child.event.source?.line === structure.line
+              ? { ...child, type: 'step', note: undefined, ownershipStatus: 'source-proven' }
               : child,
           ),
         }));
@@ -315,21 +473,19 @@ export function buildSemanticFlow(flow) {
           indices: [],
           children: [],
         }));
-        const header = [];
+        const header = [], unknown = [];
         for (const step of own) {
-          const e = events[step - 1],
-            line = e.source.line;
-          // A branch's closing brace may share a line with the next arm header.
-          let arm = structure.branches.findLastIndex(
-            (b) => b.line >= 0 && line >= b.line && line <= b.endLine,
+          const e = events[step - 1], line = e.source.line;
+          const armMatches = structure.branches.flatMap((b, i) =>
+            b.line >= 0 && line >= b.line && line <= b.endLine ? [i] : []
           );
-          if (line === structure.line) {
-            header.push(step);
-            continue;
+          let arm = armMatches.at(-1) ?? -1;
+          if (armMatches.length > 1) {
+            if (e.kind === 'catch') arm = armMatches.find(i => i > 0) ?? -1;
+            else { unknown.push(step); continue; }
           }
-          if (arm < 0) {
-            header.push(step);
-            continue;
+          if (line === structure.line || arm < 0) {
+            header.push(step); continue;
           }
           node.branches[arm].indices.push(step);
         }
@@ -337,26 +493,33 @@ export function buildSemanticFlow(flow) {
           const bounds = structure.branches[i];
           branch.children = groupSequence(
             branch.indices,
-            nested.filter(
-              (s) => s.start >= bounds.start && s.end <= bounds.end,
-            ),
+            nested.filter(s => s.start >= bounds.start && s.end <= bounds.end),
           );
         }
-        // Header operations remain inspectable, including their original cursor.
-        node.children = header.map((index) => ({
-          ...leaf(index),
-          type: 'step',
-          note: undefined,
-        }));
+        node.children = [
+          ...header.map(index => ({
+            ...leaf(index), type: 'step', note: undefined,
+          })),
+          ...unknown.map(index => ({
+            ...leaf(index), type: 'unresolved',
+            ownershipStatus: 'unresolved',
+            note: 'Unresolved shared-line branch ownership; prepared event only.',
+          })),
+        ].sort((a,b) => a.indices[0] - b.indices[0]);
         if (structure.type === 'decision') {
           const condition = event.values?.condition;
-          if (typeof condition === 'boolean')
-            node.branches.forEach((branch, i) => {
+          if (typeof condition === 'boolean' && node.branches.length === 2) {
+            const conflicts = node.branches.some((branch, i) =>
+              (i === 0) !== condition && branch.indices.length > 0
+            );
+            if (conflicts) {
+              node.ownershipStatus = 'unresolved';
+              node.note = 'Contradictory evidence: prepared source membership conflicts with the supplied branch outcome; no arm selected.';
+            } else node.branches.forEach((branch, i) => {
               branch.selected = (i === 0) === condition;
             });
-          else
-            node.note =
-              'Branch outcome not supplied; lanes show source membership, not an inferred condition result.';
+          } else node.note =
+            'Branch outcome not supplied; lanes show source membership, not an inferred condition result.';
         }
       }
       result.push(node);
@@ -371,7 +534,9 @@ export function buildSemanticFlow(flow) {
       indices.map((index) => events[index - 1].source?.file),
     );
     const candidates =
-      files.size === 1 ? (parsed.get(first.source?.file) ?? []) : [];
+      files.size === 1 && !ambiguousTasks.has(id)
+        ? (parsed.get(first.source?.file) ?? [])
+        : [];
     const returned = indices
       .map((index) => events[index - 1])
       .findLast((event) => event.kind === 'return');
@@ -385,6 +550,9 @@ export function buildSemanticFlow(flow) {
       inputs: first.inputs,
       result: returned?.result,
       parentId: group?.parentCallId,
+      ...(ambiguousTasks.has(id) ? {
+        note: 'Unresolved invocation ownership: conflicting or incomplete task/entry identity for one callId; prepared order only.',
+      } : {}),
     };
   });
   const ids = new Set(methods.map((method) => method.id));
