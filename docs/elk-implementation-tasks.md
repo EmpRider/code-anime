@@ -1,5 +1,7 @@
 # ELK implementation task progress
 
+> **2026-10-28 continuation handoff:** [Verified implementation status, exact CI evidence, blockers, T1–T9 roadmap, approvals and restart checklist](implementation-handoff-2026-10-28.md). Read this alongside the current task table and historical entries. This handoff is documentation only; T1 remains `CI_VERIFIED`, T2 pending, T3 license-gated.
+
 Source: owner-approved reviewed implementation plan dated 2026-10-27. Static
 analysis and explicitly labeled AI mock data remain mandatory; analyzed user
 code must never execute to construct animations.
