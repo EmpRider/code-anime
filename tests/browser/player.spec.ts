@@ -1412,6 +1412,32 @@ for (const mobile of [false, true]) {
         .focus();
       await page.keyboard.press('Enter');
       const children = page.locator('.diagram-card[data-parent-id]');
+      const waitForSettledDirection = async (
+        direction: 'horizontal' | 'vertical',
+      ) => {
+        await expect(
+          page.locator(
+            `#canvas[data-direction="${direction}"][data-layout-state="ready"]`,
+          ),
+        ).toHaveCount(1);
+        const samples = await children.evaluateAll(async (nodes) => {
+          const positions = () =>
+            nodes.slice(0, 2).map((node) => {
+              const { x, y, width, height } = node.getBoundingClientRect();
+              return { x, y, width, height };
+            });
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => resolve()),
+          );
+          const first = positions();
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => resolve()),
+          );
+          return { first, second: positions() };
+        });
+        expect(samples.first).toHaveLength(2);
+        expect(samples.second).toEqual(samples.first);
+      };
       const beforeDirection = await children.evaluateAll((nodes) =>
         nodes.map((node) => node.getAttribute('data-step')),
       );
@@ -1422,6 +1448,7 @@ for (const mobile of [false, true]) {
       await expect(
         controls.getByRole('button', { name: 'Vertical layout', exact: true }),
       ).toBeVisible();
+      await waitForSettledDirection('horizontal');
       await expect(page.locator('#progress')).toHaveText(cursor!);
       expect(
         await children.evaluateAll((nodes) =>
@@ -1446,6 +1473,7 @@ for (const mobile of [false, true]) {
       await controls
         .getByRole('button', { name: 'Vertical layout', exact: true })
         .click();
+      await waitForSettledDirection('vertical');
       const verticalFirst = (await children.nth(0).boundingBox())!;
       const verticalSecond = (await children.nth(1).boundingBox())!;
       expect(verticalSecond.y).toBeGreaterThan(

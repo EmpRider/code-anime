@@ -28,9 +28,11 @@ Pinned upstream snapshots: Superpowers `2ce8aa15`, Council `a7565e21`, Caveman `
 
 ## CA-003 — Vertical geometry (P1)
 
-- Owner: graph/development specialist. Status: `WAITING_ON_REPRO`. Lock: diagram layout files.
-- Observed: displaced/incorrectly ordered siblings (`tests/browser/player.spec.ts:1325–1452`). Expected ordered, non-overlapping vertical flow.
-- Cause unverified; inspect orientation propagation, async readiness, actual DOM. Acceptance: both orientations desktop/mobile, semantic endpoints preserved, no clipping; full browser suite.
+- Owner: graph/development specialist. Status: `VERIFIED/AWAITING_BROWSER_CI`. Lock: `tests/browser/player.spec.ts` only; no production geometry changes.
+- Observed: vertical sibling bounds were sampled immediately after the orientation click (`tests/browser/player.spec.ts:1325–1475`), while diagram geometry settles asynchronously through ELK and the canvas reports `data-layout-state` pending/stale/ready. The prior browser CI failure remains the behavioral RED; final rendered geometry has not yet been proven correct.
+- Council decision: synchronize the browser test with the requested canvas direction and ready state; sample child DOM bounds across two animation frames for stability, then retain the original strict vertical non-overlap and x-alignment assertions unchanged. A ready marker alone does not waive geometry correctness. If CI still fails, reopen as a real geometry defect; do not weaken assertions.
+- Verification: full `npm run check` scope guard, typecheck, Vite build and Node tests 250 PASS / 0 FAIL / 2 SKIP; Prettier and `git diff --check` PASS. The local pinned Playwright Chromium install failed despite authorized escalation (CDN delivered invalid/truncated 0 MiB ZIP); no local browser pass is claimed.
+- Acceptance pending: remote browser CI must validate desktop/mobile strict geometry in both directions, no clipping or semantic endpoint regression. Task remains open until browser green.
 
 ## CA-004 — Values card anchor (P1)
 
