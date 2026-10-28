@@ -44,6 +44,7 @@
   border-radius: 8px;
   color: var(--diagram-ink);
   pointer-events: none;
+  background: color-mix(in srgb, var(--decision-fill) 32%, transparent);
 }
 .diagram-control-region > span {
   display: block;
@@ -77,9 +78,51 @@
 }
 .diagram-control-region[data-control-type='try'] {
   border-color: var(--recovery);
+  background: color-mix(in srgb, var(--recovery-fill) 45%, transparent);
+}
+.diagram-control-region[data-control-type='branch'] {
+  border-style: dashed;
+}
+.diagram-control-region[data-control-type='unresolved'] {
+  border-color: var(--diagram-muted);
+  border-style: dashed;
+  background: transparent;
+}
+.diagram-control-region[data-control-type='unresolved'] > span::before {
+  content: '? ';
 }
 .diagram-control-region[data-selected='false'] {
   border-style: dashed;
+}
+.diagram-layout-status {
+  max-width: 250px;
+  padding: 8px 10px;
+  border: 1px solid var(--diagram-border);
+  border-radius: 6px;
+  color: var(--diagram-ink);
+  background: var(--diagram-card);
+  font:
+    12px/16px 'Segoe UI',
+    sans-serif;
+}
+.diagram-layout-status[hidden] {
+  display: none;
+}
+#canvas.diagram-canvas[data-layout-state='stale'] .diagram-surface::before {
+  content: 'Previous prepared trace · updating layout';
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  z-index: 5;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--diagram-ink);
+  background: var(--diagram-card);
+  border: 1px dashed var(--diagram-muted);
+  font:
+    600 12px/16px 'Segoe UI',
+    sans-serif;
+  pointer-events: none;
 }
 .diagram-card.diagram-control {
   overflow: visible;

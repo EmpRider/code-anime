@@ -9,7 +9,8 @@ import { createDrilldown } from './diagram-drilldown.js';
 import { preparedReturns } from './diagram-returns.js';
 import { createRoutePlanner } from './diagram-routing.js';
 import { buildSemanticFlow } from './semantic-flow-model.js';
-import { layoutControlFlow } from './diagram-control-layout.js';
+import { prepareControlFlow } from './diagram-control-layout.js';
+import { createControlLayout } from './diagram-elk-layout.js';
 import './vendor/x6.css';
 import './diagram.css';
 
@@ -56,6 +57,7 @@ Shape.HTML.register({
     );
     card.dataset.nodeId = data.id;
     card.dataset.controlType = data.control ?? data.kind;
+    if (data.unresolved) card.dataset.sourceOwnership = 'unresolved';
     if (data.control) card.classList.add('diagram-control');
     card.translate = false;
     card.dataset.step = data.index;
@@ -224,6 +226,11 @@ Shape.HTML.register({
     const rail = element('div', '', 'diagram-control-region');
     rail.dataset.controlType = data.type;
     rail.dataset.selected = String(data.selected);
+    if (data.type === 'unresolved') rail.dataset.status = 'unknown';
+    rail.setAttribute(
+      'aria-label',
+      `${data.label} · ${data.selected === false ? 'not selected' : data.type === 'unresolved' ? 'unknown source ownership' : 'prepared source scope'}`,
+    );
     rail.append(element('span', data.label));
     return rail;
   },
@@ -348,7 +355,11 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
   controls.prepend(panButtons);
   const routingStatus = element('details', '', 'diagram-routing-status');
   routingStatus.hidden = true;
-  footer.append(pages, routingStatus, controls);
+  const layoutStatus = element('div', '', 'diagram-layout-status');
+  layoutStatus.setAttribute('role', 'status');
+  layoutStatus.setAttribute('aria-live', 'polite');
+  layoutStatus.hidden = true;
+  footer.append(pages, layoutStatus, routingStatus, controls);
   container.replaceChildren(heading, surface, footer);
   const graph = new Graph({
     container: surface,
@@ -455,6 +466,101 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
   let signature = '',
     previousCursor = -1,
     disposed = false;
+  let renderedTraceRevision = 0;
+  const controlLayout = createControlLayout();
+  const geometryCache = new Map();
+  const geometryFailures = new Map();
+  let wantedGeometry = new Map();
+  let runningGeometry;
+  let traceRevision = 0;
+  let pendingFit = false;
+  function showGeometryStatus() {
+    const failures = [...wantedGeometry.keys()].filter((key) =>
+      geometryFailures.has(key),
+    );
+    const pending = [...wantedGeometry.keys()].filter(
+      (key) => !geometryCache.has(key) && !geometryFailures.has(key),
+    );
+    layoutStatus.hidden = !pending.length && !failures.length;
+    const previousSnapshot =
+      pending.length && renderedTraceRevision !== traceRevision;
+    layoutStatus.textContent = failures.length
+      ? `ELK Worker layout failed: ${geometryFailures.get(failures[0])}. Prepared playback remains available; no route was invented.`
+      : pending.length
+        ? `ELK Worker layout pending for ${pending.length} expanded method${pending.length === 1 ? '' : 's'}. ${previousSnapshot ? 'Previous trace layout shown; not current prepared evidence until replacement finishes.' : 'Existing diagram retained.'}`
+        : '';
+    container.dataset.layoutState = previousSnapshot
+      ? 'stale'
+      : pending.length
+        ? 'pending'
+        : failures.length
+          ? 'failed'
+          : 'ready';
+  }
+  function requestGeometry(wanted, fitLayout) {
+    const keys = [...wanted.keys()];
+    if (runningGeometry && !wanted.has(runningGeometry.key))
+      runningGeometry.abort.abort();
+    wantedGeometry = wanted;
+    const unfinished = keys.some(
+      (key) => !geometryCache.has(key) && !geometryFailures.has(key),
+    );
+    if (unfinished) pendingFit ||= fitLayout;
+    else if (!runningGeometry) pendingFit = false;
+    showGeometryStatus();
+    if (runningGeometry) return;
+    const key = keys.find(
+      (id) => !geometryCache.has(id) && !geometryFailures.has(id),
+    );
+    if (!key) return;
+    const {
+      prepared,
+      direction: layoutDirection,
+      extraHeights,
+    } = wanted.get(key);
+    const abort = new AbortController();
+    const revision = traceRevision;
+    runningGeometry = { key, abort };
+    controlLayout
+      .layout(prepared, {
+        direction: layoutDirection,
+        extraHeight: (id) => extraHeights.get(id) ?? 0,
+        signal: abort.signal,
+      })
+      .then(
+        (geometry) => {
+          if (
+            !disposed &&
+            revision === traceRevision &&
+            wantedGeometry.has(key)
+          )
+            geometryCache.set(key, geometry);
+        },
+        (error) => {
+          if (
+            !disposed &&
+            !abort.signal.aborted &&
+            revision === traceRevision &&
+            wantedGeometry.has(key)
+          )
+            geometryFailures.set(key, error.message);
+        },
+      )
+      .finally(() => {
+        if (disposed || runningGeometry?.key !== key) return;
+        runningGeometry = undefined;
+        showGeometryStatus();
+        const remaining = [...wantedGeometry.keys()].some(
+          (id) => !geometryCache.has(id) && !geometryFailures.has(id),
+        );
+        if (remaining) requestGeometry(wantedGeometry, pendingFit);
+        else {
+          const shouldFit = pendingFit;
+          pendingFit = false;
+          render(options, shouldFit);
+        }
+      });
+  }
   let nodeCells = new Map(),
     groupCells = new Map(),
     edgeCells = [];
@@ -615,6 +721,12 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
   });
   observer.observe(surface);
   function setFlow(value, preserveScope = false) {
+    traceRevision++;
+    geometryCache.clear();
+    geometryFailures.clear();
+    wantedGeometry = new Map();
+    pendingFit = false;
+    runningGeometry?.abort.abort();
     ++valuesRevision;
     flow = value;
     events = value.trace?.events ?? [];
@@ -917,24 +1029,41 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
     ]);
     const controlRegions = [];
     const controlEdges = [];
+    const wanted = new Map();
+    let waitingForGeometry = false;
     for (const card of cards) {
       const method = semantic.methods.find((item) => item.id === card.callId);
       if (card.expanded && method) {
-        const layout = layoutControlFlow(method.items, {
-          direction,
-          maxWidth: Math.max(340, surface.clientWidth - 144),
-          targetAspectRatio: Math.max(
-            1.8,
-            Math.min(
-              2.4,
-              surface.clientWidth / Math.max(1, surface.clientHeight),
-            ),
-          ),
+        const prepared = prepareControlFlow(method.items, {
           cursor: follow ? cursor : 0,
           visits: selectedVisits,
-          extraHeight: (id) =>
-            valueHeight(JSON.stringify(['control', card.id, id])),
+          methodCallId: card.callId,
         });
+        const extraHeights = new Map();
+        for (const item of prepared.cards) {
+          const height = valueHeight(
+            JSON.stringify(['control', card.id, item.id]),
+          );
+          // shortcut: T4 measures repeated visits by shared node.id;
+          // grow all matching visits instead of clipping an open Values card.
+          extraHeights.set(
+            item.node.id,
+            Math.max(extraHeights.get(item.node.id) ?? 0, height),
+          );
+        }
+        const layoutKey = JSON.stringify([
+          traceRevision,
+          card.id,
+          prepared.topologyKey,
+          direction,
+          [...extraHeights],
+        ]);
+        wanted.set(layoutKey, { prepared, direction, extraHeights });
+        const layout = geometryCache.get(layoutKey);
+        if (!layout) {
+          if (!geometryFailures.has(layoutKey)) waitingForGeometry = true;
+          continue;
+        }
         card.controlLayout = layout;
         card.width = Math.max(WIDTH, layout.width + 32);
         const ids = new Map(
@@ -958,23 +1087,26 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
             continue;
           }
           const index = item.index ?? item.node.indices[0];
-          const event = events[index - 1];
+          const event = events[index - 1] ?? item.event;
           const step = card.steps.find((step) => step.index === index);
           innerCards.push({
             id: ids.get(item.id),
             parentId: card.id,
+            parentRegionId: item.parentRegionId
+              ? JSON.stringify([card.id, item.parentRegionId])
+              : undefined,
             index,
             event,
-            symbol: event.symbolId,
+            symbol: event?.symbolId ?? 'Unknown prepared source',
             callId: card.callId,
-            source: event.source,
-            certainty: event.certainty,
+            source: event?.source,
+            certainty: event?.certainty ?? 'unresolved',
             level: 'step',
-            kind: event.kind,
+            kind: event?.kind ?? 'unresolved',
             control: item.control,
             label: item.control
               ? item.node.title
-              : (step?.label ?? event.label),
+              : (step?.label ?? event?.label ?? 'Unresolved prepared event'),
             code: step?.code,
             simulated: item.control ? undefined : `Simulated: ${event.label}`,
             x: item.x,
@@ -984,8 +1116,9 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
             expandLabel: 'Go to source step ' + index,
             expandable: false,
             value: snapshot(event),
+            unresolved: item.unresolved || !events[index - 1],
             active: cursor === index,
-            visits: item.node.iterations,
+            visits: item.control === 'loop' ? item.node.iterations : undefined,
             visit: item.visit,
             onVisit: (visit) => {
               onPause?.();
@@ -1008,6 +1141,9 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
             ...region,
             id: JSON.stringify([card.id, region.id]),
             parentId: card.id,
+            parentRegionId: region.parentRegionId
+              ? JSON.stringify([card.id, region.parentRegionId])
+              : undefined,
           })),
         );
         continue;
@@ -1047,6 +1183,8 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
         previous = id;
       }
     }
+    requestGeometry(wanted, fitLayout);
+    if (waitingForGeometry && nodeCells.size) return;
     for (const card of cards) {
       card.headerHeight =
         HEIGHT + valueHeight(card.id) + (card.invocations?.length > 1 ? 36 : 0);
@@ -1216,22 +1354,6 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
         if (parents.has(card.id))
           groupCells.get(parents.get(card.id)).addChild(cell);
       }
-      for (const card of innerCards) {
-        const parent = nodeCells.get(card.parentId);
-        const position = parent.position();
-        const cell = graph.addNode({
-          id: card.id,
-          shape: 'code-anime-card',
-          x: position.x + 16 + (card.x ?? card.column * (WIDTH + STEP_GAP)),
-          y: position.y + card.offsetY,
-          width: card.width ?? WIDTH,
-          height: card.height,
-          zIndex: 2,
-          data: { ...card, onSelect, onSeek, onExpand },
-        });
-        parent.addChild(cell);
-        nodeCells.set(card.id, cell);
-      }
       for (const region of controlRegions) {
         const parent = nodeCells.get(region.parentId);
         const position = parent.position();
@@ -1245,7 +1367,35 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
           zIndex: 1,
           data: region,
         });
-        parent.addChild(cell);
+        const owner = region.parentRegionId
+          ? graph.getCellById(region.parentRegionId)
+          : parent;
+        if (!owner)
+          throw new Error(
+            `Missing source-proven parent region for ${region.id}`,
+          );
+        owner.addChild(cell);
+      }
+      for (const card of innerCards) {
+        const parent = nodeCells.get(card.parentId);
+        const position = parent.position();
+        const cell = graph.addNode({
+          id: card.id,
+          shape: 'code-anime-card',
+          x: position.x + 16 + (card.x ?? card.column * (WIDTH + STEP_GAP)),
+          y: position.y + card.offsetY,
+          width: card.width ?? WIDTH,
+          height: card.height,
+          zIndex: 2,
+          data: { ...card, onSelect, onSeek, onExpand },
+        });
+        const owner = card.parentRegionId
+          ? graph.getCellById(card.parentRegionId)
+          : parent;
+        if (!owner)
+          throw new Error(`Missing source-proven parent region for ${card.id}`);
+        owner.addChild(cell);
+        nodeCells.set(card.id, cell);
       }
       const stepNodes = new Map(
         innerCards
@@ -1344,6 +1494,12 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
             : firstAppearance
               ? `First appearance order—not a call: ${from} to ${to}`
               : undefined,
+          fallback:
+            realCall &&
+            (!stepNodes.has(entry?.callSiteIndex) ||
+              !stepNodes.has(entry?.index))
+              ? 'Exact call/entry card unavailable; connected to method overview'
+              : undefined,
         });
         if (grouped && !internal)
           for (const item of returns.get(callId) ?? [])
@@ -1352,6 +1508,11 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
               target: source,
               kind: 'return',
               callId,
+              fallback:
+                !stepNodes.has(item.index) ||
+                !stepNodes.has(entry?.callSiteIndex)
+                  ? 'Exact return/call card unavailable; connected to method overview'
+                  : undefined,
               ...item,
             });
       }
@@ -1369,56 +1530,98 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
         };
       };
       for (const item of pending) {
-        const sourceCard = nodeCells.get(item.source).getData();
-        const targetCard = nodeCells.get(item.target).getData();
+        const sourceCell = nodeCells.get(item.source);
+        const targetCell = nodeCells.get(item.target);
+        if (!sourceCell || !targetCell) {
+          missingConnections++;
+          unavailable.push(
+            `${item.kind}: missing prepared endpoint; no route drawn`,
+          );
+          continue;
+        }
+        const sourceCard = sourceCell.getData();
+        const targetCard = targetCell.getData();
         const controlEdge =
           sourceCard.parentId && sourceCard.parentId === targetCard.parentId;
-        const route = planner.route(
-          {
-            ...rectangles.get(item.source),
-            ...(sourceCard.control === 'decision' ? { shape: 'diamond' } : {}),
-            ...(controlEdge
-              ? {
-                  sides:
-                    !vertical && item.kind === 'branch'
-                      ? ['right', 'bottom']
-                      : [item.sourceSide ?? (vertical ? 'bottom' : 'right')],
-                  centered: true,
-                }
-              : {}),
-          },
-          item.kind === 'call' && nodeCells.get(item.target).getData().expanded
-            ? {
-                ...rectangles.get(item.target),
-                height: HEIGHT,
-                sides: ['left', 'right'],
-              }
-            : {
-                ...rectangles.get(item.target),
-                ...(targetCard.control === 'decision'
+        const origin = nodeCells.get(sourceCard.parentId)?.position();
+        const parentData = nodeCells.get(sourceCard.parentId)?.getData();
+        const nativePoints = item.points?.map((point) => ({
+          x: point.x + origin.x + 16,
+          y: point.y + origin.y + parentData.headerHeight + 16,
+        }));
+        const route = nativePoints
+          ? nativePoints.length >= 2
+            ? { points: nativePoints }
+            : null
+          : planner.route(
+              {
+                ...rectangles.get(item.source),
+                ...(sourceCard.control === 'decision'
                   ? { shape: 'diamond' }
                   : {}),
                 ...(controlEdge
                   ? {
                       sides:
                         !vertical && item.kind === 'branch'
-                          ? ['left', 'top']
-                          : [item.targetSide ?? (vertical ? 'top' : 'left')],
+                          ? ['right', 'bottom']
+                          : [
+                              item.sourceSide ??
+                                (vertical ? 'bottom' : 'right'),
+                            ],
                       centered: true,
                     }
                   : {}),
               },
-          item.label,
-        );
+              item.kind === 'call' &&
+                nodeCells.get(item.target).getData().expanded
+                ? {
+                    ...rectangles.get(item.target),
+                    height: HEIGHT,
+                    sides: ['left', 'right'],
+                  }
+                : {
+                    ...rectangles.get(item.target),
+                    ...(targetCard.control === 'decision'
+                      ? { shape: 'diamond' }
+                      : {}),
+                    ...(controlEdge
+                      ? {
+                          sides:
+                            !vertical && item.kind === 'branch'
+                              ? ['left', 'top']
+                              : [
+                                  item.targetSide ??
+                                    (vertical ? 'top' : 'left'),
+                                ],
+                          centered: true,
+                        }
+                      : {}),
+                  },
+              item.label,
+            );
         if (!route) {
           missingConnections++;
           unavailable.push(
-            `${item.kind}: ${nodeCells.get(item.source).getData().symbol} to ${nodeCells.get(item.target).getData().symbol}`,
+            `${item.kind} (${item.status ?? 'unavailable'}): ${sourceCard.symbol ?? item.source} to ${targetCard.symbol ?? item.target}; no route drawn`,
           );
           continue;
         }
         const { points, label } = route;
         const labelBox = label?.box;
+        const status =
+          item.status ?? (item.inactive ? 'not-selected' : 'prepared');
+        const fallback = item.fallback;
+        const edgeLabel =
+          item.label ??
+          (item.kind === 'branch'
+            ? 'BRANCH'
+            : item.kind === 'catch'
+              ? 'EXCEPTION'
+              : item.kind === 'finally'
+                ? 'FINALLY'
+                : item.kind === 'loopback'
+                  ? 'LOOP'
+                  : undefined);
         edgeCells.push(
           graph.addEdge({
             source: endpoint(item.source, points[0]),
@@ -1434,13 +1637,14 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
               index: item.index,
               callId: item.callId,
               inactive: item.inactive,
+              status,
             },
             attrs: {
               root: {
-                'aria-label':
-                  item.description ??
-                  `${item.kind}: ${item.source} to ${item.target}`,
+                'aria-label': `${item.description ?? `${edgeLabel ?? item.kind}: ${item.source} to ${item.target}`} · ${status}${fallback ? ` · ${fallback}` : ''}`,
                 'data-edge-kind': item.kind,
+                'data-edge-status': status,
+                'data-fallback': fallback ?? '',
                 'data-source-node': item.source,
                 'data-target-node': item.target,
                 'data-route': JSON.stringify(points),
@@ -1450,25 +1654,34 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
                 stroke: '#64748b',
                 strokeWidth: 1.5,
                 strokeDasharray:
-                  item.kind === 'return' || item.kind === 'first-appearance'
-                    ? '5 7'
-                    : '',
+                  status === 'unknown'
+                    ? '8 4 2 4'
+                    : status === 'possible'
+                      ? '4 4'
+                      : status === 'not-selected'
+                        ? '2 6'
+                        : item.kind === 'return' ||
+                            item.kind === 'first-appearance'
+                          ? '5 7'
+                          : '',
                 targetMarker: { name: 'block', width: 7, height: 6 },
               },
             },
-            labels: labelBox
+            labels: edgeLabel
               ? [
                   {
-                    position: {
-                      distance: 0,
-                      offset: {
-                        x: labelBox.x + labelBox.width / 2 - points[0].x,
-                        y: labelBox.y + labelBox.height / 2 - points[0].y,
-                      },
-                    },
+                    position: labelBox
+                      ? {
+                          distance: 0,
+                          offset: {
+                            x: labelBox.x + labelBox.width / 2 - points[0].x,
+                            y: labelBox.y + labelBox.height / 2 - points[0].y,
+                          },
+                        }
+                      : 0.5,
                     attrs: {
                       label: {
-                        text: item.label,
+                        text: edgeLabel,
                         fontSize: 10,
                         fill: 'var(--diagram-ink)',
                       },
@@ -1506,6 +1719,8 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
       }
       if (selectedId) selectNode(selectedId);
       if (fitLayout) fit();
+      renderedTraceRevision = traceRevision;
+      showGeometryStatus();
     } else if (cursor !== previousCursor) {
       for (const card of diagramCards)
         nodeCells
@@ -1528,15 +1743,16 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
     for (const edge of edgeCells) {
       const isReturn = edge.getData().kind === 'return';
       const firstAppearance = edge.getData().kind === 'first-appearance';
-      const active = firstAppearance
-        ? false
-        : isReturn
-          ? edge.getData().index === cursor
-          : grouped && edge.getData().kind === 'call'
-            ? cursor > 0 &&
-              current?.kind !== 'return' &&
-              edge.getData().callId === activeId
-            : activeCards.has(edge.getTargetCellId());
+      const active =
+        edge.getData().status !== 'prepared' || firstAppearance
+          ? false
+          : isReturn
+            ? edge.getData().index === cursor
+            : grouped && edge.getData().kind === 'call'
+              ? cursor > 0 &&
+                current?.kind !== 'return' &&
+                edge.getData().callId === activeId
+              : activeCards.has(edge.getTargetCellId());
       edge.attr('line/stroke', active ? '#4f46e5' : '#64748b');
       edge.attr('line/strokeWidth', active ? 2.5 : 1.5);
       edge.attr(
@@ -1547,12 +1763,18 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
       );
       edge.attr(
         'line/strokeDasharray',
-        isReturn ||
-          firstAppearance ||
-          edge.getData().inactive ||
-          (!grouped && active && !reducedMotion)
-          ? '5 7'
-          : '',
+        edge.getData().status === 'unknown'
+          ? '8 4 2 4'
+          : edge.getData().status === 'possible'
+            ? '4 4'
+            : edge.getData().status === 'not-selected'
+              ? '2 6'
+              : isReturn ||
+                  firstAppearance ||
+                  edge.getData().inactive ||
+                  (!grouped && active && !reducedMotion)
+                ? '5 7'
+                : '',
       );
     }
     highlightSelection();
@@ -1624,6 +1846,8 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
   }
   function dispose() {
     disposed = true;
+    runningGeometry?.abort.abort();
+    controlLayout.dispose();
     observer.disconnect();
     container.removeEventListener('focusin', onFocus);
     graph.dispose();

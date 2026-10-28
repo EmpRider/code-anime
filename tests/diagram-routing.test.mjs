@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import test from 'node:test';
+import { JSDOM } from 'jsdom';
+import { build } from 'esbuild';
 import { createRoutePlanner } from '../public/diagram-routing.js';
 
 const intersects = (a, b, box) =>
@@ -170,3 +173,639 @@ assert.equal(
 console.log(
   'Routing: orthogonal, obstacle-free, separate lanes, labels, values, vertical, bounded failure passed',
 );
+
+// Exercise the actual createDiagram renderer. X6's browser-only presentation
+// boundary, not the semantic/topology/Worker adapter under test, is doubled.
+const x6Boundary = `
+export const Config = {};
+const shapes = new Map();
+export const Shape = { HTML: { register(shape) { shapes.set(shape.shape, shape); } } };
+class Cell {
+  constructor(graph, options, edge = false) {
+    this.graph = graph;
+    this.id = options.id ?? 'edge-' + graph.cells.size;
+    this.options = options;
+    this.data = options.data ?? {};
+    this.attrs = structuredClone(options.attrs ?? {});
+    this.edge = edge;
+    this.children = [];
+    if (!edge) this.paint();
+  }
+  paint() {
+    this.view?.remove();
+    this.view = document.createElement('div');
+    this.view.dataset.cellId = this.id;
+    const shape = shapes.get(this.options.shape);
+    if (shape) this.view.append(shape.html(this));
+    this.graph.container.append(this.view);
+  }
+  getData() { return this.data; }
+  setData(value) { this.data = value; this.paint(); }
+  position() { return { x: this.options.x, y: this.options.y }; }
+  getBBox() { return { x: this.options.x, y: this.options.y, width: this.options.width, height: this.options.height }; }
+  addChild(cell) { cell.parent = this; this.children.push(cell); }
+  getTargetCellId() { return this.options.target?.cell ?? this.options.target; }
+  attr(path, value) {
+    const keys = path.split('/');
+    let node = this.attrs;
+    for (const key of keys.slice(0, -1)) node = node[key] ??= {};
+    if (arguments.length === 1) return node[keys.at(-1)];
+    node[keys.at(-1)] = value;
+  }
+}
+export class Graph {
+  constructor(options) {
+    this.container = options.container;
+    this.cells = new Map();
+    this.events = new Map();
+    this.scale = 1;
+    this.offset = { tx: 0, ty: 0 };
+    globalThis.__diagramGraph = this;
+  }
+  on(name, handler) { this.events.set(name, handler); }
+  addNode(options) { return this.add(options, false); }
+  addEdge(options) { return this.add(options, true); }
+  add(options, edge) {
+    const cell = new Cell(this, options, edge);
+    this.cells.set(cell.id, cell);
+    return cell;
+  }
+  clearCells() { for (const cell of this.cells.values()) cell.view?.remove(); this.cells.clear(); }
+  getNodes() { return [...this.cells.values()].filter(cell => !cell.edge); }
+  getCellById(id) { return this.cells.get(id); }
+  findViewByCell(cell) { return { container: cell.view }; }
+  zoom(value) { return this.scale; }
+  zoomTo(value) { this.scale = value; }
+  zoomToFit() { this.scale = 1; this.fitCalls = (this.fitCalls ?? 0) + 1; }
+  translate(x, y) { if (x === undefined) return this.offset; this.offset = { tx: x, ty: y }; }
+  localToClient(bounds) { return bounds; }
+  resize() {}
+  centerCell() {}
+  dispose() { this.clearCells(); }
+}
+`;
+
+let rendererImport;
+async function renderer() {
+  if (!rendererImport) {
+    const result = await build({
+      entryPoints: [new URL('../public/diagram.js', import.meta.url).pathname],
+      bundle: true,
+      platform: 'browser',
+      format: 'esm',
+      write: false,
+      plugins: [
+        {
+          name: 'external-x6-css-boundary',
+          setup(plugin) {
+            plugin.onResolve({ filter: /^@antv\/x6$/ }, () => ({
+              path: 'x6',
+              namespace: 'test',
+            }));
+            plugin.onLoad({ filter: /^x6$/, namespace: 'test' }, () => ({
+              contents: x6Boundary,
+              loader: 'js',
+            }));
+            plugin.onResolve({ filter: /\.css$/ }, () => ({
+              path: 'css',
+              namespace: 'test',
+            }));
+            plugin.onLoad({ filter: /^css$/, namespace: 'test' }, () => ({
+              contents: '',
+              loader: 'js',
+            }));
+          },
+        },
+      ],
+    });
+    rendererImport = import(
+      'data:text/javascript;base64,' +
+        Buffer.from(result.outputFiles[0].text).toString('base64')
+    );
+  }
+  return (await rendererImport).createDiagram;
+}
+
+const source = `function run() {
+  while (ready) {
+    if (ok) {
+      tick();
+    } else {
+      skip();
+    }
+  }
+  return value;
+}
+function helper() {
+  return 42;
+}`;
+const event = (
+  kind,
+  line,
+  i,
+  callId = 'run',
+  symbolId = 'run',
+  extra = {},
+) => ({
+  id: `event-${i}`,
+  kind,
+  source: { file: 'fixture.ts', line },
+  callId,
+  symbolId,
+  label: `${kind} ${i}`,
+  certainty: 'mock',
+  values: {},
+  stack: [callId],
+  ...extra,
+});
+const events = [
+  event('enter', 1, 1),
+  event('loop', 2, 2),
+  event('branch', 3, 3, 'run', 'run', { values: { condition: true } }),
+  event('statement', 4, 4),
+  event('loop', 2, 5),
+  event('statement', 4, 6),
+  event('return', 9, 7),
+];
+const fixture = (items = events) => ({
+  endpoint: 'run',
+  steps: items.map((entry) => ({
+    from: entry.symbolId,
+    to: entry.symbolId,
+    dtoName: entry.label,
+  })),
+  trace: { events: items, sourceFiles: { 'fixture.ts': source } },
+});
+
+// The fake only stands in for the genuine native Worker outside Node's DOM.
+// It accepts actual T4 protocol messages; tests control when replies arrive.
+class PendingWorker {
+  static instances = [];
+  constructor(url) {
+    this.url = url;
+    this.requests = [];
+    PendingWorker.instances.push(this);
+  }
+  postMessage(message) {
+    if (message.cmd === 'register') {
+      queueMicrotask(() => this.onmessage?.({ data: { id: message.id } }));
+    } else if (message.cmd === 'layout') this.requests.push(message);
+  }
+  terminate() {
+    this.terminated = true;
+  }
+  resolve() {
+    const message = this.requests.shift();
+    assert.ok(message, 'a real layout request must be pending');
+    const graph = structuredClone(message.graph);
+    const absolute = new Map();
+    function measure(node, x = 0, y = 0) {
+      let nextY = 40;
+      for (const child of node.children ?? []) {
+        child.x = 16;
+        child.y = nextY;
+        measure(child, x + child.x, y + child.y);
+        nextY += child.height + 16;
+      }
+      node.width ??= Math.max(
+        292,
+        ...(node.children ?? []).map((child) => child.width + 32),
+      );
+      node.height ??= Math.max(180, nextY + 16);
+      if (node.id !== 'control-flow')
+        absolute.set(node.id, { x, y, width: node.width, height: node.height });
+    }
+    measure(graph);
+    graph.edges = graph.edges.map((edge) => {
+      const from = absolute.get(edge.sources[0]);
+      const to = absolute.get(edge.targets[0]);
+      assert.ok(from && to, 'ELK requested known endpoints');
+      const startPoint = {
+        x: from.x + from.width / 2,
+        y: from.y + from.height,
+      };
+      const endPoint = { x: to.x + to.width / 2, y: to.y };
+      return {
+        ...edge,
+        sections: [
+          {
+            startPoint,
+            endPoint,
+            bendPoints: [{ x: startPoint.x, y: endPoint.y }],
+          },
+        ],
+      };
+    });
+    this.onmessage?.({ data: { id: message.id, data: graph } });
+  }
+  fail(message = 'Worker refused') {
+    this.onerror?.({ message });
+  }
+}
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+async function mounted(flow = fixture()) {
+  const dom = new JSDOM('<div id="canvas"></div>', {
+    url: 'http://localhost/',
+  });
+  for (const key of [
+    'window',
+    'document',
+    'HTMLElement',
+    'Element',
+    'Node',
+    'localStorage',
+  ])
+    globalThis[key] = dom.window[key];
+  globalThis.CSS = {
+    escape: (value) => String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&'),
+  };
+  globalThis.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+  };
+  globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 0);
+  globalThis.Worker = PendingWorker;
+  PendingWorker.instances.length = 0;
+  const createDiagram = await renderer();
+  const sought = [];
+  const diagram = createDiagram(document.querySelector('#canvas'), {
+    onSelect() {},
+    onSeek(index) {
+      sought.push(index);
+    },
+    onPause() {},
+  });
+  const surface = document.querySelector('.diagram-surface');
+  Object.defineProperties(surface, {
+    clientWidth: { value: 1366 },
+    clientHeight: { value: 768 },
+  });
+  diagram.setFlow(flow);
+  diagram.render({ mode: 'map', cursor: 0 });
+  const graph = globalThis.__diagramGraph;
+  const expand = async (index = 0) => {
+    const cards = [
+      ...document.querySelectorAll(
+        '.diagram-card.diagram-expanded-method, .diagram-card:not([data-parent-id])',
+      ),
+    ];
+    assert.ok(cards[index], 'prepared method visible to expand');
+    cards[index].querySelector('.diagram-name').click();
+    await flush();
+  };
+  return { dom, diagram, graph, sought, expand };
+}
+
+test('render stays synchronous while native Worker layout is pending and exposes status', async () => {
+  const h = await mounted();
+  await h.expand();
+  const result = h.diagram.render({ mode: 'map', cursor: 1 });
+  assert.equal(result, undefined);
+  const status = document.querySelector('.diagram-layout-status');
+  assert.ok(
+    status && status.getAttribute('aria-live'),
+    'pending layout is announced',
+  );
+  assert.match(status.textContent, /pending|laying out|loading/i);
+  assert.ok(PendingWorker.instances.some((worker) => worker.requests.length));
+  h.diagram.dispose();
+});
+
+test('ELK frames contain selected loop header and nested branch, arrows preserve status and target', async () => {
+  const h = await mounted();
+  await h.expand();
+  PendingWorker.instances[0].resolve();
+  await flush();
+  const regions = [...h.graph.cells.values()].filter(
+    (cell) => cell.options.shape === 'code-anime-control-region',
+  );
+  const loop = regions.find(
+    (cell) => cell.data.type === 'loop' && cell.data.selected,
+  );
+  assert.ok(loop, 'actual T2/T4 loop frame rendered');
+  const header = [...h.graph.cells.values()].find(
+    (cell) => cell.data.index === 2 && cell.data.control === 'loop',
+  );
+  assert.ok(
+    header && header.parent?.id === loop.id,
+    'loop header is owned by selected frame',
+  );
+  assert.ok(
+    regions.some(
+      (region) =>
+        region.parent &&
+        region.parent.options.shape === 'code-anime-control-region',
+    ),
+    'compound nested frame',
+  );
+  const edges = [...h.graph.cells.values()].filter(
+    (cell) => cell.edge && cell.data.status,
+  );
+  assert.ok(edges.length, 'actual topology edge rendered');
+  for (const edge of edges) {
+    assert.ok(edge.attrs.line.targetMarker, 'directed target marker');
+    assert.equal(edge.attrs.root['data-source-node'], edge.options.source.cell);
+    assert.equal(edge.attrs.root['data-target-node'], edge.options.target.cell);
+    assert.equal(edge.attrs.root['data-edge-status'], edge.data.status);
+    assert.match(
+      edge.attrs.root['aria-label'],
+      /(prepared|possible|not-selected|unknown)/,
+    );
+  }
+  h.diagram.dispose();
+});
+
+test('new trace snapshot invalidates delayed layout and latest source wins', async () => {
+  const h = await mounted();
+  await h.expand();
+  const first = PendingWorker.instances[0];
+  const changed = fixture(
+    events.map((entry, i) => ({ ...entry, id: `replacement-${i}` })),
+  );
+  h.diagram.setFlow(changed, true);
+  h.diagram.render({ mode: 'map', cursor: 1 });
+  assert.equal(document.querySelector('#canvas').dataset.layoutState, 'stale');
+  assert.match(
+    document.querySelector('.diagram-layout-status').textContent,
+    /previous trace layout shown.*not current prepared evidence/i,
+  );
+  first.resolve();
+  await flush();
+  const latest = PendingWorker.instances.at(-1);
+  assert.notEqual(latest, first, 'aborted native Worker was replaced');
+  latest.resolve();
+  await flush();
+  const header = [...h.graph.cells.values()].find(
+    (cell) => cell.data.index === 2 && cell.data.control === 'loop',
+  );
+  assert.ok(header, 'new trace was actually painted');
+  assert.equal(
+    header.data.event.id,
+    'replacement-1',
+    'new event evidence wins',
+  );
+  assert.equal(document.querySelector('#canvas').dataset.layoutState, 'ready');
+  assert.ok(
+    ![...h.graph.cells.values()].some(
+      (cell) => cell.data.event?.id === 'event-2',
+    ),
+    'obsolete event evidence absent',
+  );
+  h.diagram.dispose();
+});
+
+test('Worker failure discloses non-fallback layout error while method controls remain', async () => {
+  const h = await mounted();
+  await h.expand();
+  PendingWorker.instances[0].fail('unavailable');
+  await flush();
+  const status = document.querySelector('.diagram-layout-status');
+  assert.ok(status && !status.hidden, 'failure not silently hidden');
+  assert.match(status.textContent, /failed|unavailable|error/i);
+  assert.ok(
+    document.querySelector('.diagram-card .diagram-name'),
+    'prepared controls remain',
+  );
+  h.diagram.dispose();
+});
+
+test('actual prepared, possible, not-selected and unknown topology edges retain distinct ARIA and dashes', async () => {
+  const branchSource =
+    'function run() {\n if (ok) {\n   yes();\n }\n return done;\n}';
+  const cases = [
+    { outcome: true, expected: 'not-selected', dash: '2 6' },
+    { outcome: undefined, expected: 'possible', dash: '4 4' },
+    { outcome: true, expected: 'unknown', dash: '8 4 2 4', unresolved: true },
+  ];
+  for (const { outcome, expected, dash, unresolved } of cases) {
+    const items = [
+      event('enter', 1, 1),
+      event('branch', 2, 2, 'run', 'run', {
+        values: outcome === undefined ? {} : { condition: outcome },
+      }),
+      event(
+        'statement',
+        3,
+        3,
+        'run',
+        'run',
+        unresolved ? { certainty: 'unresolved' } : {},
+      ),
+      event('return', 5, 4),
+    ];
+    const flow = fixture(items);
+    flow.trace.sourceFiles['fixture.ts'] = branchSource;
+    const h = await mounted(flow);
+    await h.expand();
+    PendingWorker.instances[0].resolve();
+    await flush();
+    const edges = [...h.graph.cells.values()].filter(
+      (cell) => cell.edge && cell.data.status,
+    );
+    const statuses = new Set(edges.map((cell) => cell.data.status));
+    assert.ok(statuses.has('prepared'), 'prepared mock edge retained');
+    assert.ok(statuses.has(expected), `${expected} route retained`);
+    const target = edges.find((cell) => cell.data.status === expected);
+    assert.equal(target.attrs.root['data-edge-status'], expected);
+    assert.match(target.attrs.root['aria-label'], new RegExp(expected));
+    assert.equal(target.attrs.line.strokeDasharray, dash);
+    assert.ok(
+      target.attrs.line.targetMarker,
+      `${expected} path remains directed`,
+    );
+    h.diagram.dispose();
+  }
+});
+
+test('native visit selector invokes prepared seek without losing method controls', async () => {
+  const h = await mounted();
+  await h.expand();
+  PendingWorker.instances[0].resolve();
+  await flush();
+  const visit = document.querySelector('.diagram-visit');
+  assert.ok(visit && visit.options.length === 2, 'real HTML visit picker');
+  visit.value = '1';
+  visit.dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.equal(
+    h.sought.at(-1),
+    5,
+    'native change navigates prepared second loop visit',
+  );
+  assert.ok(document.querySelector('.diagram-orientation[aria-label]'));
+  assert.ok(document.querySelector('.diagram-card .diagram-values-summary'));
+  h.diagram.dispose();
+});
+
+test('serial Worker requests eventually paint two expanded methods with distinct call and return routes', async () => {
+  const items = [
+    event('enter', 1, 1, 'root', 'run'),
+    event('call', 4, 2, 'root', 'run'),
+    event('enter', 11, 3, 'child', 'helper', {
+      parentCallId: 'root',
+      stack: ['root', 'child'],
+    }),
+    event('return', 12, 4, 'child', 'helper', { stack: ['root'], result: 42 }),
+    event('return', 9, 5, 'root', 'run', { stack: [], result: 42 }),
+  ];
+  const h = await mounted(fixture(items));
+  await h.expand(0);
+  await h.expand(1);
+  const worker = PendingWorker.instances[0];
+  assert.equal(
+    worker.requests.length,
+    1,
+    'T4 adapter serializes native layout requests',
+  );
+  worker.resolve();
+  await flush();
+  assert.equal(
+    worker.requests.length,
+    1,
+    'second expanded method eventually requested',
+  );
+  worker.resolve();
+  await flush();
+  const inner = [...h.graph.cells.values()].filter(
+    (cell) => cell.data.level === 'step',
+  );
+  assert.ok(inner.some((cell) => cell.data.callId === 'root'));
+  assert.ok(inner.some((cell) => cell.data.callId === 'child'));
+  const edges = [...h.graph.cells.values()].filter((cell) => cell.edge);
+  assert.ok(
+    edges.some(
+      (edge) => edge.data.kind === 'call' && edge.data.callId === 'child',
+    ),
+  );
+  assert.ok(
+    edges.some(
+      (edge) => edge.data.kind === 'return' && edge.data.callId === 'child',
+    ),
+  );
+  h.diagram.dispose();
+});
+
+test('expanding and seeking while Worker is pending does not replay an older automatic Fit', async () => {
+  const h = await mounted();
+  const before = h.graph.fitCalls ?? 0;
+  await h.expand();
+  h.graph.translate(170, -80);
+  h.diagram.render({ mode: 'map', cursor: 2 }, false);
+  PendingWorker.instances[0].resolve();
+  await flush();
+  assert.equal(
+    h.graph.fitCalls ?? 0,
+    before,
+    'pending layout cannot replay stale automatic fit',
+  );
+  assert.deepEqual(
+    h.graph.translate(),
+    { tx: 170, ty: -80 },
+    'user camera remains unchanged',
+  );
+  h.diagram.dispose();
+});
+
+test('first repeated visit Values expansion reserves extra height despite later closed visit', async () => {
+  const h = await mounted(
+    fixture(events.map((entry, i) => ({ ...entry, after: { value: i } }))),
+  );
+  await h.expand();
+  const worker = PendingWorker.instances[0];
+  const beforeGraph = structuredClone(worker.requests[0].graph);
+  worker.resolve();
+  await flush();
+  const loops = [...h.graph.cells.values()].filter(
+    (cell) => cell.data.control === 'loop',
+  );
+  assert.equal(loops.length, 2, 'two genuine prepared visits');
+  const firstValues = loops[0].view.querySelector('.diagram-values-summary');
+  assert.ok(firstValues, 'native Values summary on first visit');
+  firstValues.click();
+  assert.equal(
+    worker.requests.length,
+    1,
+    'Values expansion invokes new geometry',
+  );
+  const afterGraph = worker.requests[0].graph;
+  const nodeHeights = (graph) => {
+    const result = new Map();
+    const walk = (item) => {
+      for (const child of item.children ?? []) {
+        if (child.id.includes(':event:2:') || child.id.includes(':event:5:'))
+          result.set(child.id, child.height);
+        walk(child);
+      }
+    };
+    walk(graph);
+    return result;
+  };
+  const before = nodeHeights(beforeGraph),
+    after = nodeHeights(afterGraph);
+  assert.equal(before.size, 2);
+  assert.equal(after.size, 2);
+  for (const [id, height] of before)
+    assert.equal(
+      after.get(id),
+      height + 160,
+      'shared T4 node id must not clip first visit',
+    );
+  h.diagram.dispose();
+});
+
+test('same-line repeated child invocations keep both distinct directed call/return pairs and native selection', async () => {
+  const items = [
+    event('enter', 1, 1, 'root', 'run'),
+    event('call', 4, 2, 'root', 'run'),
+    event('enter', 11, 3, 'child-a', 'helper', {
+      parentCallId: 'root',
+      stack: ['root', 'child-a'],
+    }),
+    event('return', 12, 4, 'child-a', 'helper', { stack: ['root'], result: 1 }),
+    event('call', 4, 5, 'root', 'run'),
+    event('enter', 11, 6, 'child-b', 'helper', {
+      parentCallId: 'root',
+      stack: ['root', 'child-b'],
+    }),
+    event('return', 12, 7, 'child-b', 'helper', { stack: ['root'], result: 2 }),
+    event('return', 9, 8, 'root', 'run', { stack: [], result: 3 }),
+  ];
+  const h = await mounted(fixture(items));
+  await h.expand(0);
+  await h.expand(1);
+  const worker = PendingWorker.instances[0];
+  worker.resolve();
+  await flush();
+  worker.resolve();
+  await flush();
+  const edges = [...h.graph.cells.values()].filter((cell) => cell.edge);
+  for (const kind of ['call', 'return']) {
+    const pairs = edges.filter(
+      (edge) =>
+        edge.data.kind === kind &&
+        ['child-a', 'child-b'].includes(edge.data.callId),
+    );
+    assert.deepEqual(
+      pairs.map((edge) => edge.data.callId).sort(),
+      ['child-a', 'child-b'],
+      `${kind} invocation ancestry distinct`,
+    );
+    for (const edge of pairs) {
+      assert.ok(edge.attrs.line.targetMarker, `${kind} has direction`);
+      assert.match(edge.attrs.root['aria-label'], new RegExp(edge.data.callId));
+    }
+  }
+  const select = document.querySelector('.diagram-invocation');
+  assert.ok(
+    select && select.options.length === 2,
+    'native two-invocation selector',
+  );
+  select.value = 'child-b';
+  select.dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.equal(
+    h.sought.at(-1),
+    6,
+    'selecting second same-line invocation seeks its own entry',
+  );
+  h.diagram.dispose();
+});
