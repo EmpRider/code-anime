@@ -9,17 +9,17 @@ code must never execute to construct animations.
 | T0   | Restore mandatory formatting CI at the authored/generated boundary | Approved formatting remedy       | DONE — delivered as f2b5f10; remote branch verified        |
 | T0a  | Format newly imported ELK plan and task-tracker docs to restore CI | T0 delivery; two-file CI failure | DONE — delivered as b5a08a67 and ffd490bb; remote verified |
 | B0a  | Restore Values disclosure pointer and viewport reachability        | T0a; browser RED baseline        | DONE — focused desktop/mobile Chromium GREEN; full CI RED  |
-| B0b  | Restore map navigation and continuation                            | B0a; behavior-contract evidence  | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
-| B0c  | Preserve truthful typed call/return ancestry                       | B0b; mock/source identity        | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
-| B0d  | True Fit and reachable source-step navigation                      | B0b; B0e, B0g UX/geometry gates  | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
-| B0e  | Preserve overview Fit; focus/zoom then readable step navigation    | B0d; owner choice approved       | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
-| B0f  | Show literal source first, explicitly simulated event second       | B0c; B0e commit; owner approved  | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
-| B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
-| B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | IMPLEMENTED_CANDIDATE — browser GREEN; acceptance audit    |
+| B0b  | Restore map navigation and continuation                            | B0a; behavior-contract evidence  | DONE — scoped browser/navigation acceptance audit          |
+| B0c  | Preserve truthful typed call/return ancestry                       | B0b; mock/source identity        | DONE — scoped provenance and negative controls             |
+| B0d  | True Fit and reachable source-step navigation                      | B0b; B0e, B0g UX/geometry gates  | DONE — scoped unforced pointer/keyboard Fit verification   |
+| B0e  | Preserve overview Fit; focus/zoom then readable step navigation    | B0d; owner choice approved       | DONE — scoped overview and readable-step verification      |
+| B0f  | Show literal source first, explicitly simulated event second       | B0c; B0e commit; owner approved  | DONE — scoped source/simulated distinction verification    |
+| B0g  | Fix mobile composed SVG-transform browser test and interaction     | Ledger push; B0d                 | DONE — scoped transform/hit-test regression                |
+| B0h  | Align mobile toolbar tests to intended flex with hit tests         | Ledger push; B0a                 | DONE — scoped in-flow toolbar/overlay regression           |
 | B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DONE — diagnostic; independently fixed and verified in T7  |
 | B0j  | Review accidental trailing README test line                        | B0 gate; owner priority          | LOW_PRIORITY                                               |
 | B0k  | Verify grouped boundaries after method collapse                    | B0f; CI 40602271424              | DONE — 08dfc5b, Chromium 63/63 + Node 4/4                  |
-| T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | PAUSED — wider MVP/revised-plan gate review                |
+| T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | WAITING_COUNCIL — B0 scoped GREEN; tests-first preflight   |
 | T2   | Pure logical compound topology and truthful execution edges        | T1                               | Pending                                                    |
 | T3   | Real same-origin ELK Worker and distributable package              | B0 gate; dependency/license gate | PAUSED — owner/license distribution gate                   |
 | T4   | Nested ELK geometry and robust Worker protocol                     | T2, T3                           | Pending                                                    |
@@ -27,7 +27,7 @@ code must never execute to construct animations.
 | T6   | Async race safety and full player-state preservation               | T5                               | Pending                                                    |
 | T7   | Isolate orientation/panel preference keys with migration           | B0i; B0 browser gate GREEN       | DONE — 25efa689, Chromium 71/71 + Node 4/4 + package check |
 | T8   | PC-only compact visual clarity and accessibility                   | T6                               | Pending                                                    |
-| T9   | Full mock-trace, performance, and package acceptance               | T1–T8                            | Pending                                                    |
+| T9   | Full mock-trace, performance, and package acceptance               | T1–T8                            | Pending — restore missing E2E, stress, human release gates |
 
 ### B0k — full-map boundary contract after collapsing expanded methods
 
@@ -413,6 +413,81 @@ release, publish or remove this task ledger without owner authorization.
   B0b–B0h's wider MVP acceptance review and the historical CodeGraph
   browser evidence gap remain. Neither ELK Worker licensing nor release
   approval nor any other T1–T9 task is inferred from these checks.
+
+### B0b–B0h scoped acceptance reconciliation — 2026-10-28
+
+- **Current verified CI:** [Actions #40604735431](https://github.com/EmpRider/code-anime/actions/runs/40604735431)
+  at `25efa689` passed 71/71 real Chromium tests and the four Ubuntu/
+  Windows Node 22/24 check/package jobs. The B0b–B0h tests and their
+  negative controls existed in the earlier successful 63/63 B0k baseline
+  [Actions #40602271424](https://github.com/EmpRider/code-anime/actions/runs/40602271424).
+- **B0b map/recovery:** Accessible file/owner-to-method/invocation drilldown,
+  keyboard selection, source/cursor, continuation and recovery navigation.
+  Authored/browser deliveries include `6edcc8d` and independent review.
+- **B0c provenance:** Typed call/return arrows require prepared parent and
+  call IDs; contradictory returns remove the edge. Recursive/sibling and
+  paged prepared indices remain reachable. Reviewed deliveries include
+  `32f0ea0` and `c6cc886`.
+- **B0d, B0e camera:** Repeat Fit with real, unforced Step 5 pointer/Enter
+  activation; bookmark/breakpoint and Values behavior; whole-map overview
+  preserved until deliberate Read zoom, with readable step navigation.
+  Reviewed deliveries include `105308e` and `a662ea6`.
+- **B0f, B0g, B0h information and hit targets:** Literal source remains
+  distinct from labeled simulated events (including missing and long
+  source). Mobile composed SVG-transform/hit-test and in-flow toolbar
+  overlay negative controls pass. Reviewed deliveries include `3c0ced8`,
+  `8a7dc6b` and `433e6d2`. Desktop/PC experience remains the owner
+  priority; existing mobile tests are protective regressions.
+- **Meaning of DONE:** These are **scoped implemented-behavior** acceptances
+  against the currently active browser suite, including independent
+  reviews; they do **not** grant final visual, accessibility, CodeGraph
+  cross-language, large-trace, release or publication acceptance. No
+  reproducible current B0 functional failure remains in the active suite;
+  hence T1 source-only RED preflight may proceed after its Council gate.
+- **T9/release debt, not falsified away:** `docs/static-mock-acceptance.md`
+  contains October 15 references to now-absent browser specs for a
+  20,000-event/1,500-invocation/multi-continuation stress flow and real
+  CodeGraph-to-MCP-to-browser TypeScript/Kotlin/Java fixtures. Current
+  `tests/browser/` contains only `player.spec.ts`; two real CodeGraph
+  integration unit cases are opt-in and skipped in default CI. Restore
+  static-only equivalent coverage, add a release browser gate, and obtain
+  human PC visual/contrast/screen-reader and distribution signoff before
+  declaring T9 or the product release-ready. T3 ELK Worker license and
+  public redistribution approval is a separate owner stop condition.
+
+### T1 — semantic grouping implementation preflight, 2026-10-28
+
+- **Task ID/title:** T1 — Conservative source-proven nested grouping.
+  **Responsible role:** semantic-analysis specialist, independent QA and
+  architect review, PM/TL and full Council. **Dependencies:** scoped B0b–B0h
+  and T7 browser acceptance at 71/71 Chromium, four check/package matrix
+  jobs and packed MCP smoke; no active reproducible B0 functional RED.
+- **Current status:** `WAITING_COUNCIL` — file-based preflight pushed before
+  any T1 source or test edit. The owner asked to complete the reviewed ELK
+  task list ASAP; that authorizes task implementation, not publishing the
+  T3 dual-licensed ELK Worker or the final npm release. Council must
+  independently scrutinize the narrow source-only path first.
+- **Exclusive source/test scope:** `public/semantic-flow-model.js` and
+  `tests/semantic-flow-model.test.mjs`. Preserve `buildSemanticFlow` returning
+  `{ methods, roots, byEvent }`, its existing consumers, nested `method.items`,
+  one-based global prepared indices, repeated invocation/call/visit IDs,
+  and source-aware provenance. No analyzed code execution, runtime capture,
+  speculative branch truth, Worker, layout or package change in T1.
+- **Tests-first RED cases:** `groups_multiline_else_if_and_nested_try`,
+  `does_not_invent_unbraced_or_damaged_scope`,
+  `keeps_repeated_call_and_visit_event_identity`,
+  `contains_each_prepared_index_exactly_once`, and
+  `marks_unknown_ownership_at_overview`. Assert negative controls for
+  damaged/unbraced source, duplicate or dropped prepared indices, and
+  invented `if`/`catch` edges. Ambiguous evidence must remain explicitly
+  `Unresolved`, not guessed or made to look observed.
+- **Verification/delivery:** Obtain five independent Council advisors,
+  five clean blind peers and EDO challenge/rebuttals. Commit focused
+  tests-first RED through GitHub plugin, reproduce failed expectations;
+  implement the minimum safe parser/semantic grouping change; independently
+  review the diff; rerun focused and full Node/Chromium/package acceptance
+  at the exact remote commit; mark T1 DONE only after proven evidence.
+  T2 follows T1; T3 licensing/distribution remains a separate owner gate.
 
 ### Owner-resolved B0e/B0f contracts — implementation gate
 
