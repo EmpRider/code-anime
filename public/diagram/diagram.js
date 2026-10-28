@@ -27670,33 +27670,33 @@ function oj(e, { onSelect: t, onSeek: n, onPause: r }) {
 						});
 						continue;
 					}
-					let i = t.index ?? t.node.indices[0], a = C[i - 1] ?? t.event, o = e.steps.find((e) => e.index === i);
+					let i = t.index ?? t.node.indices[0], o = C[i - 1] ?? t.event, s = e.steps.find((e) => e.index === i);
 					Re.push({
 						id: u.get(t.id),
 						parentId: e.id,
 						parentRegionId: t.parentRegionId ? JSON.stringify([e.id, t.parentRegionId]) : void 0,
 						index: i,
-						event: a,
-						symbol: a?.symbolId ?? "Unknown prepared source",
+						event: o,
+						symbol: o?.symbolId ?? "Unknown prepared source",
 						callId: e.callId,
-						source: a?.source,
-						certainty: a?.certainty ?? "unresolved",
+						source: o?.source,
+						certainty: o?.certainty ?? "unresolved",
 						level: "step",
-						kind: a?.kind ?? "unresolved",
+						kind: o?.kind ?? "unresolved",
 						control: t.control,
-						label: t.control ? t.node.title : o?.label ?? a?.label ?? "Unresolved prepared event",
-						code: o?.code,
-						simulated: t.control ? void 0 : `Simulated: ${a.label}`,
+						label: t.control ? t.node.title : s?.label ?? o?.label ?? "Unresolved prepared event",
+						code: s?.code,
+						simulated: t.control ? void 0 : `Simulated: ${o.label}`,
 						x: t.x,
 						layoutY: t.y,
 						width: t.width,
 						height: t.height,
 						expandLabel: "Go to source step " + i,
 						expandable: !1,
-						value: aj(a),
+						value: aj(o),
 						unresolved: t.unresolved || !C[i - 1],
 						active: v === i,
-						visits: t.control === "loop" ? t.node.iterations : void 0,
+						visits: t.control === "loop" && a.get(t.parentRegionId)?.selected ? t.node.iterations : void 0,
 						visit: t.visit,
 						onVisit: (e) => {
 							r?.(), be.set(t.node.id, e), n(t.node.iterations[e].indices[0]), ie = "", ze(E, !1);

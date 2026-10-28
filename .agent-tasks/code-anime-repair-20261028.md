@@ -19,10 +19,12 @@ Pinned upstream snapshots: Superpowers `2ce8aa15`, Council `a7565e21`, Caveman `
 
 ## CA-002 — Loop picker identity/options (P0)
 
-- Owner: development specialist. Status: `WAITING_ON_REPRO`. Depends on CA-001 shared-root diagnosis. Same file lock.
+- Owner: development specialist; TL supervisor. Status: `VERIFIED/AWAITING_BROWSER_CI`. Depends on CA-001 shared-root diagnosis. Same file lock; no remote browser green claim.
 - Observed: four picker options where two expected (`tests/browser/player.spec.ts:1001–1055`). Expected only valid selectable Visit identities with exact cursor mapping.
-- Hypothesis: per-iteration picker rendering (`public/diagram.js:1152–1159`); verify before edit. Never remove prepared events or weaken assertions.
-- Acceptance: targeted desktop/mobile and full suite pass, correct identity selection.
+- Root cause: `prepareControlFlow` creates a loop header for each recorded visit, and the renderer attached the full Visit selector to each header (`public/diagram-control-layout.js:52–80`, `public/diagram.js:1152–1159`); two headers each with two options yielded four options. The Council's challenged B decision keeps one canonical selector on the selected structural Visit region, distinct from cursor-only highlighting. All visit cards and history remain.
+- Implemented: selected-region-only picker; browser assertion requires one picker before and after explicit selection, two options, and correct cursor seek. T6 native-renderer test verifies one picker, two options, selected value unchanged on cursor-only 5-to-9 updates, keyboard focus continuity and no extra Worker request. The earlier active-card-specific test locator was revised through explicit Council acceptance, without removing its behavioral focus assertions.
+- Verification: targeted `node tests/diagram-routing.test.mjs` 20 PASS / 0 FAIL. Full `npm run check` exit 0: scope guard, typecheck, Vite build, Node 250 PASS / 0 FAIL / 2 SKIP, Prettier PASS; `git diff --check` PASS. Independent QA approved. Local Chromium unavailable; remote browser CI is pending.
+- Acceptance pending: targeted desktop/mobile and full browser suite pass, exact identity selection, cursor/source/Values alignment and keyboard focus after explicit Visit switching. Keep task open if remote CI fails.
 
 ## CA-003 — Vertical geometry (P1)
 

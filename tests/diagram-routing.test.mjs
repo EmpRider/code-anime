@@ -852,13 +852,17 @@ test('T6 cursor-only 5 to 9 updates current step immediately during a pending la
   );
   values.click();
   assert.equal(worker.requests.length, 1, 'geometry change is in flight');
-  const visit = [...h.graph.cells.values()]
-    .find((cell) => cell.data.control === 'loop' && cell.data.index === 5)
-    ?.view.querySelector('.diagram-visit');
+  const pickers = [...h.graph.cells.values()].flatMap((cell) =>
+    cell.view ? [...cell.view.querySelectorAll('.diagram-visit')] : [],
+  );
+  assert.equal(pickers.length, 1, 'one picker owns the selected loop visit');
+  const visit = pickers[0];
   assert.ok(
     visit,
-    'focused native visit picker belongs to formerly active card',
+    'selected loop visit retains its native picker while cursor moves',
   );
+  assert.equal(visit.options.length, 2);
+  assert.equal(visit.value, '0', 'cursor alone does not select another visit');
   visit.focus();
   assert.equal(document.activeElement, visit);
   assert.equal(h.diagram.render({ mode: 'map', cursor: 9 }, false), undefined);

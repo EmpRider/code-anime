@@ -1050,8 +1050,10 @@ for (const mobile of [false, true]) {
         .getByRole('button', { name: 'Expand method run', exact: true })
         .click();
       const picker = page.locator('.diagram-visit');
+      await expect(picker).toHaveCount(1);
       await expect(picker.locator('option')).toHaveCount(2);
       await picker.selectOption('1');
+      await expect(picker).toHaveCount(1);
       await expect(page.locator('#progress')).toHaveText('5 / 8');
       await expect(
         page.locator('.diagram-card[data-control-type="loop"]'),

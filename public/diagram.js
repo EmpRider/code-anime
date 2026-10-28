@@ -1166,7 +1166,11 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
             value: snapshot(event),
             unresolved: item.unresolved || !events[index - 1],
             active: cursor === index,
-            visits: item.control === 'loop' ? item.node.iterations : undefined,
+            visits:
+              item.control === 'loop' &&
+              regionsById.get(item.parentRegionId)?.selected
+                ? item.node.iterations
+                : undefined,
             visit: item.visit,
             onVisit: (visit) => {
               onPause?.();
