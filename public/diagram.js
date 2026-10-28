@@ -11,6 +11,7 @@ import { createRoutePlanner } from './diagram-routing.js';
 import { buildSemanticFlow } from './semantic-flow-model.js';
 import { prepareControlFlow } from './diagram-control-layout.js';
 import { createControlLayout } from './diagram-elk-layout.js';
+import { reserveRouteLabel } from './diagram-label-placement.js';
 import './vendor/x6.css';
 import './diagram.css';
 
@@ -1590,6 +1591,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
             });
       }
       const unavailable = [];
+      const reservedEdgeLabels = [];
       let missingConnections = 0;
       const endpoint = (id, point) => {
         const center = bounds(id);
@@ -1680,7 +1682,6 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
           continue;
         }
         const { points, label } = route;
-        const labelBox = label?.box;
         const status =
           item.status ?? (item.inactive ? 'not-selected' : 'prepared');
         const fallback = item.fallback;
@@ -1695,6 +1696,19 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
                 : item.kind === 'loopback'
                   ? 'LOOP'
                   : undefined);
+        // Native ELK routes have no label reservation. Never overlay their
+        // text on a control node or another label at an arbitrary midpoint.
+        const labelBox =
+          label?.box ??
+          (edgeLabel
+            ? reserveRouteLabel(
+                points,
+                edgeLabel,
+                obstacles,
+                reservedEdgeLabels,
+              )
+            : null);
+        if (label?.box) reservedEdgeLabels.push(label.box);
         edgeCells.push(
           graph.addEdge({
             source: endpoint(item.source, points[0]),
@@ -1740,18 +1754,16 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
                 targetMarker: { name: 'block', width: 7, height: 6 },
               },
             },
-            labels: edgeLabel
+            labels: edgeLabel && labelBox
               ? [
                   {
-                    position: labelBox
-                      ? {
-                          distance: 0,
-                          offset: {
-                            x: labelBox.x + labelBox.width / 2 - points[0].x,
-                            y: labelBox.y + labelBox.height / 2 - points[0].y,
-                          },
-                        }
-                      : 0.5,
+                    position: {
+                      distance: 0,
+                      offset: {
+                        x: labelBox.x + labelBox.width / 2 - points[0].x,
+                        y: labelBox.y + labelBox.height / 2 - points[0].y,
+                      },
+                    },
                     attrs: {
                       label: {
                         text: edgeLabel,
