@@ -492,6 +492,15 @@ release, publish or remove this task ledger without owner authorization.
   at the exact remote commit; mark T1 DONE only after proven evidence.
   T2 follows T1; T3 licensing/distribution remains a separate owner gate.
 
+#### T1a — CI Prettier format gate regression (2026-10-28)
+
+- **Observed:** [Actions run 40615276143](https://github.com/EmpRider/code-anime/actions/runs/40615276143) at exact HEAD `becb768` passed Chromium browser and Node semantic tests (192 PASS, 2 optional SKIP), static boundary, TypeScript and build. Four Node matrix jobs failed only because `prettier --check .` reported `public/semantic-flow-model.js`.
+- **Expected:** repository Prettier check, package smoke and all four platform matrix jobs GREEN while semantic source/event behavior stays unchanged.
+- **Root cause:** reconstructed T1 semantic source commit `1b219b7` did not preserve the repository's exact Prettier serialization; this is a formatting-only delivery regression, not a failing semantic test.
+- **Severity/owner:** P2 CI blocker; semantic delivery specialist with independent formatting/QA gate; T1 prerequisite. **Status:** `IN_PROGRESS — format-only recovery and exact-head CI pending`.
+- **Remedy and rollback:** obtain the authoritative Prettier output using the repository's existing locked devDependency in GitHub Actions (temporary, non-mutating diagnostic test only if local formatter unavailable), update only `public/semantic-flow-model.js`, remove the temporary diagnostic, and prove no semantic test changes. No bypass of formatter, tests, license gate, or static/mock scope. GitHub plugin is required for every remote write.
+- **Acceptance:** exact-head Node 4/4 + browser GREEN, package smoke; document output and commits; keep T1 `IMPLEMENTED_CANDIDATE` until final independent acceptance and T1a complete. Temporary diagnostics must not remain in the deliverable.
+
 #### T1 source delivery checkpoint — 2026-10-28
 
 - **Source-only implementation commit:** [`1b219b7702e978ea7c23a3f88ceb9c324b7a0013`](https://github.com/EmpRider/code-anime/commit/1b219b7702e978ea7c23a3f88ceb9c324b7a0013), pushed via the GitHub connector and independently read back at the exact SHA. This follows the RED test commit `e4c5b97`.
