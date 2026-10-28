@@ -10,6 +10,19 @@ an authorization to skip the approved design, Council, tests, or human gates.
 Later documentation-only commits move HEAD. On resume, read the *actual* branch
 HEAD and its diff; do not assume the SHA above remains current.
 
+## Source reconciliation addendum — user uploads, 2026-10-28
+
+The owner supplied **two files** after the initial handoff was written:
+
+- [Restored 2026-10-26 approved plan](reference/2026-10-26-elk-approved-plan-restoration.txt): preserved as a historical **user-uploaded reconstruction** (83 lines); its own header says it was restored on 2026-10-27 after a scratch reset. It is **not** the exact missing original approved-design file or original 76-event JSON.
+- [Council-reviewed 2026-10-27 plan](code-anime-elk-reviewed-implementation-plan-2026-10-27.md): the uploaded 290-line source matches the substance of the repository's 291-line formatted reviewed plan. It elaborates T1–T9 APIs, negative controls, Council dissent, and approval/rollback gates; minor Markdown formatting is not a design amendment.
+
+**Precedence:** `AGENTS.md` static/mock-only product boundary; subsequently confirmed **PC-only new UI scope**; reviewed 2026-10-27 technical safety amendments; exact current code and evidence-based task ledger status. Use the 2026-10-26 restoration for approved historical design intent, **not** to reinstate superseded mobile-specific work or weaker async guards. A Council recommendation or reconstructed approval quote is not public Worker redistribution or release authorization.
+
+**Material deltas from the earlier restoration:** (1) T8 new work is compact PC-only, with existing mobile tests/behavior protected, not a 390×844/coarse-pointer feature project; (2) T4/T6 require `workerEpoch`, `requestId`, `geometryKey`, `traceRevision` and independent `viewportRevision`, not merely generation + flowId; (3) T1 repeated-call/visit identity, T2 unresolved/prepared/possible statuses and explicit call/return provenance have stronger negative tests; (4) actual 76-event original fixture still missing, so T9 synthetic scenarios must be labeled synthetic; (5) ELK version `0.12.0` and asserted license terms in the historical restoration are **proposals to verify from published bytes/terms**, not cleared distribution rights.
+
+**Newly observed CI regression:** repository documentation commit `2b68a276f7b5c2d55cfee6906c11ad4530a7e496` ran [CI #40629582572](https://github.com/EmpRider/code-anime/actions/runs/40629582572): browser PASS; 4/4 Node matrix jobs FAIL at Prettier checking this handoff file. 192 Node tests PASS, 2 optional SKIP. This is a **new P2 formatter blocker**, not evidence of failed semantic behavior. Next maintainer must format this document using the installed repo Prettier, commit only the repaired documentation, and reverify exact-head CI before claiming current HEAD green. The older `471e68e` source baseline remains verified GREEN; no later documentation HEAD is certified until retested.
+
 ## 1. Executive checkpoint — what is true now
 
 - **T0, T0a, B0a–B0i, B0k and T7:** recorded as DONE in the canonical
