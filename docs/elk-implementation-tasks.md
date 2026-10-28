@@ -19,7 +19,7 @@ code must never execute to construct animations.
 | B0i  | Diagnose shared orientation/panel preference key collision         | Ledger push                      | DONE — diagnostic; independently fixed and verified in T7  |
 | B0j  | Review accidental trailing README test line                        | B0 gate; owner priority          | LOW_PRIORITY                                               |
 | B0k  | Verify grouped boundaries after method collapse                    | B0f; CI 40602271424              | DONE — 08dfc5b, Chromium 63/63 + Node 4/4                  |
-| T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | WAITING_COUNCIL — B0 scoped GREEN; tests-first preflight   |
+| T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | IN_PROGRESS — Council conditional GO; tests-first RED next |
 | T2   | Pure logical compound topology and truthful execution edges        | T1                               | Pending                                                    |
 | T3   | Real same-origin ELK Worker and distributable package              | B0 gate; dependency/license gate | PAUSED — owner/license distribution gate                   |
 | T4   | Nested ELK geometry and robust Worker protocol                     | T2, T3                           | Pending                                                    |
@@ -462,11 +462,13 @@ release, publish or remove this task ledger without owner authorization.
   architect review, PM/TL and full Council. **Dependencies:** scoped B0b–B0h
   and T7 browser acceptance at 71/71 Chromium, four check/package matrix
   jobs and packed MCP smoke; no active reproducible B0 functional RED.
-- **Current status:** `WAITING_COUNCIL` — file-based preflight pushed before
-  any T1 source or test edit. The owner asked to complete the reviewed ELK
-  task list ASAP; that authorizes task implementation, not publishing the
-  T3 dual-licensed ELK Worker or the final npm release. Council must
-  independently scrutinize the narrow source-only path first.
+- **Current status:** `IN_PROGRESS — tests-first RED pending`. The
+  file-based preflight was pushed before T1 source/test edits. The owner
+  asked to complete the reviewed ELK task list ASAP; this does not authorize
+  redistributing the T3 dual-licensed ELK Worker or the final npm release.
+  The [T1 Council decision](t1-semantic-council-edo-2026-10-28.md)
+  records five independent advisors, five anonymous blind peers, live
+  QA/Devil rebuttals, and a **conditional GO** limited to semantic data.
 - **Exclusive source/test scope:** `public/semantic-flow-model.js` and
   `tests/semantic-flow-model.test.mjs`. Preserve `buildSemanticFlow` returning
   `{ methods, roots, byEvent }`, its existing consumers, nested `method.items`,
@@ -482,8 +484,9 @@ release, publish or remove this task ledger without owner authorization.
   invented `if`/`catch` edges. Ambiguous evidence must remain explicitly
   `Unresolved`, not guessed or made to look observed.
 - **Verification/delivery:** Obtain five independent Council advisors,
-  five clean blind peers and EDO challenge/rebuttals. Commit focused
-  tests-first RED through GitHub plugin, reproduce failed expectations;
+  five clean blind peers and EDO challenge/rebuttals (completed and
+  documented before T1 source edits). Commit focused tests-first RED
+  through GitHub plugin, reproduce failed expectations;
   implement the minimum safe parser/semantic grouping change; independently
   review the diff; rerun focused and full Node/Chromium/package acceptance
   at the exact remote commit; mark T1 DONE only after proven evidence.
