@@ -1505,8 +1505,23 @@ export function mountPlayer(root = document, createDiagram) {
       const editor = $('snippet');
       const rowBounds = scrollRow.getBoundingClientRect();
       const editorBounds = editor.getBoundingClientRect();
-      // Scroll only when the target line is outside the visible editor area.
-      if (rowBounds.top < editorBounds.top)
+      const centerActiveLine =
+        scrollRow === active &&
+        $('follow').checked &&
+        matchMedia('(min-width: 651px)').matches &&
+        editorBounds.height > 0;
+      if (centerActiveLine) {
+        // Keep the active prepared line in the center of the compact desktop
+        // source viewport. Manual source inspection retains reveal-only scroll.
+        const delta =
+          (rowBounds.top +
+            rowBounds.bottom -
+            editorBounds.top -
+            editorBounds.bottom) /
+          2;
+        if (Math.abs(delta) > 1)
+          editor.scrollTop = Math.max(0, editor.scrollTop + delta);
+      } else if (rowBounds.top < editorBounds.top)
         editor.scrollTop += rowBounds.top - editorBounds.top;
       else if (rowBounds.bottom > editorBounds.bottom)
         editor.scrollTop += rowBounds.bottom - editorBounds.bottom;

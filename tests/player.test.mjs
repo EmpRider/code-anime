@@ -443,7 +443,27 @@ test('source-first playback follows nested calls, restores parent locals, and re
       get('snippet').querySelector('.executing-line').dataset.line,
       '2',
     );
+    const editor = get('snippet');
+    editor.getBoundingClientRect = () => ({
+      top: 100,
+      bottom: 210,
+      height: 110,
+    });
+    for (const row of editor.querySelectorAll('.code-row')) {
+      const top = 100 + Number(row.dataset.line) * 22;
+      row.getBoundingClientRect = () => ({
+        top,
+        bottom: top + 22,
+        height: 22,
+      });
+    }
+    editor.scrollTop = 0;
     get('next').click();
+    assert.equal(
+      editor.scrollTop,
+      22,
+      'desktop follow centers the active source line within five rows',
+    );
     get('step-over').click();
     assert.equal(get('progress').textContent, '6 / 8');
     assert.equal(get('source').textContent, 'A.ts');

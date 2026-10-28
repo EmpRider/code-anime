@@ -3371,3 +3371,27 @@ svg.flow-arrows polygon {
     min-height: 44px;
   }
 }
+
+/* Compact desktop: five source lines and approximately four trace events.
+   This only applies to the wide desktop grid; preserve mobile layout rules. */
+@media (min-width: 1101px) {
+  .center-column.show-flow > .source-panel {
+    align-self: start;
+  }
+  .center-column.show-flow > .source-panel .source-code {
+    flex: 0 0 110px;
+    min-height: 110px;
+    max-height: 110px;
+  }
+  .trace-panel .event-list {
+    flex: 0 1 auto;
+    max-height: 248px;
+  }
+  .trace-panel .event-row {
+    padding-block: 6px;
+    margin-block: 1px;
+  }
+  .trace-panel .event-meta {
+    margin-top: 2px;
+  }
+}
