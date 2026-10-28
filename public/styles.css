@@ -3386,3 +3386,23 @@ svg.flow-arrows polygon {
     margin-top: 2px;
   }
 }
+
+/* Flow Studio desktop chrome: compact, high-contrast source and event surfaces. */
+@media (min-width: 1101px) {
+  .center-column.show-flow > .source-panel,
+  .center-column.show-flow > .flow-panel {
+    border-radius: 14px;
+  }
+  .source-panel .panel-heading,
+  .flow-panel .panel-heading {
+    border-bottom-color: var(--border);
+  }
+  .trace-panel .event-row.current {
+    border-radius: 10px;
+    box-shadow: inset 3px 0 var(--accent);
+  }
+  .source-panel .source-code {
+    border-radius: 8px;
+    border-left-width: 3px;
+  }
+}

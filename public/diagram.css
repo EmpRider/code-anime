@@ -709,3 +709,193 @@
     outline: 3px solid Highlight;
   }
 }
+
+/* Flow Studio visual language: consistent cards, readable regions and
+   collision-safe headings. Geometry and DOM hooks remain unchanged. */
+#canvas.diagram-canvas {
+  --diagram-accent: #2563eb;
+  --diagram-border: #bfd0e4;
+  --diagram-muted: #4a627c;
+  --decision: #ea733c;
+  --loop: #2089dd;
+  --recovery: #139e7a;
+}
+:root[data-theme='dark'] #canvas.diagram-canvas {
+  --diagram-bg: #0a1322;
+  --diagram-card: #17253c;
+  --diagram-border: #38516b;
+  --diagram-ink: #e7f1ff;
+  --diagram-muted: #9bb4cb;
+  --diagram-accent: #6ed8ff;
+  --decision: #ff965b;
+  --decision-fill: #30241f;
+  --loop: #55b4ff;
+  --loop-fill: #102b42;
+  --recovery: #40d9aa;
+  --recovery-fill: #10342d;
+}
+#canvas.diagram-canvas .diagram-surface {
+  background-color: var(--diagram-bg);
+  background-image:
+    linear-gradient(
+      115deg,
+      color-mix(in srgb, var(--loop) 4%, transparent),
+      transparent 36%,
+      color-mix(in srgb, var(--recovery) 3%, transparent)
+    ),
+    radial-gradient(
+      color-mix(in srgb, var(--diagram-muted) 24%, transparent) 0.7px,
+      transparent 0.7px
+    );
+  background-size:
+    auto,
+    22px 22px;
+}
+#canvas .diagram-card:not(.diagram-control),
+#canvas .diagram-card.diagram-expanded-method {
+  border-color: var(--diagram-border);
+  border-radius: 14px;
+  background: var(--diagram-card);
+  box-shadow:
+    0 10px 28px #00000016,
+    0 1px 0 #ffffff10 inset;
+}
+:root[data-theme='dark'] #canvas .diagram-card:not(.diagram-control) {
+  background: linear-gradient(155deg, #1b2c46, #142136);
+  box-shadow:
+    0 12px 30px #00000030,
+    0 1px 0 #ffffff08 inset;
+}
+#canvas .diagram-card.is-active:not(.diagram-control) {
+  border-color: var(--diagram-accent);
+  background: var(--diagram-card);
+  box-shadow:
+    0 0 0 1px var(--diagram-accent),
+    0 10px 30px #0000001e;
+}
+#canvas .diagram-card .diagram-name {
+  color: var(--diagram-ink);
+  letter-spacing: -0.015em;
+}
+#canvas .diagram-card .diagram-kind {
+  color: var(--diagram-muted);
+}
+#canvas .diagram-card .diagram-state {
+  color: var(--diagram-muted);
+}
+#canvas .diagram-card .diagram-location {
+  color: var(--diagram-muted);
+}
+#canvas .diagram-card .diagram-step {
+  color: var(--diagram-ink);
+  border-color: var(--diagram-border);
+  background: color-mix(in srgb, var(--diagram-accent) 9%, transparent);
+}
+#canvas .diagram-card .diagram-value {
+  color: var(--diagram-ink);
+  background: color-mix(in srgb, var(--diagram-bg) 88%, transparent);
+  border: 1px solid var(--diagram-border);
+}
+#canvas .diagram-control-region {
+  border-radius: 14px;
+  background: color-mix(
+    in srgb,
+    var(--decision-fill) 50%,
+    transparent
+  );
+}
+#canvas .diagram-control-region > span {
+  display: block;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100% - 16px);
+  height: 24px;
+  padding: 0 9px;
+  margin: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--diagram-border);
+  border-radius: 0 0 8px 8px;
+  color: var(--diagram-ink);
+  background: var(--diagram-card);
+  box-shadow: 0 3px 12px #0000001a;
+  font:
+    650 11px/22px 'Segoe UI',
+    sans-serif;
+}
+#canvas .diagram-control-region[data-control-type='loop'] {
+  background: color-mix(in srgb, var(--loop-fill) 55%, transparent);
+}
+#canvas .diagram-control-region[data-control-type='try'] {
+  background: color-mix(in srgb, var(--recovery-fill) 55%, transparent);
+}
+#canvas .diagram-card[data-control-type='decision'] .diagram-name {
+  max-height: 52px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 17px;
+  text-align: center;
+}
+#canvas .diagram-card[data-control-type='decision'] .diagram-condition {
+  color: var(--diagram-ink);
+  text-align: center;
+}
+#canvas .diagram-card[data-control-type='loop'] {
+  border-radius: 20px;
+}
+#canvas .diagram-visit,
+#canvas .diagram-invocation {
+  color: var(--diagram-ink);
+  background: var(--diagram-card);
+  border-color: var(--diagram-border);
+  border-radius: 8px;
+}
+#canvas .diagram-boundary {
+  border-color: var(--diagram-border);
+  border-radius: 16px;
+}
+#canvas .diagram-boundary-label {
+  color: var(--diagram-ink);
+}
+#canvas .diagram-footer button {
+  border-radius: 10px;
+  border-color: var(--diagram-border);
+  color: var(--diagram-ink);
+  background: var(--diagram-card);
+  box-shadow: 0 5px 15px #0000001b;
+}
+#canvas .diagram-footer button:hover,
+#canvas .diagram-navigation button:hover {
+  border-color: var(--diagram-accent);
+  background: color-mix(
+    in srgb,
+    var(--diagram-accent) 13%,
+    var(--diagram-card)
+  );
+}
+#canvas .diagram-card :focus-visible,
+#canvas .diagram-footer button:focus-visible {
+  outline: 2px solid var(--diagram-accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  #canvas .diagram-card:not(.diagram-control),
+  #canvas .diagram-footer button {
+    transition:
+      border-color 120ms ease,
+      background-color 120ms ease,
+      box-shadow 120ms ease;
+  }
+}
+@media (forced-colors: active) {
+  #canvas .diagram-card:not(.diagram-control),
+  #canvas .diagram-control-region > span,
+  #canvas .diagram-footer button {
+    border-color: CanvasText;
+    color: CanvasText;
+    background: Canvas;
+    box-shadow: none;
+  }
+}
