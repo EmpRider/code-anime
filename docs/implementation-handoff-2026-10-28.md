@@ -17,11 +17,33 @@ The owner supplied **two files** after the initial handoff was written:
 - [Restored 2026-10-26 approved plan](reference/2026-10-26-elk-approved-plan-restoration.txt): preserved as a historical **user-uploaded reconstruction** (83 lines); its own header says it was restored on 2026-10-27 after a scratch reset. It is **not** the exact missing original approved-design file or original 76-event JSON.
 - [Council-reviewed 2026-10-27 plan](code-anime-elk-reviewed-implementation-plan-2026-10-27.md): the uploaded 290-line source matches the substance of the repository's 291-line formatted reviewed plan. It elaborates T1–T9 APIs, negative controls, Council dissent, and approval/rollback gates; minor Markdown formatting is not a design amendment.
 
-**Precedence:** `AGENTS.md` static/mock-only product boundary; subsequently confirmed **PC-only new UI scope**; reviewed 2026-10-27 technical safety amendments; exact current code and evidence-based task ledger status. Use the 2026-10-26 restoration for approved historical design intent, **not** to reinstate superseded mobile-specific work or weaker async guards. A Council recommendation or reconstructed approval quote is not public Worker redistribution or release authorization.
+**Precedence:** `AGENTS.md` static/mock-only product boundary; subsequently confirmed **PC-only new UI scope**; reviewed 2026-10-27 technical safety amendments; exact current code and evidence-based task ledger status. Use the 2026-10-26 restoration for approved historical design intent, **not** to reinstate superseded mobile-specific work or weaker async guards. A Council recommendation or reconstructed historical approval quote cannot replace a separate owner decision. The explicit T3 owner decision below authorizes license-compliant Worker redistribution only, not an npm release.
 
 **Material deltas from the earlier restoration:** (1) T8 new work is compact PC-only, with existing mobile tests/behavior protected, not a 390×844/coarse-pointer feature project; (2) T4/T6 require `workerEpoch`, `requestId`, `geometryKey`, `traceRevision` and independent `viewportRevision`, not merely generation + flowId; (3) T1 repeated-call/visit identity, T2 unresolved/prepared/possible statuses and explicit call/return provenance have stronger negative tests; (4) actual 76-event original fixture still missing, so T9 synthetic scenarios must be labeled synthetic; (5) ELK version `0.12.0` and asserted license terms in the historical restoration are **proposals to verify from published bytes/terms**, not cleared distribution rights.
 
 **Documentation formatting recovery (2026-10-28):** [CI #40629582572](https://github.com/EmpRider/code-anime/actions/runs/40629582572) identified an isolated Prettier failure in this handoff; the same job's 192 Node tests passed, 2 were opt-in skipped, and Chromium passed. [Diagnostic run #40633679566](https://github.com/EmpRider/code-anime/actions/runs/40633679566) successfully emitted pinned Prettier output for three documentation guides; the reviewed plan and task ledger required no content-format changes. The handoff alone was formatted in commit [`d18a897`](https://github.com/EmpRider/code-anime/commit/d18a897b99484047437e4d8721b052ec01d86254), and the temporary `tests/docs-format-recovery.test.mjs` fixture was deleted in [`7a0cc4f`](https://github.com/EmpRider/code-anime/commit/7a0cc4fc107e0339d05d156425dc59ea51ee3f95). **Fix and cleanup are pushed; exact-head five-job CI must be confirmed separately** ([run #40634087113](https://github.com/EmpRider/code-anime/actions/runs/40634087113) began against cleanup HEAD). This documentation regression did not demonstrate a semantic source failure; T1 still awaits independent final review.
+
+## T3 ELK Worker owner approval — 2026-10-28
+
+**Owner decision:** The Code Anime project owner confirmed in this
+conversation that Code Anime is free and open source and that they have no
+owner-side restriction on using and redistributing `elkjs` in accordance with
+its applicable open-source license requirements. This is explicit project-owner
+approval for **license-compliant ELK Worker inclusion and redistribution**;
+the previous missing-owner-permission gate is resolved.
+
+**Remaining gates:** Independently verify the exact proposed `elkjs@0.12.0`
+published Worker bytes, applicable license choice and obligations, preserved
+notices, corresponding-source availability and package contents. Confirm
+same-origin native Worker/CSP behavior, failure handling, tests and independent
+license/security review before declaring T3 `DONE` or shipping the Worker.
+**Owner approval is not evidence of compliance**, and it does not authorize an
+npm publish, merge, release or deployment. New scope or a materially different
+distribution arrangement requires a separate owner decision.
+
+**T3 status:** `OWNER_APPROVED — compliance/implementation pending`.
+Do not revert this to `PAUSED — owner approval missing` unless the owner
+revokes or materially changes the approval.
 
 ## 1. Executive checkpoint — what is true now
 
@@ -37,9 +59,10 @@ The owner supplied **two files** after the initial handoff was written:
   deletion and exact-head cross-platform CI verification.
 - **T2:** PENDING. Pure logical compound topology and truthful typed edges
   have **not** been implemented or pushed. Do not infer T2 from T1's parser.
-- **T3:** PAUSED on real same-origin ELK Worker version/license, corresponding
-  source and **explicit human redistribution approval**; no licensed public
-  Worker delivery is claimed.
+- **T3:** Owner approved license-compliant ELK Worker inclusion and
+  redistribution on 2026-10-28. Exact version/license, notices,
+  corresponding-source, Worker/package implementation, independent review
+  and test gates remain pending; no public Worker delivery is claimed.
 - **T4, T5, T6, T8, T9:** PENDING and gated by predecessor tasks. T7 is
   already DONE; never re-implement its storage-key migration as new work.
 - **No npm publish, release, merge, deployment or deletion of temporary
@@ -77,8 +100,9 @@ The owner supplied **two files** after the initial handoff was written:
    Its initial 2026-10-27 `revised plan approval pending` statement is a
    **historical planning gate**. Later scope-specific T1/T7 Council/owner
    authorization is in their own files; do not silently treat it as blanket
-   T2–T9 feature/design or ELK Worker redistribution approval. Resolve
-   authorization precisely through the next Council/owner.
+   T2–T9 feature/design approval. The separate T3 owner decision above
+   grants compliant Worker redistribution; other authority still needs
+   precise Council/owner reconciliation.
 4. [`docs/t1-semantic-council-edo-2026-10-28.md`](t1-semantic-council-edo-2026-10-28.md):
    T1 five-advisor/peer/EDO conditional GO, falsifiers and reserved T2/T5/T6
    responsibilities; does **not** approve release or all later tasks.
@@ -175,7 +199,7 @@ CodeGraph static evidence + AI mock trace
   -> T1 conservative semantic method.items [CI_VERIFIED]
   -> T2 pure cards/regions/typed edges [PENDING]
   -> T4 ELK nested geometry [PENDING; requires T3]
-       ^ T3 real licensed same-origin Worker [PAUSED]
+       ^ T3 real licensed same-origin Worker [OWNER_APPROVED; COMPLIANCE PENDING]
   -> T5 X6 frames/arrow rendering [PENDING]
   -> T6 async freshness + player state guards [PENDING]
   -> T8 desktop clarity/accessibility [PENDING]
@@ -233,9 +257,11 @@ visits = new Map(), methodCallId } = {})` returns pure immutable
 
 - Verify the proposed exact `elkjs@0.12.0` version, true license obligations,
   Worker build bytes, complete notices and corresponding-source availability.
-- Obtain **explicit project-owner/legal redistribution approval before**
-  bundling/publishing a public Worker. The project's MIT license alone
-  does not prove the third-party Worker redistribution terms are satisfied.
+- The project owner explicitly approved **license-compliant Worker
+  redistribution** on 2026-10-28 (see owner decision above). Do not
+  request the same owner approval again without a material scope change.
+  That approval does not prove third-party compliance: verify the actual
+  license/source obligations before bundling or distributing.
 - After authorization, build a real same-origin Worker under existing CSP;
   test actual Worker response, 404/CSP/abort/dispose, package inclusion
   and no silent main-thread fallback. T4 cannot integrate before T3.
@@ -313,7 +339,8 @@ npm run package:check
 - Obtain any **still-missing separate design/implementation approvals**
   before optional architectural scope. T1 Council conditional GO, T7
   approval, PC-only clarification and repeated `continue` requests are not
-  universal T3 license/release authorization.
+  universal release authorization. The separate 2026-10-28 T3 owner decision
+  authorizes only license-compliant ELK Worker redistribution.
 - GitHub connector/plugin is the **mandatory default** for repository
   read/write, commits and task-ledger updates. Do not substitute CLI
   Git pushing for convenience. On **any GitHub plugin error**, the owner
@@ -349,7 +376,9 @@ npm run package:check
    `IN_PROGRESS` and focused RED tests **before** implementation; follow
    the precise `Task 2` plan, no jump straight to the ELK Worker.
 6. Parallelize only genuinely independent, authorized license research
-   for T3; do not redistribute the Worker until human sign-off.
+   for T3; the owner signed off on compliant redistribution, but do not
+   distribute the Worker until exact license/source compliance and technical
+   verification are complete.
 7. Carry T4/T5/T6/T8/T9 through separate review/test/push gates. Present
    final outcome and request user completion approval before removing
    task files. Do not claim npm release/publish without distinct authority.
@@ -367,7 +396,8 @@ npm run package:check
   remotely committed source. Current CI does verify its checked-in tests.
 - **NOT VERIFIED:** final human PC visual/accessibility sign-off, live
   CodeGraph-to-browser release stress fixtures, public ELK Worker license
-  and distribution clearance, T2–T9 implementation, npm publication.
+  compliance and distribution packaging (owner permission is granted),
+  T2–T9 implementation, npm publication.
 
 **Safe next milestone:** independent T1 exact-code acceptance, then
 **T2 tests-first source-only logical topology**. Keep statuses and approvals

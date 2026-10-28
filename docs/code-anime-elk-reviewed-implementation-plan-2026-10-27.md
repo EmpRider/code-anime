@@ -6,6 +6,18 @@
 
 > **Status — COUNCIL-REVIEWED PROPOSAL, 2026-10-27; PC-ONLY SCOPE CONFIRMED, REVISED PLAN APPROVAL PENDING.** This file is a new cross-checked plan, **not** the missing original approved design or a verbatim copy of the historical plan. Five real independent advisors, five newly spawned anonymized peer reviewers, and an EDO-led live challenge/rebuttal round reviewed the proposal; their dissent and limits are recorded below. **No source edits, dependency installations, tests, commits, or GitHub pushes occurred during preparation.** The prior 2026-10-26 `approved` reply covered the archived plan. The owner confirmed the PC-only scope on 2026-10-27; this revised plan still requires approval before implementation.
 
+> **T3 owner approval addendum — 2026-10-28:** The Code Anime project owner
+> explicitly authorized use, inclusion and redistribution of `elkjs`/its
+> Worker under the applicable open-source license conditions, confirming
+> that Code Anime is free/open source and that they have no owner-side
+> restrictions. This **resolves the separate owner redistribution decision**
+> previously listed as pending. It does **not** verify the exact proposed
+> `elkjs@0.12.0` license/Worker bytes, notices, corresponding source, package
+> or CSP tests; these remain mandatory before T3 completion and distribution.
+> The historical Council/plan approval-pending statements below describe
+> their original review date. This addendum is **not** blanket T2–T9
+> implementation, npm publication, merge, deployment or release approval.
+
 **Goal:** Make source-grounded nested `for`/`while`, `if/else`, and `try/catch/finally` scope ownership and actual directional execution relationships comprehensible at fit-to-screen zoom, in `DOWN` and `RIGHT` orientations, without breaking Code Anime's existing player or interactive node controls.
 
 **Architecture:** Preserve X6 `Shape.HTML` cards and outer Dagre method/call layout. Build an immutable logical compound graph from the conservative semantic model, then calculate nested geometry with a self-hosted, same-origin ELK.js Worker; render truthful prepared/possible/unknown edges through X6 with guarded asynchronous commits. Avoid user-code execution and keep the existing synchronous public `createDiagram().render(...)` call contract.
@@ -25,7 +37,7 @@
 - **Approved library boundary:** X6 renders and hosts HTML controls, Dagre retains top-level layout, ELK is geometry/routing only inside expanded methods. No renderer rewrite or system-wide design-system replacement.
 - **Orientation:** `DOWN` top-to-bottom and `RIGHT` left-to-right preserve semantic IDs, membership, invocation/visit selection, player cursor, path status, expanded state and accurate call/return endpoints.
 - **PC-only scope, OWNER CONFIRMED 2026-10-27:** New work targets compact, icons-only PC UX at 1366×768 and actual 200% browser zoom, both orientations, keyboard/focus/reduced-motion/forced-colors. The imported plan's new 390×844/mobile/coarse-pointer enhancement is **out of scope**. **Do not delete or regress pre-existing mobile behavior/tests**; existing mobile functionality may remain because it is not harmful to the tool. This confirmation does not approve implementation or push.
-- **CSP and distribution:** Preserve `script-src 'self'`, `style-src 'self'`, `default-src 'self'` in `src/web/app.ts`; use real native same-origin Worker (no blob/eval/remote script and no silent main-thread ELK fallback). Package actual Worker bytes plus the verified applicable license and source notices; independent licensing and human distribution sign-off required.
+- **CSP and distribution:** Preserve `script-src 'self'`, `style-src 'self'`, `default-src 'self'` in `src/web/app.ts`; use real native same-origin Worker (no blob/eval/remote script and no silent main-thread ELK fallback). Package actual Worker bytes plus the verified applicable license and source notices; independent licensing review remains required, while owner permission for license-compliant redistribution was granted on 2026-10-28.
 - **Failure honesty:** Unknown source ownership stays unresolved and visible, every prepared event remains accessible, Worker failures are announced accessibly while playback/source/console remain usable. No fake ‘all tests green’ from historical logs or skipped checks.
 - **Delivery authority:** This document authorizes planning only. Future commits/pushes need renewed plan/scope approval and relevant safe execution authority; no npm publish, merge or release authorized here.
 
@@ -280,7 +292,12 @@ Proposals were randomized as A–E, without author roles in the packet. Each pee
 - Original design document: unavailable; reconstructed above for cross-check.
 - Prior plan: the available file is explicitly a **2026-10-27 restoration**, not verified original bytes.
 - PC-only scope delta: **confirmed by the owner on 2026-10-27**. The owner said the tool is PC-only and existing mobile functionality is harmless, so retain it without adding mobile-specific redesign.
-- This updated plan, implementation branch push and Worker public distribution: **pending separate explicit approval as appropriate**. Until then: planning only, no implementation/deploy/publish.
+- **T3 Worker redistribution permission:** explicitly granted by the owner on
+  2026-10-28 for license-compliant use. Exact-version licensing/source
+  verification and independent package/security review remain pending.
+- This updated plan's remaining implementation and branch-push authority,
+  general release, merge and npm publication are separate approval gates;
+  owner permission for T3 does not bypass them.
 
 ## Plan self-review checklist — document review versus future runtime verification
 
@@ -288,5 +305,5 @@ Proposals were randomized as A–E, without author roles in the packet. Each pee
 - [x] Map reconstructed design requirements to T1–T9 and each of the five Review Focus failures to named RED tests.
 - [x] Check proposed interface names and responsibilities across dependent tasks against authenticated remote code evidence; newly proposed APIs remain **proposed**, not implemented.
 - [ ] Verify test CLI filters, generated assets and package outputs in an authorized current local checkout. Only remote code/script inspection occurred during this planning task.
-- [x] Fresh independent builder (not advisor, drafter or peer reviewer) reviewed the finished plan. Technical questions resolved from authenticated code evidence: `method.items` T2 input, adapter-owned `setFlow` traceRevision and early MVP baseline gate. PC-only scope has since been confirmed; remaining **human** choices include ELK public distribution sign-off and whether synthetic visual acceptance is sufficient without the original trace/design.
+- [x] Fresh independent builder (not advisor, drafter or peer reviewer) reviewed the finished plan. Technical questions resolved from authenticated code evidence: `method.items` T2 input, adapter-owned `setFlow` traceRevision and early MVP baseline gate. PC-only scope has since been confirmed; the owner has now granted T3 compliant-redistribution permission; remaining choices include actual license/source compliance and whether synthetic visual acceptance is sufficient without the original trace/design.
 - [ ] BA obtains explicit current user approval of the revised implementation plan and execution/push before engineering writes (PC-only scope already confirmed).

@@ -1,8 +1,8 @@
 # ELK implementation task progress
 
-> **2026-10-28 continuation handoff:** [Verified implementation status, exact CI evidence, blockers, T1–T9 roadmap, approvals and restart checklist](implementation-handoff-2026-10-28.md). Read this alongside the current task table and historical entries. This handoff is documentation only; T1 remains `CI_VERIFIED`, T2 pending, T3 license-gated.
+> **2026-10-28 continuation handoff:** [Verified implementation status, exact CI evidence, blockers, T1–T9 roadmap, approvals and restart checklist](implementation-handoff-2026-10-28.md). Read this alongside the current task table and historical entries. This handoff is documentation only; T1 remains `CI_VERIFIED`, T2 pending, T3 owner-approved; license compliance and implementation pending.
 
-> **Source provenance update (2026-10-28):** The owner's restored 2026-10-26 plan is archived [here](reference/2026-10-26-elk-approved-plan-restoration.txt). Read it with the later [reviewed technical plan](code-anime-elk-reviewed-implementation-plan-2026-10-27.md) and [handoff](implementation-handoff-2026-10-28.md); historical plan claims never override current task/CI evidence. **P2 docs formatter regression:** Actions [#40629582572](https://github.com/EmpRider/code-anime/actions/runs/40629582572) has 4/4 Node matrix FAIL solely on Prettier of the handoff document (browser PASS, Node 192 PASS / 2 SKIP). **Remediation delivered:** pinned Prettier output recovered through Actions #40633679566; handoff formatting commit `d18a897`, temporary diagnostic removed in `7a0cc4f`. Exact-head CI for the subsequent documentation-only commits is still required before calling the newer HEAD green. T1 remains `CI_VERIFIED` pending independent final review, T2 pending, T3 licensing paused.
+> **Source provenance update (2026-10-28):** The owner's restored 2026-10-26 plan is archived [here](reference/2026-10-26-elk-approved-plan-restoration.txt). Read it with the later [reviewed technical plan](code-anime-elk-reviewed-implementation-plan-2026-10-27.md) and [handoff](implementation-handoff-2026-10-28.md); historical plan claims never override current task/CI evidence. **P2 docs formatter regression:** Actions [#40629582572](https://github.com/EmpRider/code-anime/actions/runs/40629582572) has 4/4 Node matrix FAIL solely on Prettier of the handoff document (browser PASS, Node 192 PASS / 2 SKIP). **Remediation delivered:** pinned Prettier output recovered through Actions #40633679566; handoff formatting commit `d18a897`, temporary diagnostic removed in `7a0cc4f`. Exact-head CI for the subsequent documentation-only commits is still required before calling the newer HEAD green. T1 remains `CI_VERIFIED` pending independent final review, T2 pending, T3 owner-approved; license compliance and implementation pending.
 
 Source: owner-approved reviewed implementation plan dated 2026-10-27. Static
 analysis and explicitly labeled AI mock data remain mandatory; analyzed user
@@ -25,13 +25,41 @@ code must never execute to construct animations.
 | B0k  | Verify grouped boundaries after method collapse                    | B0f; CI 40602271424              | DONE — 08dfc5b, Chromium 63/63 + Node 4/4                  |
 | T1   | Conservative, source-proven nested semantic grouping               | B0 MVP browser gate              | CI VERIFIED — independent final review pending             |
 | T2   | Pure logical compound topology and truthful execution edges        | T1                               | Pending                                                    |
-| T3   | Real same-origin ELK Worker and distributable package              | B0 gate; dependency/license gate | PAUSED — owner/license distribution gate                   |
+| T3   | Real same-origin ELK Worker and distributable package              | B0 gate; dependency/license gate | OWNER_APPROVED — compliance/implementation pending         |
 | T4   | Nested ELK geometry and robust Worker protocol                     | T2, T3                           | Pending                                                    |
 | T5   | X6 compound frames, arrows, and existing HTML controls             | T4                               | Pending                                                    |
 | T6   | Async race safety and full player-state preservation               | T5                               | Pending                                                    |
 | T7   | Isolate orientation/panel preference keys with migration           | B0i; B0 browser gate GREEN       | DONE — 25efa689, Chromium 71/71 + Node 4/4 + package check |
 | T8   | PC-only compact visual clarity and accessibility                   | T6                               | Pending                                                    |
 | T9   | Full mock-trace, performance, and package acceptance               | T1–T8                            | Pending — restore missing E2E, stress, human release gates |
+
+### T3 — explicit owner approval for license-compliant ELK Worker distribution
+
+**Decision date:** 2026-10-28 (Asia/Colombo). **Source:** project owner's
+statement in the current ChatGPT conversation:
+
+> We also release this Code Anime project as free and open source so we can
+> use that elkjs as they need, and as they ask, I don't have any restriction
+> from my side
+
+**Decision:** Owner-side permission is **GRANTED** to use, bundle and
+redistribute `elkjs`/its Worker with Code Anime under the applicable open-source
+license obligations. This supersedes earlier `PAUSED — owner approval missing`
+statements; it does **not** retroactively certify license compliance,
+implementation or release readiness.
+
+**Remaining T3 acceptance:** Verify the exact proposed `elkjs@0.12.0` Worker
+and license terms, select/document a valid license path, preserve copyright
+and attribution notices, supply the required license and corresponding-source
+availability information, verify actual npm package contents, and test a
+native same-origin Worker under strict CSP including 404/abort/failure cases.
+Obtain independent license/security/package review and exact-head CI before
+T3 `DONE` or Worker distribution. No npm publish, merge, deployment, release
+or removal of task files is approved by this decision.
+
+**Current status:** `OWNER_APPROVED — compliance/implementation pending`.
+Future agents must not request the same owner permission again absent a
+material scope change; they must still complete the verifiable obligations.
 
 ### B0k — full-map boundary contract after collapsing expanded methods
 
@@ -795,6 +823,11 @@ All tasks require independent review; PM coordinates delivery after verification
 | T9   | Acceptance/performance QA                                 | Full scope/type/unit/browser/build/package gates, 500/1000-event input-to-paint and memory evidence, final license approval |
 
 ## Open gates
+
+**Historical checkpoint:** The B0 RED and T3 missing-owner-approval
+statements below describe an earlier branch snapshot and are superseded by the
+current task table and 2026-10-28 T3 owner decision above. Retain them as an
+audit trail, not as present-day blockers.
 
 - B0a's narrow Values desktop/mobile acceptance is verified. B0b is a
   delivered, Chromium-pending candidate; B0d Fit clickability and B0c browser
