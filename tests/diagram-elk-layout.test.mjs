@@ -156,6 +156,82 @@ function withWorker(fn) {
   };
 }
 
+test(
+  'horizontal native layout wraps a long sequence into readable landscape rows',
+  withWorker(async () => {
+    const { default: ELK } = await import('elkjs/lib/elk.bundled.js');
+    const cards = Array.from({ length: 20 }, (_, index) => ({
+      id: `step-${index}`,
+      index,
+      node: { title: 'Prepared step' },
+    }));
+    const topology = {
+      topologyKey: 'long-horizontal-sequence',
+      cards,
+      regions: [],
+      edges: cards
+        .slice(1)
+        .map((card, index) => ({
+          id: `edge-${index}`,
+          source: cards[index].id,
+          target: card.id,
+          kind: 'step',
+        })),
+    };
+    const control = adapter.createControlLayout();
+    try {
+      const { pending, worker, request } = await workerLayout(
+        control,
+        topology,
+        { direction: 'horizontal' },
+      );
+      const elk = new ELK();
+      const result = await elk.layout(request.graph);
+      worker.receive({ id: request.id, data: result });
+      const geometry = await pending;
+      assert.equal(geometry.cards.length, 20);
+      assert.equal(geometry.edges.length, 19);
+      assert.ok(
+        geometry.width / geometry.height >= 1.5,
+        'horizontal stays landscape',
+      );
+      assert.ok(
+        geometry.width / geometry.height <= 4,
+        'long sequence wraps instead of shrinking into one row',
+      );
+      assert.ok(
+        new Set(geometry.cards.map((card) => card.y)).size > 1,
+        'multiple rows',
+      );
+      const nested = {
+        ...topology,
+        topologyKey: 'nested-horizontal-sequence',
+        cards: cards.map((card) => ({ ...card, parentRegionId: 'loop' })),
+        regions: [{ id: 'loop', type: 'loop', label: 'Selected loop visit' }],
+      };
+      const next = await workerLayout(control, nested, {
+        direction: 'horizontal',
+      });
+      next.worker.receive({
+        id: next.request.id,
+        data: await elk.layout(next.request.graph),
+      });
+      const compound = await next.pending;
+      assert.equal(compound.cards.length, 20);
+      assert.ok(
+        compound.width / compound.height >= 1.5,
+        'nested layout stays landscape',
+      );
+      assert.ok(
+        compound.width / compound.height <= 4,
+        'nested sequence also wraps',
+      );
+    } finally {
+      control.dispose();
+    }
+  }),
+);
+
 test('flattens_nested_offsets_to_absolute_positions', () => {
   assert.equal(typeof adapter.flattenElkLayout, 'function');
   const result = adapter.flattenElkLayout(elkResult(), prepared());
