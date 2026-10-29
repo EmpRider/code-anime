@@ -115,9 +115,9 @@ Every newly discovered issue receives a separate ledger entry pushed **before** 
 
 ### CA-012 — GitHub ledger and implementation kickoff (P1)
 
-- **Owner:** PM `/root/pm_impl_v2`; TL supervisor `/root/pm_impl_v2/tl_impl`. **Status: `AWAITING_LEDGER_PUSH`**. Dependencies: design/implementation authorization, verified current upstream skills, Council kickoff, real four specialist participation. Exclusive lock: `.agent-tasks/code-anime-repair-20261028.md`.
+- **Owner:** PM `/root/pm_impl_v2`; TL supervisor `/root/pm_impl_v2/tl_impl`. **Status: `DONE` (ledger push verified; status-only push pending)**. Dependencies: design/implementation authorization, verified current upstream skills, Council kickoff, real four specialist participation. Exclusive lock: `.agent-tasks/code-anime-repair-20261028.md`.
 - **Task:** Record CA013–CA019 scopes, ownership, order, acceptance, tests, approved references and discovered issue before writing implementation code. Commit/push and independently fetch the new ledger blob/commit from `fix/react-layout-collapse` using the GitHub plugin.
-- **Acceptance / verification:** Remote branch SHA and ledger blob verified, no source/test edits yet; preserve previous CA001–CA011 statuses and history. Only after verified push change CA012 to `DONE` and push/verify that status update.
+- **Acceptance / verification:** CA012 ledger committed/pushed by GitHub plugin to `695ab21b403491f1c1a2fe863ad4b69130f92dd3`, parent `bb9ae9b`; remote ledger blob exactly `7ec4ffd304ea2a287fc794bf49a443509b75b9e7` verified by GitHub fetch. No source/test edits preceded this gate; local git reconciled clean to verified commit. This line records the post-push status; a separate verified status-only push is required before claiming the ledger status is remotely `DONE`.
 
 ### CA-013 — Optional language-neutral semantic group contract (P1)
 
