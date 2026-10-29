@@ -1,0 +1,263 @@
+{
+  "schemaVersion": "3.0.0",
+  "comparison": {
+    "defaultVariantId": "proposed",
+    "variantOrder": ["proposed", "baseline"]
+  },
+  "variantsById": {
+    "proposed": {
+      "availability": "ready",
+      "artifact": {
+        "id": "artifact:p",
+        "sessionId": "session:p",
+        "revision": "rev:1",
+        "createdAt": "2026-10-29T00:00:00Z",
+        "sourceHash": "hash:p",
+        "projectRoot": "demo",
+        "target": "run",
+        "producer": "code-anime-mcp"
+      },
+      "scenario": {
+        "entrypoint": "run",
+        "description": "Valid proposed",
+        "mockInputLabel": "sample"
+      },
+      "provenance": {
+        "provider": "codegraph",
+        "simulationMode": "ai-mock",
+        "receipts": []
+      },
+      "status": {
+        "complete": false,
+        "truncated": false,
+        "coverage": { "status": "partial", "reasons": [] },
+        "warnings": [],
+        "diagnostics": []
+      },
+      "graph": {
+        "nodes": [
+          {
+            "id": "node:p",
+            "kind": "entry",
+            "label": "valid",
+            "eventIds": ["event:p"],
+            "order": 0,
+            "callId": "call:p",
+            "taskId": "task:p",
+            "groupPathIds": [],
+            "sourceRef": { "fileId": "file:p", "line": 1, "endLine": 1 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          }
+        ],
+        "edges": [],
+        "groups": []
+      },
+      "source": {
+        "files": [
+          {
+            "id": "file:p",
+            "path": "valid.py",
+            "text": "print(1)\n",
+            "languageHint": "python",
+            "tokenSpans": []
+          }
+        ]
+      },
+      "playback": {
+        "initial": {
+          "valueSnapshotId": "value:p",
+          "stackSnapshotId": "stack:p",
+          "consoleThrough": 0
+        },
+        "frames": [
+          {
+            "id": "frame:p",
+            "eventId": "event:p",
+            "step": 1,
+            "activeNodeIds": ["node:p"],
+            "activeEdgeIds": [],
+            "callId": "call:p",
+            "taskId": "task:p",
+            "sourceRef": { "fileId": "file:p", "line": 1, "endLine": 1 },
+            "valueSnapshotId": "value:p",
+            "stackSnapshotId": "stack:p",
+            "consoleThrough": 0
+          }
+        ],
+        "navigationByCursor": [
+          {
+            "cursor": 0,
+            "previousCursor": null,
+            "nextCursor": 1,
+            "intoCursor": 1,
+            "overCursor": 1,
+            "outCursor": null
+          },
+          {
+            "cursor": 1,
+            "previousCursor": 0,
+            "nextCursor": null,
+            "intoCursor": null,
+            "overCursor": null,
+            "outCursor": null
+          }
+        ],
+        "valueSnapshots": [{ "id": "value:p", "variables": {}, "objects": {} }],
+        "stackSnapshots": [
+          {
+            "id": "stack:p",
+            "frames": [{ "callId": "call:p", "label": "run" }]
+          }
+        ],
+        "consoleEntries": [],
+        "sourceVisits": [
+          { "fileId": "file:p", "line": 1, "callId": "call:p", "stepIds": [1] }
+        ],
+        "invocations": [
+          {
+            "callId": "call:p",
+            "symbolId": "symbol:p",
+            "parentCallId": null,
+            "entryStep": 1,
+            "stepIds": [1]
+          }
+        ]
+      }
+    },
+    "baseline": {
+      "availability": "ready",
+      "artifact": {
+        "id": "artifact:b",
+        "sessionId": "session:b",
+        "revision": "rev:1",
+        "createdAt": "2026-10-29T00:00:00Z",
+        "sourceHash": "hash:b",
+        "projectRoot": "demo",
+        "target": "run",
+        "producer": "code-anime-mcp"
+      },
+      "scenario": {
+        "entrypoint": "run",
+        "description": "Malformed baseline",
+        "mockInputLabel": "sample"
+      },
+      "provenance": {
+        "provider": "codegraph",
+        "simulationMode": "ai-mock",
+        "receipts": []
+      },
+      "status": {
+        "complete": false,
+        "truncated": false,
+        "coverage": { "status": "partial", "reasons": [] },
+        "warnings": [],
+        "diagnostics": []
+      },
+      "graph": {
+        "nodes": [
+          {
+            "id": "node:b",
+            "kind": "entry",
+            "label": "baseline",
+            "eventIds": ["event:b"],
+            "order": 0,
+            "callId": "call:b",
+            "taskId": "task:b",
+            "groupPathIds": [],
+            "sourceRef": { "fileId": "file:b", "line": 1, "endLine": 1 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge:bad",
+            "fromNodeId": "node:b",
+            "toNodeId": "node:missing",
+            "kind": "sequence",
+            "label": "invalid",
+            "certainty": "mock",
+            "evidenceIds": [],
+            "executionStatus": "simulated-taken",
+            "callTransition": null
+          }
+        ],
+        "groups": []
+      },
+      "source": {
+        "files": [
+          {
+            "id": "file:b",
+            "path": "old.py",
+            "text": "print(0)\n",
+            "languageHint": "python",
+            "tokenSpans": []
+          }
+        ]
+      },
+      "playback": {
+        "initial": {
+          "valueSnapshotId": "value:b",
+          "stackSnapshotId": "stack:b",
+          "consoleThrough": 0
+        },
+        "frames": [
+          {
+            "id": "frame:b",
+            "eventId": "event:b",
+            "step": 1,
+            "activeNodeIds": ["node:b"],
+            "activeEdgeIds": [],
+            "callId": "call:b",
+            "taskId": "task:b",
+            "sourceRef": { "fileId": "file:b", "line": 1, "endLine": 1 },
+            "valueSnapshotId": "value:b",
+            "stackSnapshotId": "stack:b",
+            "consoleThrough": 0
+          }
+        ],
+        "navigationByCursor": [
+          {
+            "cursor": 0,
+            "previousCursor": null,
+            "nextCursor": 1,
+            "intoCursor": 1,
+            "overCursor": 1,
+            "outCursor": null
+          },
+          {
+            "cursor": 1,
+            "previousCursor": 0,
+            "nextCursor": null,
+            "intoCursor": null,
+            "overCursor": null,
+            "outCursor": null
+          }
+        ],
+        "valueSnapshots": [{ "id": "value:b", "variables": {}, "objects": {} }],
+        "stackSnapshots": [
+          {
+            "id": "stack:b",
+            "frames": [{ "callId": "call:b", "label": "run" }]
+          }
+        ],
+        "consoleEntries": [],
+        "sourceVisits": [
+          { "fileId": "file:b", "line": 1, "callId": "call:b", "stepIds": [1] }
+        ],
+        "invocations": [
+          {
+            "callId": "call:b",
+            "symbolId": "symbol:b",
+            "parentCallId": null,
+            "entryStep": 1,
+            "stepIds": [1]
+          }
+        ]
+      }
+    }
+  }
+}

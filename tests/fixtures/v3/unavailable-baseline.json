@@ -1,0 +1,135 @@
+{
+  "schemaVersion": "3.0.0",
+  "comparison": {
+    "defaultVariantId": "proposed",
+    "variantOrder": ["proposed", "baseline"]
+  },
+  "variantsById": {
+    "proposed": {
+      "availability": "ready",
+      "artifact": {
+        "id": "artifact:solo",
+        "sessionId": "session:solo",
+        "revision": "rev:1",
+        "createdAt": "2026-10-29T00:00:00Z",
+        "sourceHash": "hash:solo",
+        "projectRoot": "demo",
+        "target": "run",
+        "producer": "code-anime-mcp"
+      },
+      "scenario": {
+        "entrypoint": "run",
+        "description": "Synthetic available choice",
+        "mockInputLabel": "sample"
+      },
+      "provenance": {
+        "provider": "codegraph",
+        "simulationMode": "ai-mock",
+        "receipts": []
+      },
+      "status": {
+        "complete": false,
+        "truncated": false,
+        "coverage": {
+          "status": "unknown",
+          "reasons": ["No provider in fixture"]
+        },
+        "warnings": [],
+        "diagnostics": []
+      },
+      "graph": {
+        "nodes": [
+          {
+            "id": "node:s",
+            "kind": "unresolved",
+            "label": "Unresolved path",
+            "eventIds": ["event:s"],
+            "order": 0,
+            "callId": "call:s",
+            "taskId": "task:s",
+            "groupPathIds": [],
+            "sourceRef": null,
+            "certainty": "unresolved",
+            "evidenceIds": [],
+            "note": "The original source owner was unavailable"
+          }
+        ],
+        "edges": [],
+        "groups": []
+      },
+      "source": {
+        "files": [
+          {
+            "id": "file:s",
+            "path": "unknown.java",
+            "text": "class Demo {}\n",
+            "languageHint": "java",
+            "tokenSpans": []
+          }
+        ]
+      },
+      "playback": {
+        "initial": {
+          "valueSnapshotId": "value:s",
+          "stackSnapshotId": "stack:s",
+          "consoleThrough": 0
+        },
+        "frames": [
+          {
+            "id": "frame:s",
+            "eventId": "event:s",
+            "step": 1,
+            "activeNodeIds": ["node:s"],
+            "activeEdgeIds": [],
+            "callId": "call:s",
+            "taskId": "task:s",
+            "sourceRef": null,
+            "valueSnapshotId": "value:s",
+            "stackSnapshotId": "stack:s",
+            "consoleThrough": 0
+          }
+        ],
+        "navigationByCursor": [
+          {
+            "cursor": 0,
+            "previousCursor": null,
+            "nextCursor": 1,
+            "intoCursor": 1,
+            "overCursor": 1,
+            "outCursor": null
+          },
+          {
+            "cursor": 1,
+            "previousCursor": 0,
+            "nextCursor": null,
+            "intoCursor": null,
+            "overCursor": null,
+            "outCursor": null
+          }
+        ],
+        "valueSnapshots": [{ "id": "value:s", "variables": {}, "objects": {} }],
+        "stackSnapshots": [
+          {
+            "id": "stack:s",
+            "frames": [{ "callId": "call:s", "label": "run" }]
+          }
+        ],
+        "consoleEntries": [],
+        "sourceVisits": [],
+        "invocations": [
+          {
+            "callId": "call:s",
+            "symbolId": "symbol:s",
+            "parentCallId": null,
+            "entryStep": 1,
+            "stepIds": [1]
+          }
+        ]
+      }
+    },
+    "baseline": {
+      "availability": "unavailable",
+      "reason": "Baseline session expired"
+    }
+  }
+}

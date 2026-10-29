@@ -1,0 +1,397 @@
+{
+  "schemaVersion": "3.0.0",
+  "comparison": {
+    "defaultVariantId": "proposed",
+    "variantOrder": ["proposed"]
+  },
+  "variantsById": {
+    "proposed": {
+      "availability": "ready",
+      "artifact": {
+        "id": "artifact:nested",
+        "sessionId": "session:nested",
+        "revision": "rev:1",
+        "createdAt": "2026-10-29T00:00:00Z",
+        "sourceHash": "hash:nested",
+        "projectRoot": "multilang",
+        "target": "handle",
+        "producer": "code-anime-mcp"
+      },
+      "scenario": {
+        "entrypoint": "handle",
+        "description": "Synthetic JS/Kotlin nested group ownership",
+        "mockInputLabel": "mock request"
+      },
+      "provenance": {
+        "provider": "codegraph",
+        "simulationMode": "ai-mock",
+        "receipts": [
+          {
+            "id": "receipt:1",
+            "tool": "symbols",
+            "queryDigest": "sha256:test-only",
+            "providerBoundary": "synthetic"
+          }
+        ]
+      },
+      "status": {
+        "complete": false,
+        "truncated": true,
+        "coverage": {
+          "status": "unresolved",
+          "reasons": ["Synthetic unresolved alternative; no CodeGraph run"]
+        },
+        "warnings": [],
+        "diagnostics": []
+      },
+      "graph": {
+        "nodes": [
+          {
+            "id": "node:入口",
+            "kind": "entry",
+            "label": "handle – entrée",
+            "eventIds": ["event:start"],
+            "order": 0,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "groupPathIds": [],
+            "sourceRef": { "fileId": "file:js", "line": 1, "endLine": 1 },
+            "certainty": "static",
+            "evidenceIds": ["receipt:1"],
+            "note": null
+          },
+          {
+            "id": "node:choice",
+            "kind": "decision",
+            "label": "条件 if/else",
+            "eventIds": ["event:choice"],
+            "order": 1,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "groupPathIds": ["group:outer", "group:choice"],
+            "sourceRef": { "fileId": "file:kt", "line": 1, "endLine": 1 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          },
+          {
+            "id": "node:λ",
+            "kind": "lambda",
+            "label": "λ обработка",
+            "eventIds": ["event:lambda"],
+            "order": 2,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "groupPathIds": [
+              "group:outer",
+              "group:choice",
+              "group:arm",
+              "group:lambda"
+            ],
+            "sourceRef": { "fileId": "file:js", "line": 2, "endLine": 2 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          },
+          {
+            "id": "node:unknown",
+            "kind": "unresolved",
+            "label": "Unknown exception path",
+            "eventIds": ["event:unknown"],
+            "order": 3,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "groupPathIds": ["group:outer", "group:handler"],
+            "sourceRef": null,
+            "certainty": "unresolved",
+            "evidenceIds": [],
+            "note": "Handler source unavailable"
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge:start",
+            "fromNodeId": "node:入口",
+            "toNodeId": "node:choice",
+            "kind": "sequence",
+            "label": "next",
+            "certainty": "mock",
+            "evidenceIds": [],
+            "executionStatus": "simulated-taken",
+            "callTransition": null
+          },
+          {
+            "id": "edge:true",
+            "fromNodeId": "node:choice",
+            "toNodeId": "node:λ",
+            "kind": "branch-true",
+            "label": "true",
+            "certainty": "mock",
+            "evidenceIds": [],
+            "executionStatus": "simulated-taken",
+            "callTransition": null
+          },
+          {
+            "id": "edge:exception",
+            "fromNodeId": "node:choice",
+            "toNodeId": "node:unknown",
+            "kind": "exception",
+            "label": "unresolved",
+            "certainty": "unresolved",
+            "evidenceIds": [],
+            "executionStatus": "unresolved",
+            "callTransition": null
+          }
+        ],
+        "groups": [
+          {
+            "id": "group:outer",
+            "kind": "sequence",
+            "label": "scope",
+            "parentGroupId": null,
+            "memberNodeIds": [],
+            "order": 0,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": null,
+            "iteration": null,
+            "sourceRef": null,
+            "certainty": "mock",
+            "evidenceIds": []
+          },
+          {
+            "id": "group:choice",
+            "kind": "decision",
+            "label": "if",
+            "parentGroupId": "group:outer",
+            "memberNodeIds": ["node:choice"],
+            "order": 1,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": null,
+            "iteration": null,
+            "sourceRef": { "fileId": "file:kt", "line": 1, "endLine": 1 },
+            "certainty": "mock",
+            "evidenceIds": []
+          },
+          {
+            "id": "group:arm",
+            "kind": "branch",
+            "label": "true",
+            "parentGroupId": "group:choice",
+            "memberNodeIds": [],
+            "order": 2,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": { "id": "arm:true", "label": "yes" },
+            "iteration": null,
+            "sourceRef": null,
+            "certainty": "mock",
+            "evidenceIds": []
+          },
+          {
+            "id": "group:lambda",
+            "kind": "lambda",
+            "label": "lambda",
+            "parentGroupId": "group:arm",
+            "memberNodeIds": ["node:λ"],
+            "order": 3,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": null,
+            "iteration": null,
+            "sourceRef": null,
+            "certainty": "mock",
+            "evidenceIds": []
+          },
+          {
+            "id": "group:handler",
+            "kind": "try",
+            "label": "maybe catch",
+            "parentGroupId": "group:outer",
+            "memberNodeIds": ["node:unknown"],
+            "order": 4,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": null,
+            "iteration": null,
+            "sourceRef": null,
+            "certainty": "unresolved",
+            "evidenceIds": []
+          }
+        ]
+      },
+      "source": {
+        "files": [
+          {
+            "id": "file:js",
+            "path": "constructor",
+            "text": "function handle() {\r\n  const λ = () => '😄';\n}\n",
+            "languageHint": "javascript",
+            "tokenSpans": [
+              { "startUtf16": 0, "endUtf16": 8, "kind": "keyword" },
+              { "startUtf16": 29, "endUtf16": 30, "kind": "identifier" }
+            ]
+          },
+          {
+            "id": "file:kt",
+            "path": "src/条件.kt",
+            "text": "if (準備完了) {\n  println(\"OK\")\n}\n",
+            "languageHint": "kotlin",
+            "tokenSpans": [
+              { "startUtf16": 0, "endUtf16": 2, "kind": "keyword" }
+            ]
+          }
+        ]
+      },
+      "playback": {
+        "initial": {
+          "valueSnapshotId": "value:zero",
+          "stackSnapshotId": "stack:zero",
+          "consoleThrough": 0
+        },
+        "frames": [
+          {
+            "id": "frame:start",
+            "eventId": "event:start",
+            "step": 1,
+            "activeNodeIds": ["node:入口"],
+            "activeEdgeIds": [],
+            "callId": "call:main",
+            "taskId": "task:main",
+            "sourceRef": { "fileId": "file:js", "line": 1, "endLine": 1 },
+            "valueSnapshotId": "value:zero",
+            "stackSnapshotId": "stack:main",
+            "consoleThrough": 0
+          },
+          {
+            "id": "frame:choice",
+            "eventId": "event:choice",
+            "step": 2,
+            "activeNodeIds": ["node:choice"],
+            "activeEdgeIds": ["edge:start"],
+            "callId": "call:main",
+            "taskId": "task:main",
+            "sourceRef": { "fileId": "file:kt", "line": 1, "endLine": 1 },
+            "valueSnapshotId": "value:zero",
+            "stackSnapshotId": "stack:main",
+            "consoleThrough": 0
+          },
+          {
+            "id": "frame:lambda",
+            "eventId": "event:lambda",
+            "step": 3,
+            "activeNodeIds": ["node:λ"],
+            "activeEdgeIds": ["edge:true"],
+            "callId": "call:main",
+            "taskId": "task:main",
+            "sourceRef": { "fileId": "file:js", "line": 2, "endLine": 2 },
+            "valueSnapshotId": "value:one",
+            "stackSnapshotId": "stack:main",
+            "consoleThrough": 0
+          },
+          {
+            "id": "frame:unknown",
+            "eventId": "event:unknown",
+            "step": 4,
+            "activeNodeIds": ["node:unknown"],
+            "activeEdgeIds": [],
+            "callId": "call:main",
+            "taskId": "task:main",
+            "sourceRef": null,
+            "valueSnapshotId": "value:one",
+            "stackSnapshotId": "stack:main",
+            "consoleThrough": 0
+          }
+        ],
+        "navigationByCursor": [
+          {
+            "cursor": 0,
+            "previousCursor": null,
+            "nextCursor": 1,
+            "intoCursor": 1,
+            "overCursor": 1,
+            "outCursor": null
+          },
+          {
+            "cursor": 1,
+            "previousCursor": 0,
+            "nextCursor": 2,
+            "intoCursor": 2,
+            "overCursor": 2,
+            "outCursor": 4
+          },
+          {
+            "cursor": 2,
+            "previousCursor": 1,
+            "nextCursor": 3,
+            "intoCursor": 3,
+            "overCursor": 3,
+            "outCursor": 4
+          },
+          {
+            "cursor": 3,
+            "previousCursor": 2,
+            "nextCursor": 4,
+            "intoCursor": 4,
+            "overCursor": 4,
+            "outCursor": 4
+          },
+          {
+            "cursor": 4,
+            "previousCursor": 3,
+            "nextCursor": null,
+            "intoCursor": null,
+            "overCursor": null,
+            "outCursor": null
+          }
+        ],
+        "valueSnapshots": [
+          { "id": "value:zero", "variables": {}, "objects": {} },
+          {
+            "id": "value:one",
+            "variables": { "λ": "😄", "__proto__": { "literal": true } },
+            "objects": {}
+          }
+        ],
+        "stackSnapshots": [
+          { "id": "stack:zero", "frames": [] },
+          {
+            "id": "stack:main",
+            "frames": [{ "callId": "call:main", "label": "handle" }]
+          }
+        ],
+        "consoleEntries": [],
+        "sourceVisits": [
+          {
+            "fileId": "file:js",
+            "line": 1,
+            "callId": "call:main",
+            "stepIds": [1]
+          },
+          {
+            "fileId": "file:kt",
+            "line": 1,
+            "callId": "call:main",
+            "stepIds": [2]
+          },
+          {
+            "fileId": "file:js",
+            "line": 2,
+            "callId": "call:main",
+            "stepIds": [3]
+          }
+        ],
+        "invocations": [
+          {
+            "callId": "call:main",
+            "symbolId": "symbol:handle",
+            "parentCallId": null,
+            "entryStep": 1,
+            "stepIds": [1, 2, 3, 4]
+          }
+        ]
+      }
+    }
+  }
+}

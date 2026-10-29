@@ -1,0 +1,365 @@
+{
+  "schemaVersion": "3.0.0",
+  "comparison": {
+    "defaultVariantId": "proposed",
+    "variantOrder": ["proposed", "baseline"]
+  },
+  "variantsById": {
+    "proposed": {
+      "availability": "ready",
+      "artifact": {
+        "id": "artifact:p",
+        "sessionId": "session:p",
+        "revision": "rev:1",
+        "createdAt": "2026-10-29T00:00:00Z",
+        "sourceHash": "hash:proposed",
+        "projectRoot": "demo",
+        "target": "run",
+        "producer": "code-anime-mcp"
+      },
+      "scenario": {
+        "entrypoint": "run",
+        "description": "Synthetic emoji and repeated Visit",
+        "mockInputLabel": "sample"
+      },
+      "provenance": {
+        "provider": "codegraph",
+        "simulationMode": "ai-mock",
+        "receipts": []
+      },
+      "status": {
+        "complete": false,
+        "truncated": false,
+        "coverage": { "status": "partial", "reasons": ["Synthetic data only"] },
+        "warnings": [],
+        "diagnostics": []
+      },
+      "graph": {
+        "nodes": [
+          {
+            "id": "node:one",
+            "kind": "entry",
+            "label": "start <img src=x onerror=alert(1)>",
+            "eventIds": ["event:1", "event:3"],
+            "order": 0,
+            "callId": "call:p",
+            "taskId": "task:p",
+            "groupPathIds": [],
+            "sourceRef": { "fileId": "file:emoji", "line": 1, "endLine": 1 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          },
+          {
+            "id": "node:two",
+            "kind": "console",
+            "label": "print 😄",
+            "eventIds": ["event:2"],
+            "order": 1,
+            "callId": "call:p",
+            "taskId": "task:p",
+            "groupPathIds": [],
+            "sourceRef": { "fileId": "file:emoji", "line": 2, "endLine": 2 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          }
+        ],
+        "edges": [
+          {
+            "id": "edge:1",
+            "fromNodeId": "node:one",
+            "toNodeId": "node:two",
+            "kind": "sequence",
+            "label": "next",
+            "certainty": "mock",
+            "evidenceIds": [],
+            "executionStatus": "simulated-taken",
+            "callTransition": null
+          }
+        ],
+        "groups": []
+      },
+      "source": {
+        "files": [
+          {
+            "id": "file:emoji",
+            "path": "__proto__",
+            "text": "const 😄 = 1;\r\nconsole.log(😄);\n",
+            "languageHint": "javascript",
+            "tokenSpans": [
+              { "startUtf16": 0, "endUtf16": 5, "kind": "keyword" },
+              { "startUtf16": 6, "endUtf16": 8, "kind": "identifier" },
+              { "startUtf16": 16, "endUtf16": 23, "kind": "function" }
+            ]
+          }
+        ]
+      },
+      "playback": {
+        "initial": {
+          "valueSnapshotId": "value:zero",
+          "stackSnapshotId": "stack:zero",
+          "consoleThrough": 0
+        },
+        "frames": [
+          {
+            "id": "frame:1",
+            "eventId": "event:1",
+            "step": 1,
+            "activeNodeIds": ["node:one"],
+            "activeEdgeIds": [],
+            "callId": "call:p",
+            "taskId": "task:p",
+            "sourceRef": { "fileId": "file:emoji", "line": 1, "endLine": 1 },
+            "valueSnapshotId": "value:zero",
+            "stackSnapshotId": "stack:active",
+            "consoleThrough": 0
+          },
+          {
+            "id": "frame:2",
+            "eventId": "event:2",
+            "step": 2,
+            "activeNodeIds": ["node:two"],
+            "activeEdgeIds": ["edge:1"],
+            "callId": "call:p",
+            "taskId": "task:p",
+            "sourceRef": { "fileId": "file:emoji", "line": 2, "endLine": 2 },
+            "valueSnapshotId": "value:one",
+            "stackSnapshotId": "stack:active",
+            "consoleThrough": 1
+          },
+          {
+            "id": "frame:3",
+            "eventId": "event:3",
+            "step": 3,
+            "activeNodeIds": ["node:one"],
+            "activeEdgeIds": [],
+            "callId": "call:p",
+            "taskId": "task:p",
+            "sourceRef": { "fileId": "file:emoji", "line": 1, "endLine": 1 },
+            "valueSnapshotId": "value:one",
+            "stackSnapshotId": "stack:active",
+            "consoleThrough": 1
+          }
+        ],
+        "navigationByCursor": [
+          {
+            "cursor": 0,
+            "previousCursor": null,
+            "nextCursor": 1,
+            "intoCursor": 1,
+            "overCursor": 1,
+            "outCursor": null
+          },
+          {
+            "cursor": 1,
+            "previousCursor": 0,
+            "nextCursor": 2,
+            "intoCursor": 2,
+            "overCursor": 2,
+            "outCursor": 3
+          },
+          {
+            "cursor": 2,
+            "previousCursor": 1,
+            "nextCursor": 3,
+            "intoCursor": 3,
+            "overCursor": 3,
+            "outCursor": 3
+          },
+          {
+            "cursor": 3,
+            "previousCursor": 2,
+            "nextCursor": null,
+            "intoCursor": null,
+            "overCursor": null,
+            "outCursor": null
+          }
+        ],
+        "valueSnapshots": [
+          { "id": "value:zero", "variables": {}, "objects": {} },
+          {
+            "id": "value:one",
+            "variables": {
+              "__proto__": { "polluted": false },
+              "constructor": "safe",
+              "message": "mock"
+            },
+            "objects": { "constructor": { "visible": true } },
+            "result": null
+          }
+        ],
+        "stackSnapshots": [
+          { "id": "stack:zero", "frames": [] },
+          {
+            "id": "stack:active",
+            "frames": [{ "callId": "call:p", "label": "run" }]
+          }
+        ],
+        "consoleEntries": [
+          {
+            "id": "console:1",
+            "text": "mock 😄\n",
+            "certainty": "mock",
+            "sourceStep": 2
+          }
+        ],
+        "sourceVisits": [
+          {
+            "fileId": "file:emoji",
+            "line": 1,
+            "callId": "call:p",
+            "stepIds": [1, 3]
+          },
+          {
+            "fileId": "file:emoji",
+            "line": 2,
+            "callId": "call:p",
+            "stepIds": [2]
+          }
+        ],
+        "invocations": [
+          {
+            "callId": "call:p",
+            "symbolId": "symbol:run",
+            "parentCallId": null,
+            "entryStep": 1,
+            "stepIds": [1, 2, 3]
+          }
+        ]
+      }
+    },
+    "baseline": {
+      "availability": "ready",
+      "artifact": {
+        "id": "artifact:b",
+        "sessionId": "session:b",
+        "revision": "rev:1",
+        "createdAt": "2026-10-29T00:00:00Z",
+        "sourceHash": "hash:baseline",
+        "projectRoot": "demo",
+        "target": "run",
+        "producer": "code-anime-mcp"
+      },
+      "scenario": {
+        "entrypoint": "run",
+        "description": "Older synthetic version",
+        "mockInputLabel": "sample"
+      },
+      "provenance": {
+        "provider": "codegraph",
+        "simulationMode": "ai-mock",
+        "receipts": []
+      },
+      "status": {
+        "complete": false,
+        "truncated": false,
+        "coverage": { "status": "partial", "reasons": ["Synthetic baseline"] },
+        "warnings": [],
+        "diagnostics": []
+      },
+      "graph": {
+        "nodes": [
+          {
+            "id": "node:baseline",
+            "kind": "console",
+            "label": "older",
+            "eventIds": ["event:baseline"],
+            "order": 0,
+            "callId": "call:b",
+            "taskId": "task:b",
+            "groupPathIds": [],
+            "sourceRef": { "fileId": "file:b", "line": 1, "endLine": 1 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          }
+        ],
+        "edges": [],
+        "groups": []
+      },
+      "source": {
+        "files": [
+          {
+            "id": "file:b",
+            "path": "main-old.kt",
+            "text": "println(\"old\")\n",
+            "languageHint": "kotlin",
+            "tokenSpans": []
+          }
+        ]
+      },
+      "playback": {
+        "initial": {
+          "valueSnapshotId": "value:b0",
+          "stackSnapshotId": "stack:b0",
+          "consoleThrough": 0
+        },
+        "frames": [
+          {
+            "id": "frame:b1",
+            "eventId": "event:baseline",
+            "step": 1,
+            "activeNodeIds": ["node:baseline"],
+            "activeEdgeIds": [],
+            "callId": "call:b",
+            "taskId": "task:b",
+            "sourceRef": { "fileId": "file:b", "line": 1, "endLine": 1 },
+            "valueSnapshotId": "value:b1",
+            "stackSnapshotId": "stack:b1",
+            "consoleThrough": 1
+          }
+        ],
+        "navigationByCursor": [
+          {
+            "cursor": 0,
+            "previousCursor": null,
+            "nextCursor": 1,
+            "intoCursor": 1,
+            "overCursor": 1,
+            "outCursor": null
+          },
+          {
+            "cursor": 1,
+            "previousCursor": 0,
+            "nextCursor": null,
+            "intoCursor": null,
+            "overCursor": null,
+            "outCursor": null
+          }
+        ],
+        "valueSnapshots": [
+          { "id": "value:b0", "variables": {}, "objects": {} },
+          { "id": "value:b1", "variables": { "message": "old" }, "objects": {} }
+        ],
+        "stackSnapshots": [
+          { "id": "stack:b0", "frames": [] },
+          {
+            "id": "stack:b1",
+            "frames": [{ "callId": "call:b", "label": "run" }]
+          }
+        ],
+        "consoleEntries": [
+          {
+            "id": "console:b1",
+            "text": "old\n",
+            "certainty": "mock",
+            "sourceStep": 1
+          }
+        ],
+        "sourceVisits": [
+          { "fileId": "file:b", "line": 1, "callId": "call:b", "stepIds": [1] }
+        ],
+        "invocations": [
+          {
+            "callId": "call:b",
+            "symbolId": "symbol:run",
+            "parentCallId": null,
+            "entryStep": 1,
+            "stepIds": [1]
+          }
+        ]
+      }
+    }
+  }
+}
