@@ -112,10 +112,11 @@ BA communication uses ADHD next action and a compact numbered checklist, Attenti
 
 ### CA027 — Independent V3 documents review and GitHub delivery (P1)
 
-- **Owner:** independent QA/reviewer + PM remote-commit owner. **Status: `BLOCKED_ON_CA023_CA024_CA025_CA026_AND_COUNCIL`**.
-- **Files:** read-only review of `docs/v3/*`; PM-only ledger status edits.
+- **Owner:** independent QA/reviewer + PM remote-commit owner. **Status: `PARTIAL/V3_INDEX_INDEPENDENT_QA_AND_EDO_APPROVED/WAITING_ON_CA048_CA049_FINAL_AUDIT/AWAITING_TASK_PUSH` (NOT DONE)**. CA026 full proposed plan doc commit `2339caeb86ed89ed3bbba479d5cffc1c3d42773d` and its DONE status+CA048/49 discovery ledger `d19fc0eb261e5fa7893aa8fc8f2ff3c55e48d5ac` remotely verified. CA022/025 final docs need narrowly scoped CA048/49 addenda, not code.
+- **Files:** new `docs/v3/README.md` index plus read-only review of `docs/v3/*`; PM-only ledger status edits.
 - **Scope:** Cross-document schema/field/role consistency, contradictory assumptions, existing source/Visit/Values/current desktop lock, project static/mock boundary and explicit future/blocked status audit. Commit/push documentation in reviewed task-specific commits and verify each GitHub blob/commit. Preserve legacy dirty work.
 - **Acceptance:** Independent review verdict, exact docs/ledger SHA verification on the approved branch, no source changes, no merge/publish/deploy, owner given docs and asked for separate DESIGN/PLAN approval before implementation.
+- **CA027 index review evidence (pre-push):** New compact V3 README links six V3 architecture/contract/FE/MCP/Council/implementation-plan docs and both GitHub ledgers (**8/8 links resolved**), explicitly labels DESIGN and PLAN as PROPOSED/NOT USER-APPROVED, FE source work NOT AUTHORIZED, MCP/backend FUTURE/DEFERRED, UI desktop locked and CodeGraph+AI-mock static only. Independent parity and link/format reviewers plus EDO APPROVED the **index-only** docs commit; Prettier and diff-check PASS. Final CA027 all-doc consistency/DONE remains pending CA048/49 corrections, exact GitHub remote verification and a separate final QA; no software/browser/native test claimed.
 
 ## 5. FE-first implementation backlog — planned ONLY; not authorized now
 
