@@ -118,7 +118,9 @@ Syntax display tokenization **is not semantic language analysis**: it cannot int
 
 The future producer must support currently visible Follow/unfollow/pinned call, repeated Visit prev/next, current source-line, source window paging, Values/object details, console playback, stack, keyboard step controls and baseline source comparison without client event semantic reconstruction. If an existing behavior requires a missing index or field, **extend and version this contract before live cutover**, rather than quietly weakening the UI. UI timers, cursor movement, keyboard focus, manual source scroll and visual collapse are local _presentation state_ and permitted. Branch truth, source line anchoring, grouping, values and call ownership are not.
 
-**Mandatory precomputed step navigation (CA042):** Every ready variant includes `playback.navigationByCursor`, an array of **exactly `N+1`** entries for `N = playback.frames.length`. Entry at array index `c` has exactly `{cursor:c,previousCursor,nextCursor,intoCursor,overCursor,outCursor}`. Each target field is an **integer UI cursor in `0..N` or `null`** (no action/disabled). `cursor:0` means before the first frame; for `c >= 1`, the active frame is `playback.frames[c-1]`, whose `step` equals `c`. Opaque `frame.id` values are **not** cursor numbers. `previousCursor` is `null` at 0 and otherwise `c-1`; `nextCursor` is `c+1` until `N`, then `null`. `intoCursor`, `overCursor`, and `outCursor` are either **strictly greater than `c`** or `null`; they are producer-computed using event invocation identity, direct child entries, interleaved tasks and terminal return/throw/unresolved behavior. The FE follows these exact targets, without scanning frame stack or recomputing call semantics. A `0` is a valid target and must not be discarded by falsy checks. The array and every target are **per variant**; baseline and proposed navigation never share a computed cursor mapping. If no call exit exists in the prepared scenario, `outCursor:null` is truthful.
+**Mandatory precomputed step navigation (CA042/CA046):** Every ready variant includes `playback.navigationByCursor`, an array of **exactly `N+1`** entries for `N = playback.frames.length`. Entry at array index `c` has exactly `{cursor:c,previousCursor,nextCursor,intoCursor,overCursor,outCursor}`. Each target field is an **integer UI cursor in `0..N` or `null`** (no moving action/disabled). `cursor:0` means before the first frame; for `c >= 1`, the active frame is `playback.frames[c-1]`, whose `step` equals `c`. Opaque `frame.id` values are **not** cursor numbers. `previousCursor` is `null` at 0 and otherwise `c-1`; `nextCursor` is `c+1` until `N`, then `null`. `intoCursor`, `overCursor`, and `outCursor` are either **strictly greater than `c`** or `null`. The FE follows these exact targets, without scanning frame stacks or recomputing call semantics. A `0` is a valid target and must not be discarded by falsy checks. The array and every target are **per variant**; baseline and proposed navigation never share a computed cursor mapping.
+
+**Step target parity, prepared by MCP (CA046):** At cursor `0`, Into and Over go to `1` when frames exist, while Out is `null`. At a nonterminal cursor `c` with an attributed invocation, Into selects the next frame in that invocation or a directly entered child; Over selects the next frame in that invocation or a qualifying nested escaping throw; Out selects the invocation's own `return`/`unresolved`/escaping `throw`, including a nested unwind. **If no qualifying future frame exists for any of those three actions, its target is `N`**, even with no explicit return; this is a navigation fallback, **not** fabricated proof that the call returned. For an unattributed current frame, Into/Over advance to `c+1`; Out advances to `c+1` only for a `console` event and otherwise is `null`. At terminal cursor `N`, moving targets are `null`. Unrelated interleaved callbacks are not progression of the active invocation. If coverage is incomplete, the prepared fallback to `N` remains visible as an incomplete-scenario boundary, not an observed return. A future MCP producer must precompute these targets with the original event invocation/stack/exception ownership; the FE must never infer them from labels, stack displays or source.
 
 ## 6. Representative semantic constructs and a small fixture
 
@@ -707,7 +709,7 @@ This **synthetic** sample includes two independently ready variants in one docum
             "nextCursor": 2,
             "intoCursor": 2,
             "overCursor": 2,
-            "outCursor": null
+            "outCursor": 9
           },
           {
             "cursor": 2,
@@ -715,7 +717,7 @@ This **synthetic** sample includes two independently ready variants in one docum
             "nextCursor": 3,
             "intoCursor": 3,
             "overCursor": 3,
-            "outCursor": null
+            "outCursor": 9
           },
           {
             "cursor": 3,
@@ -723,7 +725,7 @@ This **synthetic** sample includes two independently ready variants in one docum
             "nextCursor": 4,
             "intoCursor": 4,
             "overCursor": 4,
-            "outCursor": null
+            "outCursor": 9
           },
           {
             "cursor": 4,
@@ -731,7 +733,7 @@ This **synthetic** sample includes two independently ready variants in one docum
             "nextCursor": 5,
             "intoCursor": 5,
             "overCursor": 5,
-            "outCursor": null
+            "outCursor": 9
           },
           {
             "cursor": 5,
@@ -739,7 +741,7 @@ This **synthetic** sample includes two independently ready variants in one docum
             "nextCursor": 6,
             "intoCursor": 6,
             "overCursor": 6,
-            "outCursor": null
+            "outCursor": 9
           },
           {
             "cursor": 6,
@@ -747,7 +749,7 @@ This **synthetic** sample includes two independently ready variants in one docum
             "nextCursor": 7,
             "intoCursor": 7,
             "overCursor": 7,
-            "outCursor": null
+            "outCursor": 9
           },
           {
             "cursor": 7,
@@ -755,7 +757,7 @@ This **synthetic** sample includes two independently ready variants in one docum
             "nextCursor": 8,
             "intoCursor": 8,
             "overCursor": 8,
-            "outCursor": null
+            "outCursor": 9
           },
           {
             "cursor": 8,
@@ -763,7 +765,7 @@ This **synthetic** sample includes two independently ready variants in one docum
             "nextCursor": 9,
             "intoCursor": 9,
             "overCursor": 9,
-            "outCursor": null
+            "outCursor": 9
           },
           {
             "cursor": 9,
