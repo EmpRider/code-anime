@@ -148,6 +148,55 @@ function legacyElkGraph(graph, direction) {
   return fallback;
 }
 
+function checkSiblingOverlaps(rectangles) {
+  const byParent = new Map();
+  for (const rect of rectangles) {
+    if (!rect.width || !rect.height) continue;
+    const parent = rect.parentRegionId || '';
+    if (!byParent.has(parent)) byParent.set(parent, []);
+    byParent.get(parent).push(rect);
+  }
+  for (const siblings of byParent.values()) {
+    if (siblings.length < 2) continue;
+    const ys = [
+      ...new Set(siblings.flatMap(({ y, height }) => [y, y + height])),
+    ].sort((a, b) => a - b);
+    const yIndex = new Map(ys.map((y, index) => [y, index]));
+    const events = siblings.flatMap((rect) => {
+      const span = {
+        id: rect.id,
+        start: yIndex.get(rect.y),
+        end: yIndex.get(rect.y + rect.height),
+      };
+      return [
+        { ...span, x: rect.x, delta: 1 },
+        { ...span, x: rect.x + rect.width, delta: -1 },
+      ];
+    });
+    // End before start at the same x: touching borders do not overlap.
+    events.sort((a, b) => a.x - b.x || a.delta - b.delta);
+    const maxima = new Int32Array(ys.length * 4);
+    const lazy = new Int32Array(ys.length * 4);
+    function add(node, low, high, start, end, delta) {
+      if (start <= low && high <= end) {
+        maxima[node] += delta;
+        lazy[node] += delta;
+        return;
+      }
+      const middle = Math.floor((low + high) / 2);
+      if (start < middle) add(node * 2, low, middle, start, end, delta);
+      if (end > middle) add(node * 2 + 1, middle, high, start, end, delta);
+      maxima[node] =
+        lazy[node] + Math.max(maxima[node * 2], maxima[node * 2 + 1]);
+    }
+    for (const event of events) {
+      add(1, 0, ys.length - 1, event.start, event.end, event.delta);
+      if (event.delta > 0 && maxima[1] > 1)
+        throw new Error(`Invalid ELK sibling overlap near ${event.id}`);
+    }
+  }
+}
+
 /** Convert every child-relative ELK rectangle/route into absolute graph coordinates. */
 export function flattenElkLayout(elk, prepared) {
   checkPrepared(prepared);
@@ -227,17 +276,19 @@ export function flattenElkLayout(elk, prepared) {
     ...geometry.get(region.id),
   }));
   const byRegion = new Map(regions.map((region) => [region.id, region]));
-  for (const item of [...regions, ...cards]) {
-    const owner = byRegion.get(item.parentRegionId);
+  const rectangles = [...regions, ...cards];
+  const root = { x: 0, y: 0, width, height };
+  for (const item of rectangles) {
+    const owner = byRegion.get(item.parentRegionId) ?? root;
     if (
-      owner &&
-      (item.x < owner.x ||
-        item.y < owner.y ||
-        item.x + item.width > owner.x + owner.width ||
-        item.y + item.height > owner.y + owner.height)
+      item.x < owner.x ||
+      item.y < owner.y ||
+      item.x + item.width > owner.x + owner.width ||
+      item.y + item.height > owner.y + owner.height
     )
       throw new Error(`Invalid ELK ownership geometry for ${item.id}`);
   }
+  checkSiblingOverlaps(rectangles);
   const edges = prepared.edges.map((edge) => {
     const sections = routes.get(edge.id);
     const points = [...sections[0]];

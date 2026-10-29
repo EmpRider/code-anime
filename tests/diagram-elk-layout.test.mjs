@@ -402,6 +402,39 @@ test('rejects nested regions outside their owners', () => {
   );
 });
 
+test('rejects root overflow and overlapping sibling rectangles', () => {
+  for (const corrupt of [
+    (graph) => {
+      graph.width = 100;
+      graph.height = 100; // Even root-level cards exceed the canvas.
+    },
+    (graph) => {
+      graph.children[1].x = 420; // Root width is only 500.
+    },
+    (graph) => {
+      graph.children[1].x = 100;
+      graph.children[1].y = 100; // Root card collides with root region.
+    },
+    (graph) => {
+      graph.children[0].children[1].y = 100; // Nested branch intersects header.
+    },
+  ]) {
+    const invalid = elkResult();
+    corrupt(invalid);
+    assert.throws(
+      () => adapter.flattenElkLayout(invalid, prepared()),
+      /ownership|containment|overlap|collision/i,
+    );
+  }
+  const touching = elkResult();
+  touching.children[1].x = 330; // Touches the root region edge only.
+  assert.doesNotThrow(() => adapter.flattenElkLayout(touching, prepared()));
+  const zeroArea = elkResult();
+  zeroArea.children[1].width = 0;
+  zeroArea.children[1].x = 100; // A zero-width rectangle has no overlap area.
+  assert.doesNotThrow(() => adapter.flattenElkLayout(zeroArea, prepared()));
+});
+
 test(
   'viewport resize invalidates an older worker generation',
   withWorker(async () => {
@@ -480,6 +513,40 @@ test(
           source,
           target,
         ]),
+        flow.edges.map(({ id, source, target }) => [id, source, target]),
+      );
+    } finally {
+      control.dispose();
+    }
+  }),
+);
+
+test(
+  'overlapping wrapped output retries once with original Values and edges',
+  withWorker(async () => {
+    const control = adapter.createControlLayout();
+    const flow = prepared();
+    let heightReads = 0;
+    try {
+      const { pending, worker, request } = await workerLayout(control, flow, {
+        direction: 'horizontal',
+        viewport: { width: 900, height: 1400 },
+        extraHeight: (id) => (id === 'statement' ? ++heightReads * 20 : 0),
+      });
+      const bad = elkResult();
+      bad.children[1].x = 100;
+      bad.children[1].y = 100;
+      worker.receive({ id: request.id, data: bad });
+      const retries = worker.sent.filter(({ cmd }) => cmd === 'layout');
+      assert.equal(retries.length, 2);
+      assert.equal(retries[1].id, request.id, 'same Worker request epoch');
+      assert.equal(retries[1].graph.layoutOptions['elk.aspectRatio'], 2);
+      assert.deepEqual(retries[1].graph.edges, request.graph.edges);
+      assert.equal(heightReads, 1, 'Values dimensions are a snapshot');
+      worker.receive({ id: retries[1].id, data: elkResult() });
+      const geometry = await pending;
+      assert.deepEqual(
+        geometry.edges.map(({ id, source, target }) => [id, source, target]),
         flow.edges.map(({ id, source, target }) => [id, source, target]),
       );
     } finally {
