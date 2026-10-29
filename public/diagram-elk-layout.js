@@ -48,21 +48,28 @@ function checkPrepared(prepared) {
   return regions;
 }
 
-function elkGraph(prepared, direction, extraHeight) {
+function elkGraph(prepared, direction, extraHeight, viewport) {
   const regions = checkPrepared(prepared);
   if (direction !== 'vertical' && direction !== 'horizontal')
     throw new Error(`Invalid layout direction: ${direction}`);
   if (typeof extraHeight !== 'function')
     throw new TypeError('extraHeight must be a function');
+  let aspectRatio = 2;
+  if (viewport !== undefined) {
+    const width = validNumber(viewport?.width, 'viewport width');
+    const height = validNumber(viewport?.height, 'viewport height');
+    if (!width || !height) throw new Error('Invalid viewport dimensions');
+    aspectRatio = Math.max(0.5, Math.min(3, width / height));
+  }
   const graph = {
     id: 'control-flow',
     layoutOptions: {
       'elk.algorithm': 'layered',
       'elk.direction': DIRECTIONS[direction],
-      // Wrap the flat outer event sequence, not nested decision/try scopes.
+      // Match available canvas shape; ELK decides whether a sequence needs lanes.
       'elk.layered.wrapping.strategy':
-        direction === 'horizontal' ? 'MULTI_EDGE' : 'OFF',
-      'elk.aspectRatio': 2,
+        viewport || direction === 'horizontal' ? 'MULTI_EDGE' : 'OFF',
+      'elk.aspectRatio': aspectRatio,
       'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
       'elk.edgeRouting': 'ORTHOGONAL',
       'elk.padding': '[top=16,left=16,bottom=16,right=16]',
@@ -84,10 +91,11 @@ function elkGraph(prepared, direction, extraHeight) {
         'elk.algorithm': 'layered',
         'elk.direction': DIRECTIONS[direction],
         'elk.layered.wrapping.strategy':
-          direction === 'horizontal' && directChildCount >= 8
+          (viewport && directChildCount > 1) ||
+          (direction === 'horizontal' && directChildCount >= 8)
             ? 'MULTI_EDGE'
             : 'OFF',
-        'elk.aspectRatio': 2,
+        'elk.aspectRatio': aspectRatio,
         'elk.padding': '[top=40,left=16,bottom=16,right=16]',
       },
       children: [],
@@ -118,6 +126,26 @@ function elkGraph(prepared, direction, extraHeight) {
     targets: [target],
   }));
   return graph;
+}
+
+function legacyElkGraph(graph, direction) {
+  const fallback = structuredClone(graph);
+  fallback.layoutOptions['elk.aspectRatio'] = 2;
+  fallback.layoutOptions['elk.layered.wrapping.strategy'] =
+    direction === 'horizontal' ? 'MULTI_EDGE' : 'OFF';
+  function restore(children) {
+    for (const child of children) {
+      if (!child.children) continue;
+      child.layoutOptions['elk.aspectRatio'] = 2;
+      child.layoutOptions['elk.layered.wrapping.strategy'] =
+        direction === 'horizontal' && child.children.length >= 8
+          ? 'MULTI_EDGE'
+          : 'OFF';
+      restore(child.children);
+    }
+  }
+  restore(fallback.children);
+  return fallback;
 }
 
 /** Convert every child-relative ELK rectangle/route into absolute graph coordinates. */
@@ -199,16 +227,16 @@ export function flattenElkLayout(elk, prepared) {
     ...geometry.get(region.id),
   }));
   const byRegion = new Map(regions.map((region) => [region.id, region]));
-  for (const card of cards) {
-    const owner = byRegion.get(card.parentRegionId);
+  for (const item of [...regions, ...cards]) {
+    const owner = byRegion.get(item.parentRegionId);
     if (
       owner &&
-      (card.x < owner.x ||
-        card.y < owner.y ||
-        card.x + card.width > owner.x + owner.width ||
-        card.y + card.height > owner.y + owner.height)
+      (item.x < owner.x ||
+        item.y < owner.y ||
+        item.x + item.width > owner.x + owner.width ||
+        item.y + item.height > owner.y + owner.height)
     )
-      throw new Error(`Invalid ELK ownership geometry for ${card.id}`);
+      throw new Error(`Invalid ELK ownership geometry for ${item.id}`);
   }
   const edges = prepared.edges.map((edge) => {
     const sections = routes.get(edge.id);
@@ -304,6 +332,19 @@ export function createControlLayout({
     try {
       settle(pending, null, flattenElkLayout(reply.data, pending.prepared));
     } catch (error) {
+      if (pending.fallback && !pending.fallbackAttempted) {
+        pending.fallbackAttempted = true;
+        try {
+          origin.worker.postMessage({
+            ...pending.message,
+            graph: legacyElkGraph(pending.message.graph, pending.fallback),
+          });
+          return;
+        } catch (retryError) {
+          settle(pending, retryError);
+          return;
+        }
+      }
       settle(pending, error);
     }
   }
@@ -348,6 +389,7 @@ export function createControlLayout({
     {
       direction = 'vertical',
       extraHeight = () => 0,
+      viewport,
       signal,
       timeoutMs = WORKER_TIMEOUT_MS,
     } = {},
@@ -357,7 +399,7 @@ export function createControlLayout({
       return Promise.reject(new Error('Control layout aborted'));
     let graph;
     try {
-      graph = elkGraph(prepared, direction, extraHeight);
+      graph = elkGraph(prepared, direction, extraHeight, viewport);
       if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
         throw new Error('Invalid Worker timeout');
     } catch (error) {
@@ -387,6 +429,7 @@ export function createControlLayout({
         prepared,
         signal,
         geometryKey,
+        fallback: viewport ? direction : undefined,
         epoch: origin.epoch,
         generation,
         settled: false,

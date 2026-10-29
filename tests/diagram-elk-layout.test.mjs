@@ -156,6 +156,338 @@ function withWorker(fn) {
   };
 }
 
+function longSequence({ nested = false } = {}) {
+  const cards = Array.from({ length: 28 }, (_, index) => ({
+    id: `visit-${index}`,
+    index,
+    node: { id: `event-${index}`, title: `Prepared event ${index}` },
+    ...(nested && {
+      parentRegionId: index < 14 ? 'first-arm' : 'second-arm',
+    }),
+  }));
+  return {
+    topologyKey: nested ? 'nested-sequence' : 'flat-sequence',
+    cards,
+    regions: nested
+      ? [
+          { id: 'outer', type: 'decision', label: 'Prepared decision' },
+          {
+            id: 'first-arm',
+            type: 'branch',
+            parentRegionId: 'outer',
+            label: 'First arm',
+          },
+          {
+            id: 'second-arm',
+            type: 'branch',
+            parentRegionId: 'outer',
+            label: 'Second arm',
+          },
+        ]
+      : [],
+    edges: cards.slice(1).map((card, index) => ({
+      id: `link-${index}`,
+      source: cards[index].id,
+      target: card.id,
+      kind: 'step',
+    })),
+  };
+}
+
+function assertValidGeometry(topology, geometry) {
+  assert.deepEqual(
+    geometry.edges.map(({ id, source, target }) => [id, source, target]),
+    topology.edges.map(({ id, source, target }) => [id, source, target]),
+  );
+  assert.deepEqual(
+    geometry.cards.map(({ id }) => id),
+    topology.cards.map(({ id }) => id),
+  );
+  assert.deepEqual(
+    geometry.regions.map(({ id }) => id),
+    topology.regions.map(({ id }) => id),
+  );
+  const rectangles = [...geometry.cards, ...geometry.regions];
+  const regions = new Map(
+    geometry.regions.map((region) => [region.id, region]),
+  );
+  for (const rect of rectangles) {
+    for (const value of [rect.x, rect.y, rect.width, rect.height])
+      assert.ok(Number.isFinite(value) && value >= 0, `${rect.id} finite`);
+    const parent = regions.get(rect.parentRegionId);
+    if (parent) {
+      assert.ok(rect.x >= parent.x && rect.y >= parent.y, `${rect.id} inside`);
+      assert.ok(
+        rect.x + rect.width <= parent.x + parent.width + 0.01 &&
+          rect.y + rect.height <= parent.y + parent.height + 0.01,
+        `${rect.id} enclosed`,
+      );
+    }
+  }
+  for (let index = 0; index < rectangles.length; index++) {
+    const first = rectangles[index];
+    for (const second of rectangles.slice(index + 1)) {
+      if ((first.parentRegionId || '') !== (second.parentRegionId || ''))
+        continue;
+      const overlapWidth =
+        Math.min(first.x + first.width, second.x + second.width) -
+        Math.max(first.x, second.x);
+      const overlapHeight =
+        Math.min(first.y + first.height, second.y + second.height) -
+        Math.max(first.y, second.y);
+      assert.ok(
+        overlapWidth <= 0.01 || overlapHeight <= 0.01,
+        `overlapping siblings: ${first.id} and ${second.id}`,
+      );
+    }
+  }
+  for (const edge of geometry.edges) {
+    assert.ok(edge.points.length >= 2, `${edge.id} routed`);
+    for (const point of edge.points)
+      assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y));
+    for (let index = 1; index < edge.points.length; index++) {
+      const previous = edge.points[index - 1];
+      const point = edge.points[index];
+      assert.ok(
+        Math.abs(previous.x - point.x) < 0.01 ||
+          Math.abs(previous.y - point.y) < 0.01,
+        `${edge.id} orthogonal segment`,
+      );
+    }
+  }
+}
+
+async function realLayout(control, elk, topology, options) {
+  const { pending, worker, request } = await workerLayout(
+    control,
+    topology,
+    options,
+  );
+  const raw = await elk.layout(request.graph);
+  worker.receive({ id: request.id, data: raw });
+  return { geometry: await pending, request };
+}
+
+test(
+  'horizontal viewport ratio changes number of left-to-right rows without losing geometry',
+  withWorker(async () => {
+    const { default: ELK } = await import('elkjs/lib/elk.bundled.js');
+    const control = adapter.createControlLayout();
+    const topology = longSequence();
+    const elk = new ELK();
+    try {
+      const wide = await realLayout(control, elk, topology, {
+        direction: 'horizontal',
+        viewport: { width: 1900, height: 700 },
+      });
+      const tall = await realLayout(control, elk, topology, {
+        direction: 'horizontal',
+        viewport: { width: 750, height: 1400 },
+      });
+      for (const result of [wide, tall])
+        assertValidGeometry(topology, result.geometry);
+      const rows = (result) =>
+        new Set(result.geometry.cards.map(({ y }) => y)).size;
+      assert.ok(rows(wide) > 1, 'long horizontal sequence uses multiple rows');
+      assert.ok(rows(tall) > rows(wide), 'taller canvas supports more rows');
+      assert.ok(
+        tall.geometry.width / tall.geometry.height <
+          wide.geometry.width / wide.geometry.height,
+        'viewport changes final graph aspect',
+      );
+      const repeat = await realLayout(control, elk, topology, {
+        direction: 'horizontal',
+        viewport: { width: 750, height: 1400 },
+      });
+      assert.deepEqual(repeat.geometry, tall.geometry, 'layout deterministic');
+    } finally {
+      control.dispose();
+    }
+  }),
+);
+
+test(
+  'vertical viewport ratio creates top-to-bottom columns with intact nested regions',
+  withWorker(async () => {
+    const { default: ELK } = await import('elkjs/lib/elk.bundled.js');
+    const control = adapter.createControlLayout();
+    const topology = longSequence({ nested: true });
+    const elk = new ELK();
+    try {
+      const wide = await realLayout(control, elk, topology, {
+        direction: 'vertical',
+        viewport: { width: 1900, height: 700 },
+        extraHeight: (id) => (id === 'event-3' ? 180 : 0),
+      });
+      const tall = await realLayout(control, elk, topology, {
+        direction: 'vertical',
+        viewport: { width: 750, height: 1400 },
+        extraHeight: (id) => (id === 'event-3' ? 180 : 0),
+      });
+      for (const result of [wide, tall])
+        assertValidGeometry(topology, result.geometry);
+      const cols = (result) =>
+        new Set(
+          result.geometry.cards
+            .filter((card) => card.parentRegionId === 'first-arm')
+            .map(({ x }) => x),
+        ).size;
+      assert.ok(cols(wide) > 1, 'wide canvas permits multiple nested columns');
+      assert.ok(cols(wide) > cols(tall), 'narrow canvas uses fewer columns');
+      assert.ok(
+        wide.geometry.width / wide.geometry.height >
+          tall.geometry.width / tall.geometry.height,
+        'viewport affects vertical nested aspect',
+      );
+      assert.equal(
+        wide.geometry.cards.find(({ id }) => id === 'visit-3').height,
+        300,
+      );
+      const repeat = await realLayout(control, elk, topology, {
+        direction: 'vertical',
+        viewport: { width: 1900, height: 700 },
+        extraHeight: (id) => (id === 'event-3' ? 180 : 0),
+      });
+      assert.deepEqual(
+        repeat.geometry,
+        wide.geometry,
+        'nested layout deterministic',
+      );
+    } finally {
+      control.dispose();
+    }
+  }),
+);
+
+test(
+  'flat vertical and nested horizontal layouts wrap without breaking hierarchy',
+  withWorker(async () => {
+    const { default: ELK } = await import('elkjs/lib/elk.bundled.js');
+    const control = adapter.createControlLayout();
+    const elk = new ELK();
+    try {
+      for (const [direction, nested, viewport] of [
+        ['vertical', false, { width: 1900, height: 700 }],
+        ['horizontal', true, { width: 750, height: 1400 }],
+      ]) {
+        const topology = longSequence({ nested });
+        const { geometry, request } = await realLayout(control, elk, topology, {
+          direction,
+          viewport,
+        });
+        assertValidGeometry(topology, geometry);
+        assert.equal(
+          request.graph.layoutOptions['elk.direction'],
+          direction === 'vertical' ? 'DOWN' : 'RIGHT',
+        );
+        const positions = new Set(
+          geometry.cards.map((card) =>
+            direction === 'vertical' ? card.x : card.y,
+          ),
+        );
+        assert.ok(positions.size > 1, `${direction} has multiple lanes`);
+      }
+    } finally {
+      control.dispose();
+    }
+  }),
+);
+
+test('rejects nested regions outside their owners', () => {
+  const invalid = elkResult();
+  invalid.children[0].children[1].x = 240;
+  assert.throws(
+    () => adapter.flattenElkLayout(invalid, prepared()),
+    /ownership|containment|parent/i,
+  );
+});
+
+test(
+  'viewport resize invalidates an older worker generation',
+  withWorker(async () => {
+    const control = adapter.createControlLayout();
+    try {
+      const first = await workerLayout(control, prepared(), {
+        direction: 'vertical',
+        viewport: { width: 800, height: 1300 },
+      });
+      const second = control.layout(prepared(), {
+        direction: 'vertical',
+        viewport: { width: 1700, height: 800 },
+      });
+      await assert.rejects(first.pending, /stale/i);
+      const current = await nextMessage(first.worker, 'layout');
+      assert.notEqual(
+        first.request.graph.layoutOptions['elk.aspectRatio'],
+        current.graph.layoutOptions['elk.aspectRatio'],
+      );
+      first.worker.receive({ id: first.request.id, data: elkResult() });
+      assert.equal(
+        await Promise.race([
+          second.then(() => 'resolved'),
+          Promise.resolve('pending'),
+        ]),
+        'pending',
+      );
+      first.worker.receive({ id: current.id, data: elkResult() });
+      assert.equal((await second).cards.length, 3);
+      await assert.rejects(
+        control.layout(prepared(), { viewport: { width: 0, height: 700 } }),
+        /viewport/i,
+      );
+    } finally {
+      control.dispose();
+    }
+  }),
+);
+
+test(
+  'invalid wrapped nested geometry retries the same trace with legacy ELK options',
+  withWorker(async () => {
+    const control = adapter.createControlLayout();
+    try {
+      const flow = prepared();
+      let heightReads = 0;
+      const { pending, worker, request } = await workerLayout(control, flow, {
+        direction: 'vertical',
+        viewport: { width: 1700, height: 800 },
+        extraHeight: (id) => (id === 'statement' ? ++heightReads * 40 : 0),
+      });
+      const bad = elkResult();
+      bad.children[0].children[1].x = 240; // Nested region escapes its owner.
+      worker.receive({ id: request.id, data: bad });
+      const retries = worker.sent.filter(({ cmd }) => cmd === 'layout');
+      assert.equal(retries.length, 2, 'one safe legacy retry');
+      assert.equal(
+        retries[1].graph.layoutOptions['elk.layered.wrapping.strategy'],
+        'OFF',
+      );
+      assert.equal(retries[1].graph.layoutOptions['elk.aspectRatio'], 2);
+      assert.deepEqual(retries[1].graph.edges, request.graph.edges);
+      const bodyHeight = (graph) =>
+        graph.children[0].children.find(({ id }) => id === 'branch').children[0]
+          .height;
+      assert.equal(
+        bodyHeight(retries[1].graph),
+        bodyHeight(request.graph),
+        'fallback retains original Values height',
+      );
+      assert.equal(heightReads, 1, 'fallback does not re-measure Values');
+      worker.receive({ id: retries[1].id, data: elkResult() });
+      assert.deepEqual(
+        (await pending).edges.map(({ id, source, target }) => [
+          id,
+          source,
+          target,
+        ]),
+        flow.edges.map(({ id, source, target }) => [id, source, target]),
+      );
+    } finally {
+      control.dispose();
+    }
+  }),
+);
+
 test(
   'horizontal native layout wraps a long sequence into readable landscape rows',
   withWorker(async () => {
