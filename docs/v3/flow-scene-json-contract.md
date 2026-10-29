@@ -118,6 +118,8 @@ Syntax display tokenization **is not semantic language analysis**: it cannot int
 
 The future producer must support currently visible Follow/unfollow/pinned call, repeated Visit prev/next, current source-line, source window paging, Values/object details, console playback, stack, keyboard step controls and baseline source comparison without client event semantic reconstruction. If an existing behavior requires a missing index or field, **extend and version this contract before live cutover**, rather than quietly weakening the UI. UI timers, cursor movement, keyboard focus, manual source scroll and visual collapse are local _presentation state_ and permitted. Branch truth, source line anchoring, grouping, values and call ownership are not.
 
+**Mandatory precomputed step navigation (CA042):** Every ready variant includes `playback.navigationByCursor`, an array of **exactly `N+1`** entries for `N = playback.frames.length`. Entry at array index `c` has exactly `{cursor:c,previousCursor,nextCursor,intoCursor,overCursor,outCursor}`. Each target field is an **integer UI cursor in `0..N` or `null`** (no action/disabled). `cursor:0` means before the first frame; for `c >= 1`, the active frame is `playback.frames[c-1]`, whose `step` equals `c`. Opaque `frame.id` values are **not** cursor numbers. `previousCursor` is `null` at 0 and otherwise `c-1`; `nextCursor` is `c+1` until `N`, then `null`. `intoCursor`, `overCursor`, and `outCursor` are either **strictly greater than `c`** or `null`; they are producer-computed using event invocation identity, direct child entries, interleaved tasks and terminal return/throw/unresolved behavior. The FE follows these exact targets, without scanning frame stack or recomputing call semantics. A `0` is a valid target and must not be discarded by falsy checks. The array and every target are **per variant**; baseline and proposed navigation never share a computed cursor mapping. If no call exit exists in the prepared scenario, `outCursor:null` is truthful.
+
 ## 6. Representative semantic constructs and a small fixture
 
 The following mappings are **language-neutral metadata**, not source-code parsing rules. Java, Kotlin, JS, TypeScript, Python, C# or future languages can emit the same categories only when CodeGraph evidence plus host mock supplies explicit relationships.
@@ -194,7 +196,7 @@ This **synthetic** sample includes two independently ready variants in one docum
             "id": "node:loop",
             "kind": "loop",
             "label": "for each item",
-            "eventIds": ["event:2"],
+            "eventIds": ["event:2", "event:7"],
             "order": 1,
             "callId": "call:main",
             "taskId": "task:main",
@@ -275,11 +277,11 @@ This **synthetic** sample includes two independently ready variants in one docum
             "id": "node:try",
             "kind": "try",
             "label": "fallback",
-            "eventIds": ["event:7"],
+            "eventIds": ["event:8"],
             "order": 6,
             "callId": "call:main",
             "taskId": "task:main",
-            "groupPathIds": ["group:try"],
+            "groupPathIds": ["group:handler", "group:try"],
             "sourceRef": { "fileId": "file:demo", "line": 7, "endLine": 7 },
             "certainty": "mock",
             "evidenceIds": [],
@@ -289,11 +291,11 @@ This **synthetic** sample includes two independently ready variants in one docum
             "id": "node:catch",
             "kind": "catch",
             "label": "handle error",
-            "eventIds": ["event:8"],
+            "eventIds": ["event:9"],
             "order": 7,
             "callId": "call:main",
             "taskId": "task:main",
-            "groupPathIds": ["group:try", "group:catch"],
+            "groupPathIds": ["group:handler", "group:catch"],
             "sourceRef": { "fileId": "file:demo", "line": 8, "endLine": 8 },
             "certainty": "mock",
             "evidenceIds": [],
@@ -375,7 +377,7 @@ This **synthetic** sample includes two independently ready variants in one docum
             "label": "next item",
             "certainty": "mock",
             "evidenceIds": [],
-            "executionStatus": "alternative",
+            "executionStatus": "simulated-taken",
             "callTransition": null
           },
           {
@@ -508,12 +510,27 @@ This **synthetic** sample includes two independently ready variants in one docum
             "evidenceIds": []
           },
           {
+            "id": "group:handler",
+            "kind": "sequence",
+            "label": "fallback and exception handler",
+            "parentGroupId": null,
+            "memberNodeIds": [],
+            "order": 7,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": null,
+            "iteration": null,
+            "sourceRef": null,
+            "certainty": "mock",
+            "evidenceIds": []
+          },
+          {
             "id": "group:try",
             "kind": "try",
             "label": "fallback",
-            "parentGroupId": null,
+            "parentGroupId": "group:handler",
             "memberNodeIds": ["node:try"],
-            "order": 7,
+            "order": 8,
             "callId": "call:main",
             "taskId": "task:main",
             "arm": null,
@@ -526,9 +543,9 @@ This **synthetic** sample includes two independently ready variants in one docum
             "id": "group:catch",
             "kind": "catch",
             "label": "caught error",
-            "parentGroupId": "group:try",
+            "parentGroupId": "group:handler",
             "memberNodeIds": ["node:catch"],
-            "order": 8,
+            "order": 9,
             "callId": "call:main",
             "taskId": "task:main",
             "arm": null,
@@ -639,6 +656,19 @@ This **synthetic** sample includes two independently ready variants in one docum
             "id": "frame:7",
             "eventId": "event:7",
             "step": 7,
+            "activeNodeIds": ["node:loop"],
+            "activeEdgeIds": ["edge:7"],
+            "callId": "call:main",
+            "taskId": "task:main",
+            "sourceRef": { "fileId": "file:demo", "line": 2, "endLine": 2 },
+            "valueSnapshotId": "value:one",
+            "stackSnapshotId": "stack:main",
+            "consoleThrough": 0
+          },
+          {
+            "id": "frame:8",
+            "eventId": "event:8",
+            "step": 8,
             "activeNodeIds": ["node:try"],
             "activeEdgeIds": ["edge:8"],
             "callId": "call:main",
@@ -649,9 +679,9 @@ This **synthetic** sample includes two independently ready variants in one docum
             "consoleThrough": 0
           },
           {
-            "id": "frame:8",
-            "eventId": "event:8",
-            "step": 8,
+            "id": "frame:9",
+            "eventId": "event:9",
+            "step": 9,
             "activeNodeIds": ["node:catch"],
             "activeEdgeIds": ["edge:9"],
             "callId": "call:main",
@@ -660,6 +690,88 @@ This **synthetic** sample includes two independently ready variants in one docum
             "valueSnapshotId": "value:one",
             "stackSnapshotId": "stack:main",
             "consoleThrough": 0
+          }
+        ],
+        "navigationByCursor": [
+          {
+            "cursor": 0,
+            "previousCursor": null,
+            "nextCursor": 1,
+            "intoCursor": 1,
+            "overCursor": 1,
+            "outCursor": null
+          },
+          {
+            "cursor": 1,
+            "previousCursor": 0,
+            "nextCursor": 2,
+            "intoCursor": 2,
+            "overCursor": 2,
+            "outCursor": null
+          },
+          {
+            "cursor": 2,
+            "previousCursor": 1,
+            "nextCursor": 3,
+            "intoCursor": 3,
+            "overCursor": 3,
+            "outCursor": null
+          },
+          {
+            "cursor": 3,
+            "previousCursor": 2,
+            "nextCursor": 4,
+            "intoCursor": 4,
+            "overCursor": 4,
+            "outCursor": null
+          },
+          {
+            "cursor": 4,
+            "previousCursor": 3,
+            "nextCursor": 5,
+            "intoCursor": 5,
+            "overCursor": 5,
+            "outCursor": null
+          },
+          {
+            "cursor": 5,
+            "previousCursor": 4,
+            "nextCursor": 6,
+            "intoCursor": 6,
+            "overCursor": 6,
+            "outCursor": null
+          },
+          {
+            "cursor": 6,
+            "previousCursor": 5,
+            "nextCursor": 7,
+            "intoCursor": 7,
+            "overCursor": 7,
+            "outCursor": null
+          },
+          {
+            "cursor": 7,
+            "previousCursor": 6,
+            "nextCursor": 8,
+            "intoCursor": 8,
+            "overCursor": 8,
+            "outCursor": null
+          },
+          {
+            "cursor": 8,
+            "previousCursor": 7,
+            "nextCursor": 9,
+            "intoCursor": 9,
+            "overCursor": 9,
+            "outCursor": null
+          },
+          {
+            "cursor": 9,
+            "previousCursor": 8,
+            "nextCursor": null,
+            "intoCursor": null,
+            "overCursor": null,
+            "outCursor": null
           }
         ],
         "valueSnapshots": [
@@ -689,7 +801,7 @@ This **synthetic** sample includes two independently ready variants in one docum
             "fileId": "file:demo",
             "line": 2,
             "callId": "call:main",
-            "stepIds": [2]
+            "stepIds": [2, 7]
           },
           {
             "fileId": "file:demo",
@@ -719,13 +831,13 @@ This **synthetic** sample includes two independently ready variants in one docum
             "fileId": "file:demo",
             "line": 7,
             "callId": "call:main",
-            "stepIds": [7]
+            "stepIds": [8]
           },
           {
             "fileId": "file:demo",
             "line": 8,
             "callId": "call:main",
-            "stepIds": [8]
+            "stepIds": [9]
           }
         ],
         "invocations": [
@@ -734,7 +846,7 @@ This **synthetic** sample includes two independently ready variants in one docum
             "symbolId": "symbol:demo",
             "parentCallId": null,
             "entryStep": 1,
-            "stepIds": [1, 2, 3, 4, 5, 6, 7, 8]
+            "stepIds": [1, 2, 3, 4, 5, 6, 7, 8, 9]
           }
         ]
       }
@@ -823,6 +935,24 @@ This **synthetic** sample includes two independently ready variants in one docum
             "consoleThrough": 1
           }
         ],
+        "navigationByCursor": [
+          {
+            "cursor": 0,
+            "previousCursor": null,
+            "nextCursor": 1,
+            "intoCursor": 1,
+            "overCursor": 1,
+            "outCursor": null
+          },
+          {
+            "cursor": 1,
+            "previousCursor": 0,
+            "nextCursor": null,
+            "intoCursor": null,
+            "overCursor": null,
+            "outCursor": null
+          }
+        ],
         "valueSnapshots": [
           { "id": "value:baseline-zero", "variables": {}, "objects": {} },
           {
@@ -869,7 +999,7 @@ This **synthetic** sample includes two independently ready variants in one docum
 }
 ```
 
-The sample's edge `edge:7` is an **alternative loop-back**, not an executed step. `edge:4` is explicitly unresolved and cannot be colored as confidently taken. The `edge:8` loop-exit links the prepared post-iteration try block; the graph's semantic meaning comes entirely from the JSON, not from the pseudo-source text.
+The sample's edge `edge:7` is a **simulated loop-back** followed by the second visit to source line 2 (`frame:7`), and then edge `edge:8` is the loop exit to the `try` scope. `try` and `catch` are sibling groups under the same handler scope. `edge:4` is explicitly unresolved and cannot be colored as confidently taken. All meanings come from JSON, not the pseudo-source text.
 
 ## 7. Validation and error matrix
 
