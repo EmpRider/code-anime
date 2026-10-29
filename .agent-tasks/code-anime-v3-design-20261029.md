@@ -95,10 +95,11 @@ BA communication uses ADHD next action and a compact numbered checklist, Attenti
 
 ### CA025 — Future MCP producer, trust/budget and migration architecture (P1)
 
-- **Owner:** backend architect/security specialist; independent MCP/CodeGraph reviewer. **Status: `BLOCKED_ON_CA022_LEDGER_GATE`**.
+- **Owner:** backend architect/security specialist; independent MCP/CodeGraph reviewer. **Status: `PARTIAL/INDEPENDENT_REVIEW_APPROVED_WITH_KNOWN_CA040_CA042/WAITING_ON_TASK_PUSH` (NOT DONE)**. CA022 ledger-first, CA040/041 and CA042/043 discovery gates remotely verified; CA023 and CA024 initial design baselines are individually verified on this branch.
 - **Files:** `docs/v3/mcp-future-architecture.md` only.
 - **Scope:** Specify future host-AI semantic node/edge declarations, builder-owned canonical IDs, atomic evidence-cited relationships, CodeGraph-only source provenance, server-side frame/Values/source construction, pagination of CodeGraph receipt reads, continuation fold/validation, a **single complete JSON artifact** with quotas/expiry/integrity, cross-language neutral contract, API evolution and legacy deprecation. Do **not** implement any backend change.
 - **Acceptance:** Explicit trust boundaries, invalid-data error matrix, memory/size/cancellation/DoS budgets without arbitrary node cap, source privacy, failure rollback, expected MCP/web wire shapes, native provider acceptance matrix with `UNVERIFIED` where appropriate, and no publication/deployment work.
+- **Initial baseline evidence:** `docs/v3/mcp-future-architecture.md` drafted with CodeGraph-only receipts, host-AI mock if/else/loop/try/catch/switch/lambda language-neutral examples, future single JSON assembly, continuation/source provenance, resource/privacy budgets and deferred implementation status. Independent reviewer **APPROVED PARTIAL baseline only** while CA040 variant assembly and CA042 plain ANSI wording clarification remain open. These are documentation designs, not completed MCP behavior, and no native provider or package run was performed.
 
 ### CA026 — FE-first implementation and verification plan (P1)
 
