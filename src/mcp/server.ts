@@ -6,7 +6,7 @@ import {
 import { z } from 'zod';
 import { readFileSync } from 'node:fs';
 import { type SessionStore } from '../domain/flow.js';
-import { eventSchema } from '../domain/trace.js';
+import { eventSchema, semanticGroupSchema } from '../domain/trace.js';
 import { AnimationBuilder } from '../services/animation-builder.js';
 import { SimulationService } from '../services/simulation-service.js';
 import { VisualizationService } from '../services/visualization-service.js';
@@ -17,6 +17,41 @@ const object = { type: 'object', additionalProperties: true };
 // build their requests from tools/list, so an omitted kind is unusable even
 // when the server's event builder accepts it.
 const eventKinds = eventSchema.shape.kind.options;
+const groupKinds = semanticGroupSchema.innerType().shape.kind.options;
+const groupKey = { type: 'string', minLength: 1, maxLength: 200 };
+const groupSource = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    file: { type: 'string', minLength: 1, maxLength: 4096 },
+    line: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
+    endLine: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
+    generated: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        file: { type: 'string', minLength: 1, maxLength: 4096 },
+        line: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
+      },
+      required: ['file', 'line'],
+    },
+  },
+  required: ['file', 'line', 'endLine'],
+};
+const groupMetadata = {
+  kind: { type: 'string', enum: groupKinds },
+  title: { type: 'string', minLength: 1, maxLength: 800 },
+  source: groupSource,
+  evidenceIds: { type: 'array', maxItems: 200, items: string },
+  certainty: { type: 'string', enum: ['mock', 'assumed', 'unresolved'] },
+  arm: {
+    type: 'object',
+    additionalProperties: false,
+    properties: { id: groupKey, label: { type: 'string', maxLength: 800 } },
+    required: ['id', 'label'],
+  },
+  iteration: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
+};
 const schema = (
   properties: Record<string, unknown>,
   required: string[] = [],
@@ -154,7 +189,7 @@ export function createMcpServer(
     {
       name: 'build_mock_animation',
       description:
-        'Default script-free animation workflow. begin creates a server-owned build after CodeGraph evidence checks. append accepts up to 100 compact semantic operations directly as MCP arguments; server generates event/call IDs, stack, complete locals/object snapshots and before/after states. No Python/JS scripts, shell commands, generated programs, or JSON payload files. finish automatically chunks, persists and returns the localhost player URL. Retry append with the same batchId/body safely. Use status/cancel as needed.',
+        'Default script-free animation workflow. begin checks CodeGraph evidence. append accepts up to 100 mock operations, optional groupDefinitions with stable opaque keys and each operation’s outer-to-inner groupPath; the server assigns real event/call IDs and validates direct semantic memberships after append. CodeGraph receipts prove source retrieval, not a real executed branch. finish chunks, persists and returns the localhost player URL. Never create scripts or payload files. Retry the identical batchId/body safely.',
       inputSchema: schema(
         {
           action: {
@@ -223,8 +258,21 @@ export function createMcpServer(
                   enum: ['mock', 'assumed', 'unresolved', 'proposed'],
                 },
                 note: string,
+                groupPath: { type: 'array', maxItems: 2000, items: groupKey },
               },
               ['kind', 'label'],
+            ),
+          },
+          groupDefinitions: {
+            type: 'array',
+            maxItems: 2000,
+            items: schema(
+              {
+                key: groupKey,
+                parentKey: groupKey,
+                ...groupMetadata,
+              },
+              ['key', 'kind', 'title', 'certainty'],
             ),
           },
         },
@@ -234,7 +282,7 @@ export function createMcpServer(
     {
       name: 'generate_mock_flow_animation',
       description:
-        'For normal flows prefer build_mock_animation so the server handles bookkeeping. Do not create scripts or payload files. One-shot compatibility: render the host AI’s CodeGraph-grounded, statement-by-statement mock execution. Include transforms (trim/min), assignments, DTO fields, branch/loop decisions, calls/returns, complete locals and stack snapshots. CodeGraph evidence receipts are mandatory. Use before/after for state changes. Values are simulated, not live execution. For large traces submit chunks with complete:false then continuationOf. For visual plans supply baselineSessionId and a full proposed scenario.',
+        'Prefer build_mock_animation for automatic IDs. One-shot compatibility accepts fully formed CodeGraph-grounded mock events and optional semanticGroups with EXISTING local event IDs/call IDs, parent IDs, source receipts and simulated uncertainty; group membership is direct, not inherited. No executed branch truth is implied. For long traces use complete:false and continuationOf, repeating immutable ancestor groups with chunk-local members. Never create scripts or payload files.',
       inputSchema: schema(
         {
           projectRoot: string,
@@ -312,6 +360,25 @@ export function createMcpServer(
                 'stack',
                 'certainty',
               ],
+            ),
+          },
+          semanticGroups: {
+            type: 'array',
+            maxItems: 2000,
+            items: schema(
+              {
+                id: groupKey,
+                callId: groupKey,
+                taskId: { type: 'string', minLength: 1, maxLength: 100 },
+                parentGroupId: groupKey,
+                memberEventIds: {
+                  type: 'array',
+                  maxItems: 2000,
+                  items: groupKey,
+                },
+                ...groupMetadata,
+              },
+              ['id', 'kind', 'title', 'callId', 'memberEventIds', 'certainty'],
             ),
           },
           steps: {

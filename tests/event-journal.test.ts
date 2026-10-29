@@ -89,3 +89,80 @@ test('journal bounds every persisted batch and replay chunk by serialized UTF-8 
     journal.close();
   }
 });
+
+test('journal stores optional group paths with events atomically while ordinary replay returns events only', async () => {
+  const journal = new EventJournal();
+  const event = {
+    id: 'event-1',
+    kind: 'statement' as const,
+    symbolId: 'run',
+    label: 'One mock step',
+    values: {},
+    callId: 'call-1',
+    stack: ['call-1'],
+    certainty: 'mock' as const,
+  };
+  try {
+    await journal.append([event], [['outer', 'inner']]);
+    await journal.append([{ ...event, id: 'event-2' }], [[]]);
+    await assert.rejects(
+      journal.append([{ ...event, id: 'event-3' }], [[], []]),
+      /group path count/i,
+    );
+    assert.equal(journal.count, 2);
+    const ordinary: TraceEvent[] = [];
+    for await (const chunk of journal.chunks()) ordinary.push(...chunk);
+    assert.deepEqual(
+      ordinary.map(({ id }) => id),
+      ['event-1', 'event-2'],
+    );
+    assert.equal('groupPath' in ordinary[0]!, false);
+    const annotated = [];
+    for await (const chunk of journal.annotatedChunks()) annotated.push(chunk);
+    assert.deepEqual(
+      annotated.flatMap(({ events }) => events.map(({ id }) => id)),
+      ['event-1', 'event-2'],
+    );
+    assert.deepEqual(
+      annotated.flatMap(({ groupPaths }) => groupPaths),
+      [['outer', 'inner'], []],
+    );
+  } finally {
+    journal.close();
+  }
+});
+
+test('journal splits annotated chunks before their union exceeds 2000 group definitions', async () => {
+  const journal = new EventJournal();
+  const event = {
+    id: 'event-1',
+    kind: 'statement' as const,
+    symbolId: 'run',
+    label: 'Mock',
+    values: {},
+    callId: 'call-1',
+    stack: ['call-1'],
+    certainty: 'mock' as const,
+  };
+  try {
+    const firstPath = Array.from({ length: 1500 }, (_, index) => `a-${index}`);
+    const secondPath = Array.from({ length: 1500 }, (_, index) => `b-${index}`);
+    await journal.append(
+      [event, { ...event, id: 'event-2' }],
+      [firstPath, secondPath],
+    );
+    const chunks = [];
+    for await (const chunk of journal.annotatedChunks()) chunks.push(chunk);
+    assert.deepEqual(
+      chunks.map(({ events }) => events.map(({ id }) => id)),
+      [['event-1'], ['event-2']],
+    );
+    assert.deepEqual(
+      chunks.map(({ groupPaths }) => groupPaths[0]?.length),
+      [1500, 1500],
+    );
+    assert.equal(journal.count, 2);
+  } finally {
+    journal.close();
+  }
+});

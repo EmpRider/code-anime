@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { SimulationService } from '../src/services/simulation-service.js';
 import { FileSessionStore } from '../src/storage/file-session-store.js';
 import type { TraceEvent } from '../src/domain/trace.js';
@@ -1000,6 +1001,131 @@ test('complete proposals require original source and matching CodeGraph provenan
       }),
       /earlier event unlocated-partial-proposal lacks a source\/call-site location/,
     );
+  } finally {
+    await c.close();
+  }
+});
+
+test('one-shot mock groups accept existing local IDs and survive session storage without changing events', async () => {
+  const c = await fixture(
+    '**Service.run** (method)\n**Location:** Service.kt:1\n',
+  );
+  try {
+    const event = c.event('one-shot-event');
+    const group = {
+      id: 'one-shot-decision',
+      kind: 'decision',
+      title: 'Mock decision',
+      callId: 'mock-1',
+      memberEventIds: [event.id],
+      source: event.source,
+      evidenceIds: [c.receipt.evidenceId],
+      certainty: 'assumed',
+    };
+    const result = await c.service.submit({
+      ...c.payload([event], true),
+      semanticGroups: [group],
+    });
+    const trace = (await c.store.get(result.sessionId))!.flow.trace!;
+    assert.deepEqual(trace.events, [event]);
+    assert.deepEqual(trace.semanticGroups, [group]);
+    await assert.rejects(
+      c.service.submit({
+        ...c.payload([{ ...event, id: 'bad-member-event' }], true),
+        semanticGroups: [group],
+      }),
+      /Unknown local member event ID|semanticGroups/i,
+    );
+    assert.equal((await c.store.list()).length, 1);
+  } finally {
+    await c.close();
+  }
+});
+
+test('one-shot continuation rejects changed group identity and unsupplied source receipts', async () => {
+  const c = await fixture(
+    '**Service.run** (method)\n**Location:** Service.kt:1\n',
+  );
+  try {
+    const firstEvent = c.event('first-event');
+    const group = {
+      id: 'stable-group',
+      kind: 'decision',
+      title: 'Mock decision',
+      callId: 'mock-1',
+      memberEventIds: [firstEvent.id],
+      source: firstEvent.source,
+      evidenceIds: [c.receipt.evidenceId],
+      certainty: 'assumed',
+    };
+    await assert.rejects(
+      c.service.submit({
+        ...c.payload([firstEvent], false),
+        semanticGroups: [{ ...group, evidenceIds: [randomUUID()] }],
+      }),
+      /unsupplied CodeGraph evidence receipt/,
+    );
+    const first = await c.service.submit({
+      ...c.payload([firstEvent], false),
+      semanticGroups: [group],
+    });
+    const later = c.event('later-event');
+    const next = {
+      ...c.payload([later], true),
+      continuationOf: first.sessionId,
+      semanticGroups: [{ ...group, memberEventIds: [later.id] }],
+    };
+    await assert.rejects(
+      c.service.submit({
+        ...next,
+        semanticGroups: [
+          {
+            ...group,
+            memberEventIds: [later.id],
+            title: 'Contradictory title',
+          },
+        ],
+      }),
+      /Continuation changes semantic group definition stable-group/,
+    );
+    const result = await c.service.submit(next);
+    const trace = (await c.store.get(result.sessionId))!.flow.trace!;
+    assert.deepEqual(trace.semanticGroups?.[0]?.memberEventIds, [
+      'later-event',
+    ]);
+    assert.equal(trace.semanticGroups?.[0]?.id, 'stable-group');
+    assert.equal(trace.simulation?.previousSessionId, first.sessionId);
+  } finally {
+    await c.close();
+  }
+});
+
+test('semantic group source cannot borrow structured CodeGraph node evidence from another file', async () => {
+  const c = await fixture(
+    '**Service.run** (method)\n**Location:** Service.kt:1\n',
+  );
+  try {
+    await writeFile(join(c.projectRoot, 'Other.kt'), 'fun other() = 2\n');
+    const event = c.event('known-event');
+    await assert.rejects(
+      c.service.submit({
+        ...c.payload([event], true),
+        semanticGroups: [
+          {
+            id: 'false-source',
+            kind: 'decision',
+            title: 'Invented source',
+            callId: 'mock-1',
+            memberEventIds: [],
+            source: { file: 'Other.kt', line: 1, endLine: 1 },
+            evidenceIds: [c.receipt.evidenceId],
+            certainty: 'mock',
+          },
+        ],
+      }),
+      /Semantic group cites CodeGraph node evidence for another file/,
+    );
+    assert.deepEqual(await c.store.list(), []);
   } finally {
     await c.close();
   }

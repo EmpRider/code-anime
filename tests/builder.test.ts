@@ -1079,7 +1079,25 @@ test('builder blocks missing evidence and removes partial sessions on finish fai
       buildId,
       batchId: 'start',
       expectedEventCount: 0,
-      operations: [{ kind: 'enter', symbol: 'x', label: 'Enter', source }],
+      groupDefinitions: [
+        {
+          key: 'long-flow',
+          kind: 'sequence',
+          title: 'Long simulated flow',
+          source,
+          evidenceIds: [c.evidence.evidenceId],
+          certainty: 'mock',
+        },
+      ],
+      operations: [
+        {
+          kind: 'enter',
+          symbol: 'x',
+          label: 'Enter',
+          source,
+          groupPath: ['long-flow'],
+        },
+      ],
     });
     const original = c.simulation.submit.bind(c.simulation);
     let calls = 0;
@@ -1097,6 +1115,7 @@ test('builder blocks missing evidence and removes partial sessions on finish fai
           kind: 'loop',
           label: 'Iteration',
           set: { value: 1 },
+          groupPath: ['long-flow'],
         })),
       });
     await c.builder.run({
@@ -1104,7 +1123,9 @@ test('builder blocks missing evidence and removes partial sessions on finish fai
       buildId,
       batchId: 'return',
       expectedEventCount: 2001,
-      operations: [{ kind: 'return', label: 'Return' }],
+      operations: [
+        { kind: 'return', label: 'Return', groupPath: ['long-flow'] },
+      ],
     });
     await assert.rejects(
       c.builder.run({
@@ -1117,17 +1138,373 @@ test('builder blocks missing evidence and removes partial sessions on finish fai
     );
     assert.equal((await c.store.list()).length, 0);
     c.simulation.submit = original;
-    assert.equal(
-      (
-        await c.builder.run({
-          action: 'finish',
-          buildId,
-          complete: true,
-          coverage: 'test',
-        })
-      ).status,
-      'ready',
+    const finished = await c.builder.run({
+      action: 'finish',
+      buildId,
+      complete: true,
+      coverage: 'test',
+    });
+    assert.equal(finished.status, 'ready');
+    const last = (await c.store.get(String(finished.sessionId)))!.flow.trace!;
+    assert.equal(last.semanticGroups?.length, 1);
+    assert.deepEqual(last.semanticGroups?.[0]?.memberEventIds, [
+      'event-2001',
+      'event-2002',
+    ]);
+  } finally {
+    await c.close();
+  }
+});
+
+test('builder assigns direct nested memberships only after accepting operations and preserves retry identity', async () => {
+  const c = await setup();
+  try {
+    const { buildId } = await c.begin();
+    await c.builder.run({
+      action: 'append',
+      buildId,
+      batchId: 'entry',
+      expectedEventCount: 0,
+      operations: [
+        { kind: 'enter', symbol: 'Workflow.run', label: 'Enter', source },
+      ],
+    });
+    const definitions = [
+      {
+        key: '__proto__',
+        kind: 'loop',
+        title: 'Source-grounded mock loop',
+        source,
+        evidenceIds: [c.evidence.evidenceId],
+        certainty: 'mock',
+      },
+      {
+        key: 'iteration',
+        parentKey: '__proto__',
+        kind: 'iteration',
+        iteration: 1,
+        title: 'First mock iteration',
+        source,
+        evidenceIds: [c.evidence.evidenceId],
+        certainty: 'assumed',
+      },
+    ];
+    const batch = {
+      action: 'append',
+      buildId,
+      batchId: 'nested',
+      expectedEventCount: 1,
+      groupDefinitions: definitions,
+      operations: [
+        {
+          kind: 'assign',
+          label: 'Set count',
+          line: 2,
+          set: { count: 1 },
+          groupPath: ['__proto__', 'iteration'],
+        },
+        {
+          kind: 'assign',
+          label: 'After loop',
+          line: 3,
+          set: { done: true },
+          groupPath: [],
+        },
+      ],
+    };
+    assert.equal((await c.builder.run(batch)).eventCount, 3);
+    assert.equal((await c.builder.run(batch)).replayedBatch, true);
+    await assert.rejects(
+      c.builder.run({ ...batch, groupDefinitions: [...definitions].reverse() }),
+      /batchId/,
     );
+    await assert.rejects(
+      c.builder.run({
+        ...batch,
+        operations: [{ ...batch.operations[0], groupPath: ['iteration'] }],
+      }),
+      /batchId/,
+    );
+    await c.builder.run({
+      action: 'append',
+      buildId,
+      batchId: 'exit',
+      expectedEventCount: 3,
+      operations: [{ kind: 'return', label: 'Return', result: 1 }],
+    });
+    const result = await c.builder.run({
+      action: 'finish',
+      buildId,
+      complete: true,
+      coverage: 'One simulated iteration',
+    });
+    const trace = (await c.store.get(String(result.sessionId)))!.flow.trace!;
+    assert.deepEqual(
+      trace.events.map(({ id }) => id),
+      ['event-1', 'event-2', 'event-3', 'event-4'],
+    );
+    assert.equal(trace.semanticGroups?.length, 2);
+    const loop = trace.semanticGroups!.find(({ kind }) => kind === 'loop')!;
+    const iteration = trace.semanticGroups!.find(
+      ({ kind }) => kind === 'iteration',
+    )!;
+    assert.deepEqual(loop.memberEventIds, []);
+    assert.deepEqual(iteration.memberEventIds, ['event-2']);
+    assert.equal(iteration.parentGroupId, loop.id);
+    assert.equal(loop.callId, 'call-1');
+    assert.equal(iteration.callId, 'call-1');
+    assert.equal(trace.events[2]?.source?.line, 3);
+    assert.equal(trace.simulation?.complete, true);
+  } finally {
+    await c.close();
+  }
+});
+
+test('invalid groups roll back batches, tasks and event identities before journal commit', async () => {
+  const c = await setup();
+  try {
+    const { buildId } = await c.begin();
+    const definition = {
+      key: 'decision',
+      kind: 'decision',
+      title: 'Mock decision',
+      source,
+      certainty: 'mock',
+      evidenceIds: [c.evidence.evidenceId],
+    };
+    await assert.rejects(
+      c.builder.run({
+        action: 'append',
+        buildId,
+        batchId: 'invalid-path',
+        expectedEventCount: 0,
+        groupDefinitions: [definition],
+        operations: [
+          { kind: 'enter', symbol: 'Workflow.run', label: 'Enter', source },
+          { kind: 'branch', label: 'Wrong ancestry', groupPath: ['unknown'] },
+        ],
+      }),
+      /unknown|groupPath|group/i,
+    );
+    assert.equal(
+      (await c.builder.run({ action: 'status', buildId })).eventCount,
+      0,
+    );
+    await c.builder.run({
+      action: 'append',
+      buildId,
+      batchId: 'valid',
+      expectedEventCount: 0,
+      groupDefinitions: [definition],
+      operations: [
+        { kind: 'enter', symbol: 'Workflow.run', label: 'Enter', source },
+        { kind: 'branch', label: 'Mock condition', groupPath: ['decision'] },
+        { kind: 'return', label: 'Done' },
+      ],
+    });
+    await assert.rejects(
+      c.builder.run({
+        action: 'append',
+        buildId,
+        batchId: 'other-task',
+        expectedEventCount: 3,
+        operations: [
+          {
+            kind: 'enter',
+            taskId: 'worker',
+            symbol: 'Workflow.work',
+            label: 'Enter worker',
+            source,
+          },
+          {
+            kind: 'statement',
+            taskId: 'worker',
+            label: 'Wrong owner',
+            groupPath: ['decision'],
+          },
+        ],
+      }),
+      /owner|task|invocation|call/i,
+    );
+    assert.equal(
+      (await c.builder.run({ action: 'status', buildId })).eventCount,
+      3,
+    );
+    const result = await c.builder.run({
+      action: 'finish',
+      buildId,
+      complete: true,
+      coverage: 'Mock decision',
+    });
+    const trace = (await c.store.get(String(result.sessionId)))!.flow.trace!;
+    assert.deepEqual(
+      trace.events.map(({ id }) => id),
+      ['event-1', 'event-2', 'event-3'],
+    );
+    assert.deepEqual(trace.semanticGroups?.[0]?.memberEventIds, ['event-2']);
+  } finally {
+    await c.close();
+  }
+});
+
+test('builder splits two disjoint 1500-ancestor paths into valid ordered continuations', async () => {
+  const c = await setup();
+  try {
+    const { buildId } = await c.begin();
+    const definitions = (prefix: string) =>
+      Array.from({ length: 1500 }, (_, i) => ({
+        key: `${prefix}-${i}`,
+        ...(i ? { parentKey: `${prefix}-${i - 1}` } : {}),
+        kind: 'sequence',
+        title: `${prefix} group ${i}`,
+        source,
+        evidenceIds: [c.evidence.evidenceId],
+        certainty: 'mock',
+      }));
+    const firstPath = Array.from({ length: 1500 }, (_, i) => `left-${i}`);
+    const secondPath = Array.from({ length: 1500 }, (_, i) => `right-${i}`);
+    await c.builder.run({
+      action: 'append',
+      buildId,
+      batchId: 'left',
+      expectedEventCount: 0,
+      groupDefinitions: definitions('left'),
+      operations: [
+        { kind: 'enter', symbol: 'Workflow.run', label: 'Start', source },
+        {
+          kind: 'statement',
+          label: 'Left nested step',
+          line: 2,
+          groupPath: firstPath,
+        },
+      ],
+    });
+    await c.builder.run({
+      action: 'append',
+      buildId,
+      batchId: 'right',
+      expectedEventCount: 2,
+      groupDefinitions: definitions('right'),
+      operations: [
+        {
+          kind: 'statement',
+          label: 'Right nested step',
+          line: 3,
+          groupPath: secondPath,
+        },
+        { kind: 'return', label: 'Done' },
+      ],
+    });
+    const result = await c.builder.run({
+      action: 'finish',
+      buildId,
+      complete: true,
+      coverage: 'Both nested paths',
+    });
+    assert.equal(result.chunks, 2);
+    const first = (await c.store.get(String(result.url).split('/').at(-1)!))!
+      .flow.trace!;
+    const second = (await c.store.get(String(result.sessionId)))!.flow.trace!;
+    assert.deepEqual(
+      first.events.map(({ id }) => id),
+      ['event-1', 'event-2'],
+    );
+    assert.deepEqual(
+      second.events.map(({ id }) => id),
+      ['event-3', 'event-4'],
+    );
+    assert.equal(first.semanticGroups?.length, 1500);
+    assert.equal(second.semanticGroups?.length, 1500);
+    assert.equal(
+      first.semanticGroups?.filter((group) => group.memberEventIds.length)
+        .length,
+      1,
+    );
+    assert.equal(
+      second.semanticGroups?.filter((group) => group.memberEventIds.length)
+        .length,
+      1,
+    );
+    assert.deepEqual(first.semanticGroups?.at(-1)?.memberEventIds, ['event-2']);
+    assert.deepEqual(second.semanticGroups?.at(-1)?.memberEventIds, [
+      'event-3',
+    ]);
+    assert.equal(
+      second.simulation?.previousSessionId,
+      String(result.url).split('/').at(-1),
+    );
+  } finally {
+    await c.close();
+  }
+});
+
+test('journal append failure leaves grouped batch fully retryable with the original event IDs', async () => {
+  const c = await setup();
+  try {
+    const { buildId } = await c.begin();
+    const builds = (
+      c.builder as unknown as {
+        builds: Map<
+          string,
+          { events: { append: (...args: any[]) => Promise<void> } }
+        >;
+      }
+    ).builds;
+    const journal = builds.get(String(buildId))!.events;
+    const append = journal.append.bind(journal);
+    let fail = true;
+    journal.append = async (...args) => {
+      if (fail) {
+        fail = false;
+        throw new Error('injected journal I/O failure');
+      }
+      return append(...args);
+    };
+    const batch = {
+      action: 'append',
+      buildId,
+      batchId: 'retry-group',
+      expectedEventCount: 0,
+      groupDefinitions: [
+        {
+          key: 'decision',
+          kind: 'decision',
+          title: 'Source-grounded decision',
+          source,
+          evidenceIds: [c.evidence.evidenceId],
+          certainty: 'mock',
+        },
+      ],
+      operations: [
+        { kind: 'enter', symbol: 'Workflow.run', label: 'Enter', source },
+        {
+          kind: 'branch',
+          label: 'Simulated condition',
+          line: 2,
+          groupPath: ['decision'],
+        },
+        { kind: 'return', label: 'Return' },
+      ],
+    };
+    await assert.rejects(c.builder.run(batch), /injected journal I\/O failure/);
+    assert.equal(
+      (await c.builder.run({ action: 'status', buildId })).eventCount,
+      0,
+    );
+    await c.builder.run(batch);
+    const result = await c.builder.run({
+      action: 'finish',
+      buildId,
+      complete: true,
+      coverage: 'Retry accepted',
+    });
+    const trace = (await c.store.get(String(result.sessionId)))!.flow.trace!;
+    assert.deepEqual(
+      trace.events.map(({ id }) => id),
+      ['event-1', 'event-2', 'event-3'],
+    );
+    assert.deepEqual(trace.semanticGroups?.[0]?.memberEventIds, ['event-2']);
+    assert.equal(trace.semanticGroups?.[0]?.callId, 'call-1');
   } finally {
     await c.close();
   }

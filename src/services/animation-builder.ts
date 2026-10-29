@@ -1,11 +1,31 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
-import { eventSchema, sourceSchema, type TraceEvent } from '../domain/trace.js';
+import {
+  eventSchema,
+  semanticGroupSchema,
+  sourceSchema,
+  type SemanticGroup,
+  type TraceEvent,
+} from '../domain/trace.js';
 import type { SessionStore } from '../domain/flow.js';
 import { SimulationService } from './simulation-service.js';
 import { EventJournal } from '../storage/event-journal.js';
 
 const record = z.record(z.unknown());
+const groupFields = semanticGroupSchema.innerType().shape;
+export const groupDefinitionSchema = z
+  .object({
+    key: groupFields.id,
+    parentKey: groupFields.id.optional(),
+    kind: groupFields.kind,
+    title: groupFields.title,
+    source: groupFields.source,
+    evidenceIds: groupFields.evidenceIds,
+    certainty: groupFields.certainty,
+    arm: groupFields.arm,
+    iteration: groupFields.iteration,
+  })
+  .strict();
 export const operationSchema = z
   .object({
     kind: eventSchema.shape.kind,
@@ -32,6 +52,7 @@ export const operationSchema = z
       .enum(['mock', 'assumed', 'unresolved', 'proposed'])
       .default('mock'),
     note: z.string().optional(),
+    groupPath: z.array(groupFields.id).max(2000).optional(),
   })
   .strict();
 const beginSchema = z
@@ -51,6 +72,7 @@ const appendSchema = z
     batchId: z.string().min(1).max(80),
     expectedEventCount: z.number().int().nonnegative(),
     operations: z.array(operationSchema).min(1).max(100),
+    groupDefinitions: z.array(groupDefinitionSchema).max(2000).optional(),
   })
   .strict();
 const finishSchema = z
@@ -73,6 +95,13 @@ export const builderSchema = z.discriminatedUnion('action', [
     .strict(),
 ]);
 type Operation = z.infer<typeof operationSchema>;
+type GroupDefinition = z.infer<typeof groupDefinitionSchema>;
+interface GroupState {
+  input: GroupDefinition;
+  id: string;
+  callId?: string;
+  taskId?: string;
+}
 interface Frame {
   id: string;
   symbol: string;
@@ -90,6 +119,9 @@ interface Build {
   events: EventJournal;
   calls: number;
   batches: Map<string, { hash: string; count: number }>;
+  groupDefinitions: Map<string, GroupState>;
+  groupCounter: number;
+  groupBytes: number;
   busy: boolean;
   result?: Record<string, unknown>;
   finishHash?: string;
@@ -192,6 +224,9 @@ export class AnimationBuilder {
         events: new EventJournal(),
         calls: 0,
         batches: new Map(),
+        groupDefinitions: new Map(),
+        groupCounter: 0,
+        groupBytes: 0,
         busy: false,
       };
       this.builds.set(b.id, b);
@@ -231,11 +266,16 @@ export class AnimationBuilder {
           ...new Set([
             ...b.input.evidenceIds,
             ...p.operations.flatMap((o) => o.evidenceIds ?? []),
+            ...(p.groupDefinitions ?? []).flatMap((g) => g.evidenceIds ?? []),
           ]),
         ];
         if (evidenceIds.length > 200)
           throw new Error('Build exceeds evidence receipt limit');
         await this.simulation.checkEvidence(b.input.projectRoot, evidenceIds);
+        await this.simulation.validateSemanticGroupEvidence(
+          b.input.projectRoot,
+          p.groupDefinitions ?? [],
+        );
         const state = {
           frames: clone(b.frames),
           taskFrames: clone(b.taskFrames),
@@ -245,15 +285,117 @@ export class AnimationBuilder {
           ) as Record<string, Record<string, unknown>>,
           calls: b.calls,
         };
-        const events = p.operations.map((op, i) =>
-          this.apply(state, op, b.events.count + i, evidenceIds),
+        const groups = clone(b.groupDefinitions);
+        let groupCounter = b.groupCounter;
+        let groupBytes = b.groupBytes;
+        const newKeys = new Set<string>();
+        for (const definition of p.groupDefinitions ?? []) {
+          if (newKeys.has(definition.key))
+            throw new Error(
+              `Duplicate group definition key: ${definition.key}`,
+            );
+          newKeys.add(definition.key);
+          const { key: _key, parentKey, ...fields } = definition;
+          const validation = semanticGroupSchema.safeParse({
+            ...fields,
+            id: definition.key,
+            callId: 'pending',
+            ...(parentKey ? { parentGroupId: parentKey } : {}),
+            memberEventIds: [],
+          });
+          if (!validation.success)
+            throw new Error(
+              `Invalid group definition ${definition.key}: ${validation.error.issues[0]?.message}`,
+            );
+          const prior = groups.get(definition.key);
+          if (prior) {
+            if (hash(prior.input) !== hash(definition))
+              throw new Error(
+                `Group definition ${definition.key} changed after declaration`,
+              );
+            continue;
+          }
+          const bytes = Buffer.byteLength(JSON.stringify(definition));
+          groupBytes += bytes;
+          if (groupBytes > 8 * 1024 * 1024)
+            throw new Error(
+              'Semantic group definition bytes exceed the 8 MiB build budget',
+            );
+          groups.set(definition.key, {
+            input: definition,
+            id: `group-${b.id}-${++groupCounter}`,
+          });
+        }
+        for (const key of newKeys) {
+          const seen = new Set<string>();
+          let cursor: string | undefined = key;
+          while (cursor) {
+            if (seen.has(cursor))
+              throw new Error(`Semantic group parent cycle: ${key}`);
+            seen.add(cursor);
+            const item = groups.get(cursor);
+            if (!item)
+              throw new Error(`Unknown semantic group parent: ${cursor}`);
+            cursor = item.input.parentKey;
+          }
+        }
+        const events: TraceEvent[] = [];
+        const paths: string[][] = [];
+        for (const [index, op] of p.operations.entries()) {
+          const event = this.apply(
+            state,
+            op,
+            b.events.count + index,
+            evidenceIds,
+          );
+          events.push(event);
+          const ids: string[] = [];
+          const seen = new Set<string>();
+          for (const [depth, key] of (op.groupPath ?? []).entries()) {
+            if (seen.has(key))
+              throw new Error(`Repeated semantic group in groupPath: ${key}`);
+            seen.add(key);
+            const group = groups.get(key);
+            if (!group)
+              throw new Error(`Unknown semantic group in groupPath: ${key}`);
+            if (group.input.parentKey !== op.groupPath?.[depth - 1])
+              throw new Error(`groupPath parent chain disagrees at ${key}`);
+            if (group.callId && group.callId !== event.callId)
+              throw new Error(
+                `Semantic group ${key} cannot cross call ownership`,
+              );
+            if (group.taskId && group.taskId !== (event.taskId ?? 'main'))
+              throw new Error(
+                `Semantic group ${key} cannot cross task ownership`,
+              );
+            group.callId = event.callId;
+            group.taskId = event.taskId ?? 'main';
+            ids.push(group.id);
+          }
+          const innermost = op.groupPath?.at(-1);
+          const memberGroup = innermost ? groups.get(innermost)! : undefined;
+          if (
+            memberGroup?.input.source &&
+            event.source &&
+            event.source.file !== memberGroup.input.source.file
+          )
+            throw new Error(
+              `Semantic group ${innermost} source file differs from its member event`,
+            );
+          paths.push(ids);
+        }
+        await b.events.append(
+          events,
+          paths.some((path) => path.length) ? paths : undefined,
         );
-        await b.events.append(events);
         // Commit only after the whole batch validates. Retried batch IDs are idempotent.
         b.frames = state.frames;
         b.taskFrames = state.taskFrames;
         b.objects = state.objects;
         b.calls = state.calls;
+        b.groupDefinitions = groups;
+        b.groupCounter = groupCounter;
+        b.groupBytes = groupBytes;
         b.input.evidenceIds = evidenceIds;
         b.batches.set(p.batchId, { hash: digest, count: events.length });
       } finally {
@@ -293,9 +435,36 @@ export class AnimationBuilder {
       let result: Awaited<ReturnType<SimulationService['submit']>> | undefined;
       let chunks = 0;
       let processed = 0;
-      for await (const events of b.events.chunks()) {
+      const byId = new Map(
+        [...b.groupDefinitions.values()].map((group) => [group.id, group]),
+      );
+      for await (const { events, groupPaths } of b.events.annotatedChunks()) {
         processed += events.length;
         chunks++;
+        const memberships = new Map<string, string[]>();
+        for (const [index, path] of groupPaths.entries()) {
+          for (const id of path)
+            if (!memberships.has(id)) memberships.set(id, []);
+          const last = path.at(-1);
+          if (last) memberships.get(last)!.push(events[index]!.id);
+        }
+        const semanticGroups: SemanticGroup[] = [...memberships].map(
+          ([id, memberEventIds]) => {
+            const group = byId.get(id)!;
+            const { key: _key, parentKey, ...fields } = group.input;
+            const parentGroupId = parentKey
+              ? b.groupDefinitions.get(parentKey)?.id
+              : undefined;
+            return {
+              id,
+              ...fields,
+              callId: group.callId!,
+              ...(group.taskId !== 'main' ? { taskId: group.taskId } : {}),
+              ...(parentGroupId ? { parentGroupId } : {}),
+              memberEventIds,
+            };
+          },
+        );
         result = await this.simulation.submit(
           {
             projectRoot: b.input.projectRoot,
@@ -303,6 +472,7 @@ export class AnimationBuilder {
             evidenceIds: b.input.evidenceIds,
             scenario: b.input.scenario,
             events,
+            ...(semanticGroups.length ? { semanticGroups } : {}),
             coverage: p.coverage,
             complete: processed === b.events.count && p.complete,
             ...(result ? { continuationOf: result.sessionId } : {}),

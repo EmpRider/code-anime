@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { TraceEvent } from '../domain/trace.js';
 
 const CHUNK_BYTES = 3 * 1024 * 1024;
+type AnnotatedEvent = { event: TraceEvent; groupPath: string[] };
 
 // Only accepted batches are visible to readers. Files belong to the server,
 // never to the project being analyzed.
@@ -15,13 +16,23 @@ export class EventJournal {
   private batches = 0;
   count = 0;
 
-  async append(events: TraceEvent[]) {
+  async append(
+    events: TraceEvent[],
+    groupPaths?: readonly (readonly string[])[],
+  ) {
+    if (groupPaths && groupPaths.length !== events.length)
+      throw new Error('Group path count must match accepted event count');
     if (!events.length) return;
     const pages: string[] = [];
     let items: string[] = [];
     let bytes = 2; // JSON array brackets
-    for (const event of events) {
-      const serialized = JSON.stringify(event);
+    for (const [index, event] of events.entries()) {
+      const path = groupPaths?.[index];
+      if (path && path.length > 2000)
+        throw new Error('One group path exceeds the trace chunk budget');
+      const serialized = JSON.stringify(
+        path ? { event, groupPath: path } : event,
+      );
       const eventBytes = Buffer.byteLength(serialized);
       if (eventBytes + 2 > CHUNK_BYTES)
         throw new Error('One event snapshot exceeds the session budget');
@@ -55,28 +66,49 @@ export class EventJournal {
     this.count += events.length;
   }
 
-  async *chunks(): AsyncGenerator<TraceEvent[]> {
-    let chunk: TraceEvent[] = [];
+  async *annotatedChunks(): AsyncGenerator<{
+    events: TraceEvent[];
+    groupPaths: string[][];
+  }> {
+    let events: TraceEvent[] = [];
+    let groupPaths: string[][] = [];
     let size = 2;
+    let groupIds = new Set<string>();
     for (let batch = 0; batch < this.batches; batch++) {
-      const events: TraceEvent[] = JSON.parse(
+      const stored: Array<TraceEvent | AnnotatedEvent> = JSON.parse(
         await readFile(join(this.directory, `${batch}.json`), 'utf8'),
       );
-      for (const event of events) {
-        const bytes = Buffer.byteLength(JSON.stringify(event));
+      for (const entry of stored) {
+        const annotated = 'event' in entry;
+        const event = annotated ? entry.event : entry;
+        const path = annotated ? entry.groupPath : [];
+        const bytes = Buffer.byteLength(JSON.stringify(entry));
+        const missing = path.filter((id) => !groupIds.has(id));
         if (
-          chunk.length &&
-          (chunk.length >= 2000 || size + 1 + bytes > CHUNK_BYTES)
+          events.length &&
+          (events.length >= 2000 ||
+            size + 1 + bytes > CHUNK_BYTES ||
+            groupIds.size + missing.length > 2000)
         ) {
-          yield chunk;
-          chunk = [];
+          yield { events, groupPaths };
+          events = [];
+          groupPaths = [];
           size = 2;
+          groupIds = new Set();
         }
-        chunk.push(event);
-        size += (chunk.length > 1 ? 1 : 0) + bytes;
+        for (const id of path) groupIds.add(id);
+        if (groupIds.size > 2000)
+          throw new Error('One group path exceeds the trace chunk budget');
+        events.push(event);
+        groupPaths.push(path);
+        size += (events.length > 1 ? 1 : 0) + bytes;
       }
     }
-    if (chunk.length) yield chunk;
+    if (events.length) yield { events, groupPaths };
+  }
+
+  async *chunks(): AsyncGenerator<TraceEvent[]> {
+    for await (const chunk of this.annotatedChunks()) yield chunk.events;
   }
 
   close() {

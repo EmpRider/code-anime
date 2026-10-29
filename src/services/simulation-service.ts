@@ -6,9 +6,14 @@ import {
   readNativeEvidence,
 } from '../analysis/native-codegraph.js';
 import { traceToFlow } from '../analysis/contract.js';
-import { eventSchema, type Trace, type TraceEvent } from '../domain/trace.js';
+import {
+  eventSchema,
+  semanticGroupSchema,
+  type Trace,
+  type TraceEvent,
+} from '../domain/trace.js';
 import { flowSchema, type SessionStore } from '../domain/flow.js';
-import { collectSourceFiles } from './source-catalog.js';
+import { collectSourceFiles, sourceBoundary } from './source-catalog.js';
 import { checkInvocationIntegrity } from './invocation-integrity.js';
 
 export const evidenceRequestSchema = z
@@ -30,6 +35,7 @@ export const simulationSchema = z
     evidenceIds: z.array(z.string().uuid()).min(1).max(200),
     scenario: z.record(z.unknown()).default({}),
     events: z.array(eventSchema).min(1).max(2000).optional(),
+    semanticGroups: z.array(semanticGroupSchema).max(2000).optional(),
     steps: flowSchema.shape.steps.optional(),
     complete: z.boolean().default(true),
     coverage: z.string().min(1).max(4000),
@@ -61,6 +67,8 @@ function sourceIdentity(root: string, file: string) {
   const path = resolve(root, file);
   return process.platform === 'win32' ? path.toLowerCase() : path;
 }
+const hashSemanticDefinition = (value: unknown) =>
+  createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 function sourceProvenanceIssues(
   root: string,
@@ -414,6 +422,61 @@ export class SimulationService {
       );
     return { root, evidence };
   }
+  async validateSemanticGroupEvidence(
+    projectRoot: string,
+    groups: readonly {
+      source?: { file: string; line: number; endLine: number } | undefined;
+      evidenceIds?: string[] | undefined;
+      certainty: 'mock' | 'assumed' | 'unresolved';
+    }[],
+    acceptedEvidenceIds?: readonly string[],
+  ) {
+    if (!groups.length) return;
+    const root = await this.resolveRoot(projectRoot);
+    this.prune();
+    for (const group of groups) {
+      if (group.certainty !== 'unresolved' && !group.source)
+        throw new Error(
+          'Resolved semantic groups need CodeGraph-cited source locations',
+        );
+      if (group.source && !group.evidenceIds?.length)
+        throw new Error('Semantic group source requires CodeGraph evidenceIds');
+      if (group.source) {
+        const boundary = sourceBoundary(root, group.source.file);
+        if (boundary)
+          throw new Error(
+            `Semantic group source ${group.source.file}: ${boundary}`,
+          );
+      }
+      const cited = (group.evidenceIds ?? []).map((id) => {
+        if (acceptedEvidenceIds && !acceptedEvidenceIds.includes(id))
+          throw new Error(
+            `Semantic group uses an unsupplied CodeGraph evidence receipt: ${id}`,
+          );
+        const receipt = this.evidence.get(id);
+        if (!receipt || receipt.projectRoot !== root)
+          throw new Error(
+            'Semantic group CodeGraph evidence expired or belongs to another project',
+          );
+        return receipt;
+      });
+      if (!group.source || !cited.length) continue;
+      const actual = sourceIdentity(root, group.source.file);
+      if (
+        cited.every(
+          (item) => item.tool === 'node' && item.nodeSourceFiles?.length,
+        ) &&
+        !cited.some((item) =>
+          item.nodeSourceFiles?.some(
+            (file) => sourceIdentity(root, file) === actual,
+          ),
+        )
+      )
+        throw new Error(
+          `Semantic group cites CodeGraph node evidence for another file, not ${group.source.file}`,
+        );
+    }
+  }
   async submit(raw: unknown, comparisonValidated = false) {
     if (Buffer.byteLength(JSON.stringify(raw)) > 8 * 1024 * 1024)
       throw new Error(
@@ -426,6 +489,11 @@ export class SimulationService {
     const complete = p.complete && !p.steps;
     const { root, evidence } = await this.checkEvidence(
       p.projectRoot,
+      p.evidenceIds,
+    );
+    await this.validateSemanticGroupEvidence(
+      root,
+      p.semanticGroups ?? [],
       p.evidenceIds,
     );
     if (complete) {
@@ -527,6 +595,11 @@ export class SimulationService {
     const ancestorSources = new Map<string, string>();
     const ancestorEvents: TraceEvent[][] = [];
     const ancestorCoverageProblems: string[] = [];
+    const ancestorGroupDefinitions = new Map<string, string>();
+    const ancestorGroupSources = new Map<
+      string,
+      { file: string; endLine: number }
+    >();
     if (p.continuationOf) {
       previous = (await this.store.get(p.continuationOf))?.flow.trace;
       if (
@@ -554,6 +627,17 @@ export class SimulationService {
       while (ancestor?.flow.trace) {
         const ancestorTrace = ancestor.flow.trace;
         ancestorEvents.push(ancestorTrace.events);
+        for (const group of ancestorTrace.semanticGroups ?? []) {
+          const { memberEventIds: _members, ...definition } = group;
+          const fingerprint = hashSemanticDefinition(definition);
+          const earlier = ancestorGroupDefinitions.get(group.id);
+          if (earlier && earlier !== fingerprint)
+            throw new Error(
+              `Continuation changes semantic group definition ${group.id}`,
+            );
+          ancestorGroupDefinitions.set(group.id, fingerprint);
+          if (group.source) ancestorGroupSources.set(group.id, group.source);
+        }
         // Re-evaluate persistent earlier problems. Receipt pages can be read
         // after an earlier chunk was saved, so its old 'unread' classification
         // must not permanently poison the completed continuation.
@@ -638,6 +722,15 @@ export class SimulationService {
           throw new Error('Earlier chunk expired; generate a new trace');
       }
     }
+    for (const group of p.semanticGroups ?? []) {
+      const earlier = ancestorGroupDefinitions.get(group.id);
+      if (!earlier) continue;
+      const { memberEventIds: _members, ...definition } = group;
+      if (earlier !== hashSemanticDefinition(definition))
+        throw new Error(
+          `Continuation changes semantic group definition ${group.id}`,
+        );
+    }
     if (p.events)
       checkInvocationIntegrity([...ancestorEvents.reverse(), events], complete);
     let baseline: Trace | undefined;
@@ -678,6 +771,7 @@ export class SimulationService {
       target: p.endpoint,
       scenario: p.scenario,
       events,
+      ...(p.semanticGroups?.length ? { semanticGroups: p.semanticGroups } : {}),
       diagnostics: [
         'AI-simulated values from CodeGraph evidence; repository code and external effects were not executed.',
         'Evidence receipts verify retrieval and project identity, not the semantic correctness of AI calculations.',
@@ -737,6 +831,38 @@ export class SimulationService {
     }
     trace.sourceFiles = sourceCatalog.files;
     trace.diagnostics.push(...sourceCatalog.diagnostics);
+    if (complete)
+      for (const [id, groupSource] of ancestorGroupSources) {
+        const original =
+          sourceCatalog.files[groupSource.file] ??
+          ancestorSources.get(groupSource.file);
+        if (!original)
+          throw new Error(
+            `Earlier semantic group ${id} lacks original source for ${groupSource.file}`,
+          );
+        if (groupSource.endLine > original.split(/\r?\n/).length)
+          throw new Error(
+            `Earlier semantic group ${id} exceeds original source lines for ${groupSource.file}`,
+          );
+      }
+    for (const group of trace.semanticGroups ?? []) {
+      if (!group.source) continue;
+      const original =
+        sourceCatalog.files[group.source.file] ??
+        ancestorSources.get(group.source.file);
+      if (!original) {
+        if (complete && group.certainty !== 'unresolved')
+          throw new Error(
+            `Semantic group ${group.id} lacks original source for ${group.source.file}`,
+          );
+        trace.diagnostics.push(
+          `Semantic group ${group.id} source ${group.source.file} is unavailable; grouping remains uncertain.`,
+        );
+      } else if (group.source.endLine > original.split(/\r?\n/).length)
+        throw new Error(
+          `Semantic group ${group.id} references lines beyond original source ${group.source.file}`,
+        );
+    }
     // A CodeGraph receipt proves evidence retrieval, not the accuracy of an
     // agent-supplied source position. Refuse bogus line highlighting when the
     // corresponding original source is available in the prepared snapshot.
