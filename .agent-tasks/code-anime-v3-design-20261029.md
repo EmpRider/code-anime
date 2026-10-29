@@ -1,0 +1,185 @@
+# Code Anime V3 — FE-first design and implementation task ledger (2026-10-29)
+
+> **Authorization:** The project owner explicitly requested full design, architecture, implementation documentation and a GitHub task list for the revised Code Anime boundary. This authorizes **documentation and ledger creation**, not implementation of new FE or MCP features. The existing authorization for GitHub writes is limited to `EmpRider/code-anime` branch `fix/react-layout-collapse`. **Do not merge, publish, tag, deploy, delete previous task files or change analyzed-code execution scope.** This document remains a proposed task plan until the owner approves the revised design and a separate implementation plan.
+
+## 1. User decisions and immutable constraints
+
+1. Code Anime remains a **static CodeGraph-evidence + host-AI mock execution** visualizer. Do not run, instrument, import, debug or record the user's analyzed code. CodeGraph receipts prove source retrieval, **not** actual branch decisions or values.
+2. MCP/Node prepares **one complete, versioned, immutable JSON document per finished session**, including explicitly identified semantic graph nodes, groups, relationships/edge meanings, immutable source snapshots, playback frames, mock values, Visit/navigation targets and uncertainty. The server, not the browser, assembles continuation chunks and owns business/semantic execution logic.
+3. The frontend may compute **presentation geometry** from those supplied relationships: actual card/group measurements, adaptive horizontal multi-row and vertical multi-column arrangement, port positions, connector routing, label placement, grouping borders, visual shapes/colors and zoom/pan. It may **not** scan source to infer if/else/try/switch/loop/lambda grouping, invent graph edges/outcomes, merge semantic continuations, or derive execution values/ownership.
+4. Orientation/viewport changes must reuse the same JSON and recompute **client-side visual geometry** only; **no viewport-triggered server JSON fetch**. Existing desktop component locations, panel sizes, arrangements, controls, Follow, source display/highlighting, Visit, Values and playback remain locked. Outside graph only darker theme tokens and compact internal padding/margins are allowed.
+5. Prioritize accurate mock event/edge identities and semantic grouping, then readable separation/connectors/labels, then canvas utilization. No arbitrary global node-count cap; preserve bounded resource budgets, cancellation, incomplete/unresolved evidence and safe geometry failure handling. Unlimited zoom does not make node overlap correct.
+6. **Documentation phase only now.** FE-first implementation is a later approval-gated phase; MCP backend implementation is explicitly **FUTURE/DEFERRED** until the owner separately authorizes it. A local JSON fixture may document/test the FE contract later; it is never a production substitute for CodeGraph or MCP semantics.
+
+**Hard acceptance blocker:** The current browser still fetches/merges continuation sessions in `public/player.js`, derives replay/Values from raw events and constructs control-flow topology in `public/semantic-flow-model.js` / `public/diagram-control-layout.js`. These responsibilities **do not meet the final V3 frontend contract**. Because the MCP JSON compiler/output is explicitly FUTURE/DEFERRED, FE-only geometry work can be independently implemented and tested against a fixed semantic-graph fixture when authorized, but **full V3 end-to-end compliance, source/player cutover and removal of legacy client business logic must remain BLOCKED** until the server actually provides complete validated JSON. Neither fixture tests nor a prettier chart are proof of CodeGraph/MCP integration.
+
+## 2. Team, Council and provenance gates
+
+- BA `/root` → PM `/root/pm_impl_v2` → TL `/root/pm_impl_v2/tl_impl` → real specialist owners and independent reviewers. PM exclusively owns this ledger and serial GitHub task commits. Specialists must use exclusive file locks; no modifying another specialist's dirty files.
+- **Required before design-doc acceptance:** fresh pinned upstream Superpowers, EmpRider Engineering Council, Caveman, Ponytail, ADHD and Attention Span skill versions plus exact source digests; five independent advisors, five anonymous peer reviews, an EDO decision with adversarial challenges/rebuttals, and a separate independent document/contract review. Write exact refs/results into the final Council decision document; do not assume older pins remain current.
+- **Ledger-first gate:** commit/push/independently fetch this new task ledger with GitHub plugin before editing `docs/v3/*`. A verified ledger establishes authorization and dependencies; it does **not** approve subsequent software implementation.
+- **Review status meanings:** `DOCUMENTATION_DONE` requires reviewed docs, task-specific commit/push and remote blob verification. `PLANNED/NOT_AUTHORIZED` requires explicit **future** design and implementation approvals before source writes. `FUTURE/DEFERRED` prohibits backend implementation now. Browser/CodeGraph native testing is `UNVERIFIED` when not actually run.
+
+### Fresh pinned upstream evidence (2026-10-29)
+
+The independent skill-loader resolved each canonical default-branch HEAD via GitHub plugin and read complete files at the exact pinned SHA, not a search snippet. **PASS — 13 full instruction/reference files**, with SHA-256 byte digests below. This is instruction provenance, not a claim of V3 design approval.
+
+| Canonical repository | Verified default-branch commit |
+| --- | --- |
+| `obra/superpowers` | `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b` |
+| `EmpRider/claude-skills-llm-council` | `a7565e21d5ab03551fe66e36818e05af245467b8` |
+| `JuliusBrussee/caveman` | `9b68f7ed12b05e7efaff18e65c5a3fc2849fd0a4` |
+| `DietrichGebert/ponytail` | `7801d061243d7b753bad0e0b3c057cd250b11755` (**changed** since CA012 kickoff) |
+| `ayghri/i-have-adhd` | `1ecea1993b7fce257ffbd686c070948b5e07eda6` |
+| `alexgreensh/attention-span` | `8a6e2250dbc1dfb1b4186e03a92484d8c799c1b0` |
+
+| Complete pinned text (relative to its canonical repository) | SHA-256 |
+| --- | --- |
+| Caveman `skills/caveman/SKILL.md` | `415d43518f2b1a9498c15a445d4657117b129ee5e81b19454ce348439cc6672b` |
+| Attention Span `output-styles/attention-kind.md` | `959c0ff96c80ae5f6c007618951cae339340ed586b3b1a7bb5970cf229344ece` |
+| Attention Span `output-styles/rundown.md` | `c78fd3f8e2c8e6a96515a48e4c32acef2dc6456cdec9aafadd5c53524bd19ced` |
+| ADHD `skills/i-have-adhd/SKILL.md` | `88955c019bbb1419ff4b49dbb1f80a867467de6233d7865af2e06a7d7b76c7d3` |
+| Council `SKILL.md` | `6387755b0cd0f069720549c7e81d90b724433d4ff46cb127271b902939ad586d` |
+| Ponytail `skills/ponytail/SKILL.md` | `9badd22a32e19cb884e46dfa8d3aae82bb81dfa5484105b8b4f0262df823a509` |
+| Superpowers `skills/brainstorming/SKILL.md` | `61a7ef918652108c76a3fd01e02dd92d39996c6b46d4cb2819cbd03f6c45e46a` |
+| Superpowers `skills/subagent-driven-development/SKILL.md` | `ba41f697136cba88a7962d60c8e2f97488ba04a8688b1d0fbeb27f6953808e75` |
+| Superpowers `skills/dispatching-parallel-agents/SKILL.md` | `1968923066f3b707eb01d1992cdf4c42284c3855f70253b9cd5000ff45fca13c` |
+| Superpowers `skills/using-superpowers/SKILL.md` | `82c5c8866ad7f5dd4440ce66bd7806ba48a2f13771beae5cf112e53f08fe36ba` |
+| Superpowers `skills/writing-plans/SKILL.md` | `a6c67c1900064347c2a329990dd3c555657c51c3ec53b259a08aa01a2c26139a` |
+| Superpowers `skills/using-superpowers/references/codex-tools.md` | `1a38ad9b188c393052f58d95657a1c35ea6aafc8b5a27f198f3922912f70bbe7` |
+| Superpowers `skills/brainstorming/builder-check-prompt.md` | `36d51a4723d6f0a3ce5811a0ea3b3a8424f07533947e1355f5d8cb8cce40c55e` |
+
+BA communication uses ADHD next action and a compact numbered checklist, Attention-kind for asks/final results and Rundown for actual status; never compress away `NOT`, warnings, verification gaps or user approval gates.
+
+## 3. Existing work and preservation (cross-reference only)
+
+| Earlier task | Verified status as of V3 kickoff | V3 relationship |
+| --- | --- | --- |
+| CA012 | Ledger kickoff DONE, remotely verified | Original tracking remains intact. |
+| CA013 | Optional `trace.semanticGroups` schema DONE, remotely verified | V3 contract may reuse canonical group identities and certainty. |
+| CA014 | Builder semantic ingress **PARTIAL**, remote `068f6e3`; not DONE | Existing metadata infrastructure; V3 server graph projection is future work, not already implemented. |
+| CA015 | Earlier frontend metadata grouping planned, not completed | Revise so frontend **consumes explicit MCP node/edge/group topology**, not semantic inference. |
+| CA016 | Browser ELK adaptive wrapping **VERIFIED_NODE**, visual pending; partial remote `64336f5` | Reuse for FE-only geometry work after approval. |
+| CA017 | Earlier renderer/viewport integration planned, not completed | Reframe to layout supplied topology only, preserving controls. |
+| CA018 | Multilingual and visual QA pending | Extend to V3 contract/renderer acceptance, do not claim native CodeGraph or Chromium PASS. |
+| CA019 | Producer docs draft saved **uncommitted** in legacy files | Preserve exactly; new V3 docs use separate paths; reconcile only with explicit future task. |
+| CA020 | Geometry validator P2 fix DONE, remote `7167a13`, status-only `5db7398` | Reuse root bounds/sibling overlap validation in FE geometry. |
+| CA021 | P1 payload correction independently reviewed **but uncommitted/unpushed** | Preserve `src/services/animation-builder.ts`, `tests/builder.test.ts` dirty; no accidental inclusion in docs commits. |
+
+**Existing working tree protection:** old ledger `.agent-tasks/code-anime-repair-20261028.md`, `README.md`, `docs/architecture.md`, repo skill/tool-contract files, and CA021 builder/test changes are user work in progress. New V3 documentation must be authored in new files only; no destructive reset/revert or combined commit with those paths.
+
+## 4. Documentation tasks — authorized now, implementation forbidden
+
+### CA022 — V3 kickoff, skill provenance, Council and ledger gate (P1)
+
+- **Owner:** PM + TL; independent skill-loader and Council advisors. **Status: `IN_PROGRESS/LEDGER_PUSH_PENDING`**.
+- **Scope:** Confirm exact revised boundary, new file locks, six fresh upstream pinned instruction sources, full Council decision process, and independently verified GitHub-plugin task ledger push before other V3 repo writes.
+- **Deliverables:** This ledger; `docs/v3/council-decision.md` after five advisors, five anonymous reviews and EDO challenges. Track questions, assumptions, dissent, user approval text and date. Council recommendation is not approval to implement.
+- **Acceptance:** Fresh SHA/digest provenance, all actual agents/reviews recorded, branch+commit+blob verified, no overlapping source writes. No code tests necessary for ledger-only stage.
+
+### CA023 — V3 end-to-end architecture and one-JSON scene contract (P1)
+
+- **Owner:** server/data architect specialist; independent schema/security reviewer. **Status: `BLOCKED_ON_CA022_LEDGER_GATE`**.
+- **Files:** `docs/v3/architecture.md`, `docs/v3/flow-scene-json-contract.md`; exclusively owned by this doc task.
+- **Scope:** Document CodeGraph→host AI→MCP canonical event/group/relationship production→server-side continuation assembly and immutable source/frames→single JSON artifact→FE layout/render/player. Define versioned node/group/edge/frame/source schemas, unique IDs, provenance/certainty, unresolved behavior, visit targets, ownership, ordering, invariant validation, file integrity and migration/version rejection. **No stored viewport coordinates** are required in JSON; no viewport-dependent HTTP regeneration.
+- **Acceptance:** Precise field/enum/ID/reference tables and representative nested if/loop/try/switch/lambda examples; malformed/cross-call/cyclic/unknown edge examples and rejection behavior; one-file completeness and source fidelity; mark backend implementation as FUTURE. No production code writes.
+
+### CA024 — FE adaptive graph and compact desktop visual design (P1)
+
+- **Owner:** frontend graph/UX specialist; independent geometry and accessibility reviewer. **Status: `BLOCKED_ON_CA022_LEDGER_GATE`**.
+- **Files:** `docs/v3/frontend-graph-design.md` only.
+- **Scope:** Render-only boundary; typed visual node shapes/colors, nested group containers/gutters, clear labels, strict edge endpoint routing, orientation-aware 2D ELK wrapping based on actual canvas `{width,height}` and card/Values sizes, zoom and worker epochs. Document deterministic spacing, collision/label protection, fallback, cache invalidation, accessibility, source/Visit/Values interaction parity and locked exterior UI.
+- **Acceptance:** Both orientation examples and group/edge invariants; no invented edge semantics or lexical source parser; no externally rearranged panels/controls; exact visual QA matrix and user screenshot gate. No UI source edits during documentation.
+
+### CA025 — Future MCP producer, trust/budget and migration architecture (P1)
+
+- **Owner:** backend architect/security specialist; independent MCP/CodeGraph reviewer. **Status: `BLOCKED_ON_CA022_LEDGER_GATE`**.
+- **Files:** `docs/v3/mcp-future-architecture.md` only.
+- **Scope:** Specify future host-AI semantic node/edge declarations, builder-owned canonical IDs, atomic evidence-cited relationships, CodeGraph-only source provenance, server-side frame/Values/source construction, pagination of CodeGraph receipt reads, continuation fold/validation, a **single complete JSON artifact** with quotas/expiry/integrity, cross-language neutral contract, API evolution and legacy deprecation. Do **not** implement any backend change.
+- **Acceptance:** Explicit trust boundaries, invalid-data error matrix, memory/size/cancellation/DoS budgets without arbitrary node cap, source privacy, failure rollback, expected MCP/web wire shapes, native provider acceptance matrix with `UNVERIFIED` where appropriate, and no publication/deployment work.
+
+### CA026 — FE-first implementation and verification plan (P1)
+
+- **Owner:** TL/PM implementation planner; independent QA reviewer. **Status: `BLOCKED_ON_CA023_CA024_CA025`**.
+- **Files:** `docs/v3/implementation-plan.md` only.
+- **Scope:** Separate documentation approval from design approval and later implementation-plan approval. Provide phased tasks and file locks for fixture-driven FE renderer/geometry first, MCP backend future, eventual integration; dependency DAG, incremental acceptance, package/browser/native CodeGraph gates, resource budgets, rollback/readiness and user visual feedback. No code edits now.
+- **Acceptance:** Every subsequent task ID below has owner, dependencies, proposed files, tests, clear exit criteria and statuses; no backend future task represented as implemented. Explicitly identify FE fixture-only work as not end-to-end CodeGraph proof.
+
+### CA027 — Independent V3 documents review and GitHub delivery (P1)
+
+- **Owner:** independent QA/reviewer + PM remote-commit owner. **Status: `BLOCKED_ON_CA023_CA024_CA025_CA026_AND_COUNCIL`**.
+- **Files:** read-only review of `docs/v3/*`; PM-only ledger status edits.
+- **Scope:** Cross-document schema/field/role consistency, contradictory assumptions, existing source/Visit/Values/current desktop lock, project static/mock boundary and explicit future/blocked status audit. Commit/push documentation in reviewed task-specific commits and verify each GitHub blob/commit. Preserve legacy dirty work.
+- **Acceptance:** Independent review verdict, exact docs/ledger SHA verification on the approved branch, no source changes, no merge/publish/deploy, owner given docs and asked for separate DESIGN/PLAN approval before implementation.
+
+## 5. FE-first implementation backlog — planned ONLY; not authorized now
+
+### CA028 — JSON-only FE input adapter and fixture-backed render shell (P1)
+- **Owner:** frontend renderer specialist. **Status: `PLANNED/NOT_AUTHORIZED`**. **Depends:** CA023/CA024/CA026 user approvals; documented V3 fixture. **Potential files:** browser scene loader, diagram entry point, fixture tests.
+- **Task:** Develop an **isolated, fixture-driven** renderer input boundary for a complete immutable `FlowSceneDocument`; draw exactly its explicitly supplied nodes/relationships/groups/frame fields. This task must NOT replace the live player route or implement fallback semantic generation while the MCP JSON compiler is deferred. Test-only fixture is not a live MCP provider substitute.
+- **Acceptance:** Reject unknown schema/ref IDs; fixture-render module has no analytic frontend imports; existing production source/Visit/Values/controls remain untouched. Focused schema/renderer tests plus independent review; **live V3 cutover BLOCKED on CA033–CA036**.
+
+### CA029 — Space-aware multi-row/multi-column group geometry (P1)
+- **Owner:** FE geometry specialist. **Status: `PLANNED/NOT_AUTHORIZED`**. **Depends:** CA028, CA016/CA020 reviewed geometry foundation; schema groups. **Potential files:** browser ELK layout, composition, geometry tests.
+- **Task:** Compute geometry from supplied typed relationships, actual viewport/card/Values measurements; horizontal can use multiple rows, vertical multiple columns, small flows avoid forced wrapping. Never split a semantic group without explicit UI-level design.
+- **Acceptance:** No overlapping nodes/sibling groups, root bounds valid, deterministic identity and worker epoch, orientation/resize and zoom stable, graph coverage/IDs preserved, no arbitrary node-count cap; tests plus user visual gate.
+
+### CA030 — Visual semantics, connectors, routing and labels (P1)
+- **Owner:** FE diagram specialist. **Status: `PLANNED/NOT_AUTHORIZED`**. **Depends:** CA028/CA029. **Potential files:** diagram renderer/routing/label CSS and visual tests.
+- **Task:** Apply theme-token shapes/colors by provided node/edge roles; clear nested group separation and orthogonal routes/ports, protect labels from intersections and browser clipping. Edge meanings are immutable server fields; FE changes only geometry.
+- **Acceptance:** No invented or dropped graph edges; branch/switch/loop/exception labels remain truthful; no node/edge collisions; verified visual and accessibility cases both orientations.
+
+### CA031 — Existing source, frames, Values, Visits and playback preservation (P1)
+- **Owner:** FE player specialist. **Status: `PLANNED/NOT_AUTHORIZED/BLOCKED_ON_DEFERRED_MCP_JSON`**. **Depends:** CA028 and future MCP complete frame contract CA033–CA036 **before live cutover**. **Potential files:** player view binding and tests.
+- **Task:** Render precomputed frame/state/source/Visit targets from JSON. Keep exact source text, syntax coloring, active lines, Step/Follow/Read, stack/values/console, breakpoint behavior, bookmarks and keyboard operation; browser selection/timing is UI state, not data/business inference. **At the real server-JSON cutover, remove all runtime imports/calls to browser semantic scanners and continuation-merging/replay-business modules**; leave dead file deletion to later cleanup authorization.
+- **Acceptance:** New-session parity against existing meaningful browser assertions, exact event IDs/1-based cursors, **zero active frontend continuation assembly, source control-flow scanner or semantic edge inference**, proven by runtime/import assertions; old session grouping compatibility explicitly not required by user. **Do not remove/replace current player logic before a real server-produced V3 JSON can meet these gates**; isolated fixture render preview alone is not DONE.
+
+### CA032 — FE visual QA and integration readiness (P1)
+- **Owner:** independent QA. **Status: `PLANNED/NOT_AUTHORIZED/WAITING_ON_BROWSER_VISUAL`**. **Depends:** CA028–CA031, future MCP output when available.
+- **Task:** Fixture-driven browser/Node geometry matrix, desktop screenshots both orientations, source-line and playback parity, labels/connectors/camera/resize stress, package/build and accessibility checks. User performs subjective visual acceptance.
+- **Acceptance:** Distinguish synthetic fixture pass from native CodeGraph language pass and browser/user visual pass; no false DONE. No deployment/publication.
+
+## 6. MCP/backend backlog — explicitly FUTURE / DEFERRED
+
+### CA033 — CodeGraph-evidence-to-semantic graph producer contract (P1)
+- **Owner:** future MCP/host-AI contract specialist. **Status: `FUTURE/DEFERRED/NOT_AUTHORIZED`**. **Depends:** approved V3 contract and separate future backend implementation authorization.
+- **Task:** Extend existing groupDefinitions/path semantics with explicit node and relationship definitions and stable local keys, type/arm/certainty/source/evidence ownership. Host AI proposes mock semantics from CodeGraph; server rejects unsupported/cross-call/cyclic/unknown endpoints. No independent source analyzer.
+- **Acceptance:** CodeGraph evidence receipt validity, canonical server IDs, no invented FE branch logic; multilingual synthetic contract and native provider scenarios when available.
+
+### CA034 — Atomic server graph/frame compiler (P1)
+- **Owner:** future backend builder specialist. **Status: `FUTURE/DEFERRED/NOT_AUTHORIZED`**. **Depends:** CA033, prior CA013/CA014/CA021 reconciliation.
+- **Task:** Assemble typed nodes, nested groups, edges, source spans, certainty, per-step frames, Visit targets, Values/stack/console snapshots with accepted operations only; idempotent retries and transactional persistence; distinguish unresolved semantic gaps.
+- **Acceptance:** Stable IDs, exact membership, 1-based cursor continuity, no guessed outcomes, no accepted batch that later cannot finish within documented budgets; builder and integration tests.
+
+### CA035 — Server-only continuation assembly and single immutable JSON artifact (P1)
+- **Owner:** future storage/API specialist. **Status: `FUTURE/DEFERRED/NOT_AUTHORIZED`**. **Depends:** CA034.
+- **Task:** Fold validated continuation chunks server-side; verify session/project/source ancestry and duplicate IDs, persist one complete versioned JSON file per session, expose read-only localhost retrieval without viewport-specific recomputation; enforce expiry, size/CPU budgets, CSP and no leakage across project roots. Page CodeGraph retrieval internally, not the final browser semantic trace.
+- **Acceptance:** No FE continuation merging; JSON is self-contained, integrity checked, append failure atomic, no silently omitted events/groups/edges; large-trace and provenance tests.
+
+### CA036 — MCP/skill contract, version migration and trust-boundary documentation (P1)
+- **Owner:** future MCP docs and skill specialist. **Status: `FUTURE/DEFERRED/NOT_AUTHORIZED`**. **Depends:** CA033–CA035; CA019 draft must be reconciled separately without losing work.
+- **Task:** Update host producer tool descriptions, repo skill, README/architecture, one-shot/two-step flows and migration/deprecation plan to match the validated V3 JSON exactly. Never claim simulated values are observed execution.
+- **Acceptance:** Valid skill frontmatter/examples, CodeGraph-only positive/negative contract cases, no producer instructions for predicted event IDs or custom analyzer, independent review and versioned commit.
+
+### CA037 — Native multilingual CodeGraph and package acceptance (P1)
+- **Owner:** future independent backend QA. **Status: `FUTURE/DEFERRED/NOT_AUTHORIZED/UNVERIFIED`**. **Depends:** CA033–CA036.
+- **Task:** Real indexed TS/JS, Java, Kotlin, Python (and any other CodeGraph-supported) source evidence → host mocked if/else/loop/try/switch/lambda → complete V3 JSON, with unknown-language/partial evidence gates. Validate Windows npx/Node packaging, read-only localhost JSON, no runtime hooks.
+- **Acceptance:** Per-language PASS/PARTIAL/UNVERIFIED/UNSUPPORTED matrix with actual provider receipts, CI/package tests, proof of no analyzed-user-code execution. Synthetic tests cannot substitute native CodeGraph.
+
+### CA038 — FE+MCP full integration, final Council and owner visual acceptance (P1)
+- **Owner:** future cross-functional QA/PM. **Status: `FUTURE/DEFERRED/NOT_AUTHORIZED`**. **Depends:** CA032 and CA033–CA037.
+- **Task:** Verify exact JSON contract and browser presentation at real desktop sizes/orientations, source/highlight/playback preservation, mock provenance, connector/group geometry, packaged smoke and final engineering Council. Ask user to approve completion explicitly.
+- **Acceptance:** Relevant CI, package, native provider, browser and owner screenshot results honestly classified; no merge/publish/deploy without separate permission.
+
+### CA039 — Legacy inference/code cleanup and task-file retention (P2)
+- **Owner:** future PM/TL. **Status: `FUTURE/DEFERRED/NOT_AUTHORIZED`**. **Depends:** CA038 owner acceptance and separate explicit cleanup approval.
+- **Task:** Consider **physically deleting already-unused** frontend semantic-scanner files, continuation helpers, dead geometry/route modules and obsolete plans **only after** V3 has verified replacements. **Disabling their runtime use is a mandatory CA031 cutover criterion, not deferred to this cleanup task.** Never delete existing task ledgers or user work merely because new docs exist.
+- **Acceptance:** Zero source UI or execution regression, dedicated reviewer, recoverable change; no deletion without user consent.
+
+## 7. Delivery and stop conditions
+
+1. **Now:** complete CA022–CA027 documentation with independent reviews and GitHub-plugin-fetched SHA evidence. Keep all implementation backlog tasks not authorized.
+2. **Next user gate:** BA presents V3 DESIGN artifacts for explicit approval; then presents an amended implementation plan for a **separate explicit approval**. Approval of documents alone does not greenlight CA028–CA039 code.
+3. **Later FE focus:** once separately approved, proceed fixture-first with minimal meaningful unit/geometry tests and real browser screenshots; do not rework external panels/controls.
+4. **Later MCP work:** CA033–CA037 remain FUTURE/DEFERRED until their own authorization. FE geometry/visual work may be fixture-only until then; **live player/data-contract cutover is blocked** and must not add browser-side semantic analysis as a temporary workaround. Never claim complete multi-language capability prematurely.
+5. **Always:** no merge, publish, deployment or task-file cleanup, and no destructive treatment of the seven pre-existing dirty files.
