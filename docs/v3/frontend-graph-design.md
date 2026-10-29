@@ -40,7 +40,7 @@ Canvas width/height and graph pan/zoom are already user-controlled. Filling unus
 | Server-provided source files, `text` and token spans                                     | Display exact text and active region; preserve current source behavior                     | Run lexical source scanner/highlighter to synthesize tokens or ownership                       |
 | Server-provided Values/Visits and navigation targets                                     | Expand already supplied value cards, select prepared visits/frames                         | Recompute locals, evaluate conditions or invent missing visit frames                           |
 
-If the input lacks required IDs, endpoints, membership, certainty or source-token data, show an explicit **unresolved** state and provide the still-valid source/list data. Never manufacture a plausible-looking transition or silently claim a complete graph.
+**Structural invalidity is not semantic uncertainty.** Duplicate/missing mandatory node, edge, group or frame IDs; dangling endpoints or source/token references; cyclic/missing required group ancestry; and malformed required certainty fields are **`INVALID_ARTIFACT`**. Reject that variant's graph before painting; do not offer an `unresolved` fallback derived from damaged relationships. An explicitly declared, structurally valid node/edge with `certainty: "unresolved"`, a permitted `sourceRef: null`, and its evidence-gap note **is valid semantic uncertainty** and remains visibly neutral/dashed. Missing optional _visual-only_ port or label-placement hints may instead produce a presentation warning without changing the valid semantic model.
 
 ### Rendering stages
 
@@ -175,11 +175,11 @@ Suppose group `G` contains nodes `X` and `Y`, while a supplied edge `eXZ` goes f
 
 - The frontend may move **only the painted source anchor** for `eXZ` from hidden `X` to the visible boundary of `G`. It must retain `eXZ`, original `X → Z`, direction, certainty, label, frame highlights and accessible identity. It does **not** produce a semantic `G → Z` edge.
 - The label/inspector should expose that the visible group boundary represents a **hidden `X` endpoint**. Multiple distinct outgoing edges from `X` and `Y` remain distinct, even if both visually start at `G`.
-- If both ends of a provided edge are hidden within the same collapsed group, hide that edge as an internal detail rather than fabricate a group self-loop. Expansion restores the exact original edge.
+- If both ends of a provided edge are hidden within the same collapsed group, omit that edge from **visible painting only**, rather than fabricate a group self-loop. The immutable model still owns its original edge ID and both endpoints; expansion restores their visible representation.
 - Use **only explicit parent/member relationships** and optionally supplied presentational collapsed-port hints to choose the nearest visible group. Do not compute a new bypass path, group-level reachability, or branch outcome.
 - The selected Visit/frame reads supplied `timeline.framesById[frameId].activeEdgeIds` to emphasize existing IDs. The client does not calculate execution visibility from source locations or branch values.
 
-**Negative fixture:** `G` contains decision `X`, true-arm `Y`, false-arm `W`; `Z` is outside. The JSON declares edges `eXY`, `eYZ` (prepared) and `eXW`, `eWZ` (possible). On collapse, `eYZ` and `eWZ` still have separate IDs, semantic endpoints and certainty, although their _rendered_ starts can share the boundary. No new `G→Z` or `Y→W` edge may appear. Visit selection changes only explicit highlights, never synthesized connectivity. If the required group ancestry/edge identity/uncertainty fields are absent, show an unresolved state or keep group expanded; never guess.
+**Negative fixture:** `G` contains decision `X`, true-arm `Y`, false-arm `W`; `Z` is outside. The JSON declares edges `eXY`, `eYZ` (prepared) and `eXW`, `eWZ` (possible). On collapse, internal `eXY` and `eXW` may disappear **only from the painted subset**, while `eYZ` and `eWZ` retain separate IDs, semantic endpoints and certainty even if their rendered starts share the `G` boundary. No new `G→Z` or `Y→W` edge may appear. Visit selection changes only explicit highlights, never synthesized connectivity. If _mandatory_ group ancestry/edge identity/certainty fields are absent, reject `INVALID_ARTIFACT`; if only an _optional presentation_ collapse-port hint is unavailable, leave the valid group expanded or show a visual-routing warning instead of guessing.
 
 ## 7. Local interaction and geometry lifecycle
 
@@ -203,7 +203,8 @@ Maintain cache key `(documentRevision, variantId, variantArtifactRevision, decla
 
 Every generated scene must pass, at minimum:
 
-- all declared visible node and group IDs appear exactly once; no unexpected IDs or missing explicit edges;
+- validate the immutable semantic model first: all required declared IDs/references valid, no duplicate/dangling/cyclic ownership, then every expected **painted** visible node/group appears exactly once;
+- preserve the full `graph.edges[]` model unchanged across collapse and Visit changes; `visibleEdgeIds` is only a **presentation subset** of original model edge IDs (wholly internal collapsed routes may be omitted), and every visible proxy retains its original source/target IDs, certainty and edge identity;
 - every non-root child rectangle is contained in its declared parent group and in the scene root bounds;
 - nonzero-area sibling nodes/regions have no overlapping interiors (touching borders allowed); nested children may overlap their _parent_ by design;
 - edge sections are finite, connected and axis-aligned where orthogonal routing is required, with valid source/target IDs and correct arrow direction;
@@ -211,7 +212,7 @@ Every generated scene must pass, at minimum:
 - no stale Worker reply, changed viewport, changed group selection or older trace revision can overwrite the latest requested geometry;
 - no edge is added as a “helpful” continuation when ELK/layout/routing fails.
 
-Apply the already developed fast sibling-overlap/root-containment validation concepts in `public/diagram-elk-layout.js`. A safe fallback may retry a more conservative presentation strategy **using the same supplied topology**, with explicit status. If valid geometry still cannot be found, keep a last _clearly marked stale_ diagram or show an error/semantic event list. Never display stale geometry as if it represents the new JSON. Do not silently force all complex flows into one row/column or invent a route. There is no node-count-based bailout.
+Apply the already developed fast sibling-overlap/root-containment validation concepts in `public/diagram-elk-layout.js`. Geometry retries and stale layout handling apply **only after an artifact has passed structural validation**. A safe fallback may retry a more conservative presentation strategy **using the same supplied topology**, with explicit status. If valid geometry still cannot be found, keep a last _clearly marked stale_ diagram or show an error/semantic event list. Never display stale geometry as if it represents the new JSON. Do not silently force all complex flows into one row/column or invent a route. There is no node-count-based bailout.
 
 ## 9. Known existing code and migration boundary
 
@@ -231,21 +232,23 @@ Existing CA016 adaptive viewport code and CA020 collision validation are valuabl
 
 This is a **planned verification matrix**. No new V3 test, native CodeGraph scenario or desktop browser/screenshot check has been run by writing this design.
 
-| Scenario / fixture                                                              | Expected future evidence                                                                                         |
-| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Small 3–5-node flow                                                             | No forced multi-row/multi-column wrapping; readable shape labels                                                 |
-| Long 28-node flow                                                               | Horizontal uses extra rows and vertical uses extra columns as viewport aspect demands; complete exact IDs        |
-| Nested 2–4-level groups; loop + decision + try/catch/finally                    | Containment, group gutters, no sibling overlap, correct provided edge status and arrowheads                      |
-| `switch` cases, lambdas, callbacks and language-neutral unknown constructs      | Same schema rendering with explicit tags; zero TS/JS source parsing                                              |
-| Landscape 1920×1080 and narrower 800×600 desktop viewport                       | Both dimensions influence balanced packing; panel locations unchanged                                            |
-| Long source symbols and multilingual/unicode labels                             | Measured text fits or visibly wraps; labels do not collide with card/region titles                               |
-| Expand Values and change Visit                                                  | Correct frame-provided values/IDs; relayout only when dimensions/visible groups change                           |
-| Collapse `G` with parallel prepared/possible edges to `Z`                       | Preserve original `eYZ`/`eWZ` identities and statuses; no new `G→Z` edge                                         |
-| Async orientation/resize/Values changes before Worker reply                     | Stale geometry rejected, latest complete scene painted, user pan/zoom respected                                  |
-| Invalid ID, parent cycle, missing endpoint, overlap or disconnected route       | Explicit validation failure; no invented fallback edge or stale-current claim                                    |
-| Source frame highlight/Visits/Values/playback regression                        | Exact source text and server-provided tokens highlighted; old panel controls and behavior preserved for V3 flows |
-| High-count stress fixtures                                                      | Measure runtime/memory and readability; no arbitrary event cap or false PASS merely from zoom                    |
-| Desktop screenshots of both orientations, collapsed groups, zoom and dark theme | **Human review required** for visual cleanliness; node tests alone insufficient                                  |
+| Scenario / fixture                                                              | Expected future evidence                                                                                                                                 |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Small 3–5-node flow                                                             | No forced multi-row/multi-column wrapping; readable shape labels                                                                                         |
+| Long 28-node flow                                                               | Horizontal uses extra rows and vertical uses extra columns as viewport aspect demands; complete exact IDs                                                |
+| Nested 2–4-level groups; loop + decision + try/catch/finally                    | Containment, group gutters, no sibling overlap, correct provided edge status and arrowheads                                                              |
+| `switch` cases, lambdas, callbacks and language-neutral unknown constructs      | Same schema rendering with explicit tags; zero TS/JS source parsing                                                                                      |
+| Landscape 1920×1080 and narrower 800×600 desktop viewport                       | Both dimensions influence balanced packing; panel locations unchanged                                                                                    |
+| Long source symbols and multilingual/unicode labels                             | Measured text fits or visibly wraps; labels do not collide with card/region titles                                                                       |
+| Expand Values and change Visit                                                  | Correct frame-provided values/IDs; relayout only when dimensions/visible groups change                                                                   |
+| Valid explicit `certainty: "unresolved"` node/edge with required IDs and note   | Neutral uncertainty display, unchanged references; **not** `INVALID_ARTIFACT`                                                                            |
+| Missing endpoint, duplicate mandatory ID or cyclic group parent                 | Reject `INVALID_ARTIFACT` before graph painting; **not** a valid unresolved fallback                                                                     |
+| Collapse `G` with wholly internal `eXY` and parallel external edges to `Z`      | Immutable model still has `eXY`/`eYZ`/`eWZ`; painted subset may omit `eXY`, but external original IDs, statuses and endpoints survive; no new `G→Z` edge |
+| Async orientation/resize/Values changes before Worker reply                     | Stale geometry rejected, latest complete scene painted, user pan/zoom respected                                                                          |
+| Valid JSON with overlapping rectangles or disconnected visual route             | Geometry-only failure/retry; preserve semantic document and report visibly; never claim current on stale scene                                           |
+| Source frame highlight/Visits/Values/playback regression                        | Exact source text and server-provided tokens highlighted; old panel controls and behavior preserved for V3 flows                                         |
+| High-count stress fixtures                                                      | Measure runtime/memory and readability; no arbitrary event cap or false PASS merely from zoom                                                            |
+| Desktop screenshots of both orientations, collapsed groups, zoom and dark theme | **Human review required** for visual cleanliness; node tests alone insufficient                                                                          |
 
 Use existing focused tests as reference: `tests/diagram-elk-layout.test.mjs`, `tests/diagram-routing.test.mjs`, `tests/diagram-label-placement.test.mjs`, `tests/diagram-control-layout.test.mjs`. Future tests must prove no invented semantic IDs/edges and cover both width and height. Synthetic fixtures test presentation contracts only; they are **not** a successful live CodeGraph→MCP integration. Real native CodeGraph and desktop browser visual checks remain separately blocked/unverified until their environments exist.
 
