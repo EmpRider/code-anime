@@ -121,9 +121,10 @@ Every newly discovered issue receives a separate ledger entry pushed **before** 
 
 ### CA-013 — Optional language-neutral semantic group contract (P1)
 
-- **Owner:** trace/domain implementation specialist under TL; independent QA. **Status: `READY_AFTER_CA-012`**. Dependencies: CA012. Exclusive locks: `src/domain/trace.ts`, `src/domain/flow.ts`, contract tests.
+- **Owner:** `/root/pm_impl_v2/tl_impl/impl_ca013`; TL supervisor and independent `/root/pm_impl_v2/tl_impl/review_ca013`. **Status: `VERIFIED_NODE/AWAITING_TASK_PUSH`**. Dependencies: CA012 (verified `dee7e019`). Exclusive locks: `src/domain/trace.ts`, contract tests; no `flow.ts` production change necessary.
 - **Task:** Define bounded optional `trace.semanticGroups` with stable group ID/type/title, parent/invocation ownership, builder-derived `memberEventIds`, source span, CodeGraph evidence references, and certainty (`mock/assumed/unresolved`). Represent decision/branch, loop/iteration, try/catch/finally, switch/case, lambda/call scopes without language-specific source parsing. Reject duplicate/cyclic/cross-invocation/unknown memberships, invalid source spans and contradictory provenance; never discard correctly prepared events when grouping cannot be trusted.
-- **Acceptance / verification:** Focused Zod/schema round-trip, nested and repeated visits, malformed metadata, missing metadata, flow serialization; targeted tests, typecheck, independent review, detailed task commit and remote push/verification. No universal-language claim from synthetic fixtures.
+- **Implemented:** Optional Zod `semanticGroups` with group identity, source and generated-source bounds, evidence/certainty, invocation and member ownership, nested branch/iteration semantics and strict rejection of malformed/cyclic/conflicting groups. Files: `src/domain/trace.ts`, `tests/semantic-groups-schema.test.ts` only; preserves existing source snapshots and event schemas. No application-language parser or player code introduced.
+- **Verification:** Focused 4/4 PASS, `npm run typecheck` PASS, `git diff --check` PASS; negative RED→GREEN for uncapped nested generated filenames and unsafe line integers; independent reviewer requested and verified the correction, final **APPROVED**. Full browser/native CodeGraph not applicable to this schema-only task; no universal-language claim from synthetic fixtures. Await separate detailed CA013 source+ledger commit/push and verified remote SHA, then CA013 status may change to `DONE`.
 
 ### CA-014 — CodeGraph evidence, AI grouping ingress, builder atomicity (P1)
 
