@@ -220,6 +220,60 @@ test('new geometry epochs cancel stale Worker responses', async () => {
   await assert.rejects(next, /V3 layout disposed/);
 });
 
+test('invalid new viewport still invalidates a pending older worker epoch', async () => {
+  class FakeWorker {
+    constructor() {
+      FakeWorker.instance = this;
+    }
+    postMessage() {}
+    terminate() {
+      this.terminated = true;
+    }
+  }
+  const engine = createV3SceneLayout({ WorkerClass: FakeWorker });
+  const older = engine.layout(simpleScene, options);
+  const newer = engine.layout(simpleScene, {
+    viewport: { width: 0, height: 600 },
+  });
+  await assert.rejects(older, /Stale V3 layout request/);
+  await assert.rejects(newer, /viewport width/);
+  assert(FakeWorker.instance.terminated);
+  engine.dispose();
+});
+
+test('abort, worker fault, and unsafe worker origins settle without stale output', async () => {
+  assert.throws(
+    () => createV3SceneLayout({ workerUrl: 'https://example.com/worker.js' }),
+    /same-origin/,
+  );
+  assert.throws(
+    () => createV3SceneLayout({ workerUrl: '//example.com/worker.js' }),
+    /same-origin/,
+  );
+  class FakeWorker {
+    constructor() {
+      FakeWorker.instance = this;
+    }
+    postMessage() {}
+    terminate() {
+      this.terminated = true;
+    }
+  }
+  const engine = createV3SceneLayout({ WorkerClass: FakeWorker });
+  const controller = new AbortController();
+  const pending = engine.layout(simpleScene, {
+    ...options,
+    signal: controller.signal,
+  });
+  controller.abort();
+  await assert.rejects(pending, /V3 layout aborted/);
+  assert(FakeWorker.instance.terminated);
+  const failed = engine.layout(simpleScene, options);
+  FakeWorker.instance.onerror({ message: 'unexpected crash' });
+  await assert.rejects(failed, /unexpected crash/);
+  engine.dispose();
+});
+
 test('real ELK preserves nested multilingual graph in both orientations', async () => {
   const elk = new ELK();
   for (const orientation of ['horizontal', 'vertical']) {
@@ -298,4 +352,38 @@ test('long explicit sequences request wrapping without losing any graph ID', asy
       `${orientation} must occupy more than one ${secondary} lane`,
     );
   }
+});
+
+test('identical immutable inputs produce deterministic geometry; viewport changes re-pack only', async () => {
+  const elk = new ELK();
+  const narrowSettings = {
+    orientation: 'horizontal',
+    viewport: { width: 500, height: 850 },
+  };
+  const wideSettings = {
+    orientation: 'horizontal',
+    viewport: { width: 1900, height: 850 },
+  };
+  const firstInput = buildV3ElkGraph(scene, narrowSettings);
+  const secondInput = buildV3ElkGraph(scene, narrowSettings);
+  assert.deepEqual(firstInput, secondInput);
+  const first = flattenV3ElkGraph(await elk.layout(firstInput), scene);
+  const second = flattenV3ElkGraph(await elk.layout(secondInput), scene);
+  assert.deepEqual(first, second);
+  const wider = flattenV3ElkGraph(
+    await elk.layout(buildV3ElkGraph(scene, wideSettings)),
+    scene,
+  );
+  assert.deepEqual(
+    first.nodes.map(({ id }) => id),
+    wider.nodes.map(({ id }) => id),
+  );
+  assert.deepEqual(
+    first.edges.map(({ id }) => id),
+    wider.edges.map(({ id }) => id),
+  );
+  assert.notEqual(
+    buildV3ElkGraph(scene, narrowSettings).layoutOptions['elk.aspectRatio'],
+    buildV3ElkGraph(scene, wideSettings).layoutOptions['elk.aspectRatio'],
+  );
 });

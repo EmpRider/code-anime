@@ -236,6 +236,16 @@ export function createV3SceneLayout({
   workerUrl = '/vendor/elk-worker.min.js',
   WorkerClass = globalThis.Worker,
 } = {}) {
+  if (
+    typeof workerUrl !== 'string' ||
+    !workerUrl.startsWith('/') ||
+    workerUrl.startsWith('//') ||
+    workerUrl.includes('\\') ||
+    workerUrl.split('/').includes('..')
+  )
+    throw new TypeError(
+      'V3 ELK Worker URL must be same-origin and path-absolute',
+    );
   let active;
   let disposed = false;
   let serial = 0;
@@ -252,6 +262,8 @@ export function createV3SceneLayout({
 
   function layout(variant, settings = {}) {
     if (disposed) return Promise.reject(new Error('V3 layout disposed'));
+    // Even a rejected new geometry request supersedes an older viewport epoch.
+    cancelActive('Stale V3 layout request');
     if (settings.signal?.aborted)
       return Promise.reject(new Error('V3 layout aborted'));
     let graph;
@@ -267,7 +279,6 @@ export function createV3SceneLayout({
     } catch (error) {
       return Promise.reject(error);
     }
-    cancelActive('Stale V3 layout request');
     return new Promise((resolve, reject) => {
       let worker;
       try {
@@ -290,6 +301,10 @@ export function createV3SceneLayout({
       };
       pending.abort = () => settle(new Error('V3 layout aborted'));
       pending.signal?.addEventListener('abort', pending.abort, { once: true });
+      if (pending.signal?.aborted) {
+        pending.abort();
+        return;
+      }
       pending.timer = setTimeout(
         () => settle(new Error('V3 ELK Worker timeout')),
         settings.timeoutMs ?? 30000,
