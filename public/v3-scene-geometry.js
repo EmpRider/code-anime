@@ -8,6 +8,67 @@ const finitePositive = (value, label) => {
   return value;
 };
 
+function wrappingFor(children, orientation, viewport) {
+  if (children.length < 4) return 'OFF';
+  const primary = orientation === 'horizontal' ? 'width' : 'height';
+  const available = viewport[primary];
+  // Unknown group dimensions are a conservative estimate. ELK computes their
+  // real nested sizes; this only decides whether wrapping is worth considering.
+  const demand = children.reduce(
+    (sum, child) =>
+      sum + (child[primary] ?? (primary === 'width' ? 280 : 170)) + 24,
+    0,
+  );
+  return demand > available * 1.25 ? 'MULTI_EDGE' : 'OFF';
+}
+
+// ELK may emit cross-hierarchy edges in the root edges[] collection while
+// retaining section points relative to edge.container (a nested group).
+// Normalize those points into their actual collection owner's coordinates.
+// The legacy flattening helper does not interpret edge.container itself.
+function normalizeV3EdgeContainers(elk) {
+  const copy = structuredClone(elk);
+  const origins = new Map([[copy.id, { x: 0, y: 0 }]]);
+  const containers = [{ node: copy, x: 0, y: 0 }];
+  const seen = new Set();
+  for (let i = 0; i < containers.length; i++) {
+    const { node, x, y } = containers[i];
+    if (seen.has(node)) throw new Error('Invalid cyclic V3 ELK hierarchy');
+    seen.add(node);
+    for (const child of node.children ?? []) {
+      if (!Number.isFinite(child.x) || !Number.isFinite(child.y))
+        throw new Error(`Invalid V3 ELK child offset for ${child.id}`);
+      if (origins.has(child.id))
+        throw new Error(`Duplicate V3 ELK node ${child.id}`);
+      const childX = x + child.x;
+      const childY = y + child.y;
+      origins.set(child.id, { x: childX, y: childY });
+      containers.push({ node: child, x: childX, y: childY });
+    }
+  }
+  for (const { node, x, y } of containers) {
+    for (const edge of node.edges ?? []) {
+      const owner = origins.get(edge.container ?? node.id);
+      if (!owner)
+        throw new Error(`Unknown V3 ELK edge container ${edge.container}`);
+      const offsetX = owner.x - x;
+      const offsetY = owner.y - y;
+      for (const section of edge.sections ?? []) {
+        for (const point of [
+          section.startPoint,
+          ...(section.bendPoints ?? []),
+          section.endPoint,
+        ]) {
+          if (!point) continue; // Existing strict route validation rejects missing points.
+          point.x += offsetX;
+          point.y += offsetY;
+        }
+      }
+    }
+  }
+  return copy;
+}
+
 export function buildV3ElkGraph(
   variant,
   {
@@ -35,7 +96,7 @@ export function buildV3ElkGraph(
     'elk.direction': direction,
     'elk.edgeRouting': 'ORTHOGONAL',
     'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
-    'elk.layered.wrapping.strategy': 'MULTI_EDGE',
+    'elk.layered.wrapping.strategy': 'OFF',
     'elk.aspectRatio': aspect,
     'elk.padding': '[top=20,left=20,bottom=20,right=20]',
   };
@@ -81,6 +142,12 @@ export function buildV3ElkGraph(
     sources: [edge.fromNodeId],
     targets: [edge.toNodeId],
   }));
+  for (const container of containers.values())
+    container.layoutOptions['elk.layered.wrapping.strategy'] = wrappingFor(
+      container.children,
+      orientation,
+      viewport,
+    );
   return root;
 }
 
@@ -104,7 +171,7 @@ export function flattenV3ElkGraph(elk, variant) {
       target: edge.toNodeId,
     })),
   };
-  const layout = flattenElkLayout(elk, prepared);
+  const layout = flattenElkLayout(normalizeV3EdgeContainers(elk), prepared);
   const nodeGeometry = new Map(
     layout.cards.map(({ id, x, y, width, height }) => [
       id,
@@ -127,6 +194,28 @@ export function flattenV3ElkGraph(elk, variant) {
         const b = section[i];
         if (Math.abs(a.x - b.x) > 1e-7 && Math.abs(a.y - b.y) > 1e-7)
           throw new Error(`Invalid diagonal V3 ELK route for ${edge.id}`);
+        for (const card of layout.cards) {
+          // Border contact is a legitimate port; crossing the open interior
+          // of any card is never an acceptable geometry-only route.
+          const insideX =
+            Math.max(a.x, b.x) > card.x + 1e-7 &&
+            Math.min(a.x, b.x) < card.x + card.width - 1e-7;
+          const insideY =
+            Math.max(a.y, b.y) > card.y + 1e-7 &&
+            Math.min(a.y, b.y) < card.y + card.height - 1e-7;
+          const horizontalCrossing =
+            Math.abs(a.y - b.y) <= 1e-7 &&
+            a.y > card.y + 1e-7 &&
+            a.y < card.y + card.height - 1e-7 &&
+            insideX;
+          const verticalCrossing =
+            Math.abs(a.x - b.x) <= 1e-7 &&
+            a.x > card.x + 1e-7 &&
+            a.x < card.x + card.width - 1e-7 &&
+            insideY;
+          if (horizontalCrossing || verticalCrossing)
+            throw new Error(`V3 ELK route ${edge.id} crosses node ${card.id}`);
+        }
       }
     }
   }

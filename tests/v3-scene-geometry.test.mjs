@@ -63,7 +63,7 @@ test('orientation and both viewport dimensions affect presentation only', () => 
   );
   assert.equal(
     horizontal.layoutOptions['elk.layered.wrapping.strategy'],
-    'MULTI_EDGE',
+    'OFF',
   );
   assert.deepEqual(horizontal.edges, vertical.edges);
   assert.deepEqual(scene, fixture.variantsById.proposed);
@@ -142,6 +142,27 @@ test('flattens exact semantic records and rejects diagonals without inventing re
   assert.deepEqual(simpleElk.edges[0].sections[0].endPoint, { x: 320, y: 82 });
 });
 
+test('rejects a route crossing an unrelated card interior', () => {
+  const withObstacle = structuredClone(simpleScene);
+  withObstacle.graph.nodes.push({
+    ...simpleScene.graph.nodes[0],
+    id: 'node:obstacle',
+    order: 2,
+  });
+  const elk = structuredClone(simpleElk);
+  elk.children.push({
+    id: 'node:obstacle',
+    x: 290,
+    y: 72,
+    width: 20,
+    height: 20,
+  });
+  assert.throws(
+    () => flattenV3ElkGraph(elk, withObstacle),
+    /edge:1 crosses node node:obstacle/,
+  );
+});
+
 test('worker registration/layout produces an isolated, validated result', async () => {
   class FakeWorker {
     constructor() {
@@ -210,5 +231,71 @@ test('real ELK preserves nested multilingual graph in both orientations', async 
     assert.equal(geometry.edges.length, scene.graph.edges.length);
     assert(geometry.width > 0 && geometry.height > 0);
     for (const edge of geometry.edges) assert(edge.points.length >= 2);
+    const byId = new Map(geometry.nodes.map((node) => [node.id, node]));
+    function onBoundary(point, rect) {
+      const betweenX =
+        point.x >= rect.x - 1e-6 && point.x <= rect.x + rect.width + 1e-6;
+      const betweenY =
+        point.y >= rect.y - 1e-6 && point.y <= rect.y + rect.height + 1e-6;
+      const xEdge =
+        Math.abs(point.x - rect.x) < 1e-6 ||
+        Math.abs(point.x - rect.x - rect.width) < 1e-6;
+      const yEdge =
+        Math.abs(point.y - rect.y) < 1e-6 ||
+        Math.abs(point.y - rect.y - rect.height) < 1e-6;
+      return betweenX && betweenY && (xEdge || yEdge);
+    }
+    for (const edge of geometry.edges) {
+      assert(
+        onBoundary(edge.points[0], byId.get(edge.fromNodeId)),
+        `${orientation}: ${edge.id} source port`,
+      );
+      assert(
+        onBoundary(edge.points.at(-1), byId.get(edge.toNodeId)),
+        `${orientation}: ${edge.id} target port`,
+      );
+    }
+  }
+});
+
+test('long explicit sequences request wrapping without losing any graph ID', async () => {
+  const long = structuredClone(simpleScene);
+  long.graph.nodes = Array.from({ length: 28 }, (_, index) => ({
+    ...simpleScene.graph.nodes[0],
+    id: `explicit:${index}`,
+    order: index,
+    groupPathIds: [],
+  }));
+  long.graph.edges = long.graph.nodes.slice(1).map((node, index) => ({
+    ...simpleScene.graph.edges[0],
+    id: `explicit-edge:${index}`,
+    fromNodeId: `explicit:${index}`,
+    toNodeId: node.id,
+  }));
+  const elk = new ELK();
+  for (const orientation of ['horizontal', 'vertical']) {
+    const graph = buildV3ElkGraph(long, {
+      orientation,
+      viewport: { width: 900, height: 600 },
+      nodeSizes: Object.fromEntries(
+        long.graph.nodes.map(({ id }) => [id, { width: 110, height: 70 }]),
+      ),
+    });
+    assert.equal(
+      graph.layoutOptions['elk.layered.wrapping.strategy'],
+      'MULTI_EDGE',
+    );
+    const result = flattenV3ElkGraph(await elk.layout(graph), long);
+    assert.equal(result.nodes.length, 28);
+    assert.equal(result.edges.length, 27);
+    assert.deepEqual(
+      result.nodes.map(({ id }) => id),
+      long.graph.nodes.map(({ id }) => id),
+    );
+    const secondary = orientation === 'horizontal' ? 'y' : 'x';
+    assert(
+      new Set(result.nodes.map((node) => node[secondary])).size > 1,
+      `${orientation} must occupy more than one ${secondary} lane`,
+    );
   }
 });
