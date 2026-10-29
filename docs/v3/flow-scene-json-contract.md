@@ -4,41 +4,45 @@
 
 ## 1. Contract guarantee
 
-A `FlowSceneDocument` is **one immutable, versioned, viewport-agnostic JSON artifact per prepared animation**. The future MCP/Node side emits it **only after** validating and combining its own mock operations and continuation sessions. One successful document contains all semantically relevant node/edge/group definitions, full prepared source snapshots and display tokens, ordered playback frames, complete referenced Values/stack/object/console snapshots, Visit targets and explicit evidence/uncertainty diagnostics. A scenario can be labeled `complete:false` when static evidence or the simulated path is incomplete; that is **not** permission to omit fields or return half a continuation.
+A `FlowSceneDocument` is **one immutable, versioned, viewport-agnostic JSON artifact per prepared animation**, including its requested baseline/proposed comparison. The future MCP/Node side emits it **only after** validating and combining its own mock operations and continuation sessions separately for each ready variant. The single root contains `comparison` and `variantsById`, with a required, self-contained `proposed` variant and an optional `baseline` variant. Each ready variant contains its own complete semantic graph, full prepared source snapshots and display tokens, ordered playback frames, referenced Values/stack/object/console snapshots, Visit targets, source hash and evidence/uncertainty diagnostics. A variant can be labeled `complete:false` when static evidence or its simulated path is incomplete; that is **not** permission to omit fields or return half a continuation.
 
-The browser must be able to perform every visual redraw, playback step, Follow/Visit navigation, chart group-collapse display, orientation change and zoom action using **only that JSON and local UI geometry state**. It may calculate visual node sizes/positions, canvas fit, ports, edge routes and paint styles. It must not infer missing control flow, source semantics, branch choices, stack/value updates or continuation membership. **No viewport-triggered server fetch. No stored server-computed geometry.**
+The browser must be able to select either available variant and perform every visual redraw, playback step, Follow/Visit navigation, chart group-collapse display, orientation change and zoom action using **only that JSON and local UI geometry state**. It keeps independent local playback cursors for variants; it may calculate visual node sizes/positions, canvas fit, ports, edge routes and paint styles. It must not infer missing control flow, source semantics, comparison differences, branch choices, stack/value updates or continuation membership. **No baseline-specific or viewport-triggered server fetch. No stored server-computed geometry.**
 
 This is a proposed _wire contract_, not the shape returned by the current `/api/flow/:id` endpoint.
 
 ## 2. Top-level object
 
-All fields below are **required** unless marked optional. Array ordering is significant only where stated. `Id` denotes a non-empty stable string, preferably canonical namespaced IDs (`node:…`, `edge:…`, `group:…`, `event:…`, `frame:…`, `file:…`, `value:…`) assigned by the future server. Stable IDs must not be derived from frontend coordinates, branch-label text or viewport dimensions.
+All fields below are **required** unless marked optional. Array ordering is significant only where stated. `Id` denotes a non-empty stable string, preferably canonical namespaced IDs (`node:…`, `edge:…`, `group:…`, `event:…`, `frame:…`, `file:…`, `value:…`) assigned by the future server. Stable IDs must not be derived from frontend coordinates, branch-label text or viewport dimensions. IDs inside a ready variant are scoped to **that variant**; the browser must never resolve a missing reference using another variant's ID table.
 
-| Field           | Type               | Meaning / strict invariant                                                                                                                                   |
-| --------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `schemaVersion` | literal `"3.0.0"`  | Unsupported **major** contract version is rejected; no guesswork from browser heuristics. Future optional extension policy requires its own schema revision. |
-| `artifact`      | `ArtifactIdentity` | Immutable artifact ID, session ID, immutable revision, source hash, created timestamp and producer identity; no viewport.                                    |
-| `scenario`      | `Scenario`         | Chosen entry point, description, and explicitly simulated input label; no target-code execution.                                                             |
-| `provenance`    | `Provenance`       | `provider:"codegraph"`, `simulationMode:"ai-mock"`, receipt references, source/relationship coverage, evidence gaps.                                         |
-| `status`        | `ArtifactStatus`   | `complete`, `truncated`, `coverage.status`, reasons, warnings; distinguish valid incomplete analysis from structurally invalid artifact.                     |
-| `graph`         | `SemanticGraph`    | Typed `nodes[]`, `edges[]`, `groups[]`; exact relationships, semantic kind, call/task and group ownership, certainty.                                        |
-| `source`        | `SourceCatalog`    | Exact decoded source text and server-prepared syntax token spans for displayed files; generated-source provenance optional.                                  |
-| `playback`      | `Playback`         | Initial display state, ordered frames, Visit targets, value/stack/console/invocation lookup tables; no browser event replay needed.                          |
+| Field           | Type                                                                 | Meaning / strict invariant                                                                                                                                                                                         |
+| --------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `schemaVersion` | literal `"3.0.0"`                                                    | Unsupported **major** contract version is rejected; no guesswork from browser heuristics.                                                                                                                          |
+| `comparison`    | `{defaultVariantId,variantOrder}`                                    | `defaultVariantId` identifies an available ready variant, initially `"proposed"`; `variantOrder` is the unique ordered list of requested keys in `variantsById`, including an unavailable baseline when requested. |
+| `variantsById`  | `{proposed:ReadyVariant,baseline?:ReadyVariant\|UnavailableVariant}` | `proposed` must be available. An optional baseline is a complete, independent ready variant or an explicit unavailable variant; no combined semantic graph or shared frame identity.                               |
+
+### `ReadyVariant` and `UnavailableVariant`
+
+Each `ReadyVariant` has `availability:"ready"` plus **required** `artifact`, `scenario`, `provenance`, `status`, `graph`, `source`, and `playback` fields described below. It independently contains its source hash, project root and target, snapshots, playback/Visit/Values/console/navigation data, and complete source evidence boundaries. The baseline may use a **different source hash** from the proposed variant; a source revision comparison is not an ancestry mismatch between distinct variants. Compare project root and target identity, but validate source consistency **within each variant's own continuation chain**.
+
+An `UnavailableVariant` has exactly `{availability:"unavailable",reason:string}` with a non-empty reason and is permitted only for the optional `baseline`. A missing `baseline` key means comparison was not requested and the selector stays hidden. A requested but unavailable baseline is present in `variantsById` and `comparison.variantOrder`, but the selector is disabled and shows its server-supplied reason. The FE must never synthesize the missing baseline, query another session or derive a semantic diff.
+
+`comparison.defaultVariantId` and every `comparison.variantOrder` entry must refer to a present key. The default must be a `ReadyVariant`; no duplicate, unknown or omitted requested keys are permitted. Variant-internal node/edge/group/frame/source/value references are resolved **only inside that variant**, and cross-variant references are rejected even if their textual IDs happen to be equal. The browser may remember `cursorByVariant` and visual geometry independently, but may not calculate matching execution frames or aggregate either variant's graph into the other. Any future synchronized comparison requires explicit producer-authored cross-variant display mappings in a separately versioned contract.
 
 ### `ArtifactIdentity`, `Scenario`, `Provenance`, `ArtifactStatus`
 
-| Field                                                                    | Type                                                              | Requirements                                                                                                                                                |
-| ------------------------------------------------------------------------ | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `artifact.id`, `artifact.sessionId`, `artifact.revision`                 | `Id`                                                              | Non-empty and stable for the lifetime of this materialized document. A new semantic content revision is a **different artifact**, never a viewport variant. |
-| `artifact.createdAt`                                                     | UTC ISO-8601 string                                               | Generation instant; useful for expiry and audit, not proof of execution.                                                                                    |
-| `artifact.sourceHash`                                                    | non-empty digest string                                           | Hash of the validated source snapshot/project preparation; compare entire continuation ancestry.                                                            |
-| `artifact.producer`                                                      | literal `"code-anime-mcp"`                                        | Future producer identity, not presently returned.                                                                                                           |
-| `scenario.entrypoint`, `scenario.description`, `scenario.mockInputLabel` | string                                                            | Display-safe strings; never contain commands for the browser to execute.                                                                                    |
-| `provenance.provider`, `provenance.simulationMode`                       | literals `"codegraph"`, `"ai-mock"`                               | CodeGraph is the sole language semantic evidence provider; host AI supplies explicitly simulated choices and values.                                        |
-| `provenance.receipts[]`                                                  | `{id:Id,tool:string,queryDigest:string,providerBoundary?:string}` | These represent inspected static evidence retrieval. Raw receipt contents may be too large/sensitive for UI export; preserve IDs and meaningful bounds.     |
-| `status.complete`, `status.truncated`                                    | boolean                                                           | `complete` concerns the **declared mock scenario**; `truncated` records a resource/provider boundary. Neither proves exhaustive real program behavior.      |
-| `status.coverage`                                                        | `{status, reasons[]}`                                             | `status` enum: `unknown`, `partial`, `unresolved`, `provider-truncated`; never `verified-runtime`.                                                          |
-| `status.warnings[]`, `status.diagnostics[]`                              | string[]                                                          | Specific limitations; invalid structural references are rejected instead of demoted to warnings.                                                            |
+| Field                                                                    | Type                                                              | Requirements                                                                                                                                                           |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `artifact.id`, `artifact.sessionId`, `artifact.revision`                 | `Id`                                                              | Non-empty and stable for each ready variant within one immutable root document. A new semantic content revision is a **different artifact**, never a viewport variant. |
+| `artifact.createdAt`                                                     | UTC ISO-8601 string                                               | Generation instant; useful for expiry and audit, not proof of execution.                                                                                               |
+| `artifact.sourceHash`                                                    | non-empty digest string                                           | Hash of this variant's validated source snapshot/project preparation; compare only its own continuation ancestry. A baseline and proposed hash may differ.             |
+| `artifact.projectRoot`, `artifact.target`                                | non-empty strings                                                 | Identity of this variant's analyzed project and target; ready baseline and proposed variants must agree on these identities, but need not agree on source hash.        |
+| `artifact.producer`                                                      | literal `"code-anime-mcp"`                                        | Future producer identity, not presently returned.                                                                                                                      |
+| `scenario.entrypoint`, `scenario.description`, `scenario.mockInputLabel` | string                                                            | Display-safe strings; never contain commands for the browser to execute.                                                                                               |
+| `provenance.provider`, `provenance.simulationMode`                       | literals `"codegraph"`, `"ai-mock"`                               | CodeGraph is the sole language semantic evidence provider; host AI supplies explicitly simulated choices and values.                                                   |
+| `provenance.receipts[]`                                                  | `{id:Id,tool:string,queryDigest:string,providerBoundary?:string}` | These represent inspected static evidence retrieval. Raw receipt contents may be too large/sensitive for UI export; preserve IDs and meaningful bounds.                |
+| `status.complete`, `status.truncated`                                    | boolean                                                           | `complete` concerns the **declared mock scenario**; `truncated` records a resource/provider boundary. Neither proves exhaustive real program behavior.                 |
+| `status.coverage`                                                        | `{status, reasons[]}`                                             | `status` enum: `unknown`, `partial`, `unresolved`, `provider-truncated`; never `verified-runtime`.                                                                     |
+| `status.warnings[]`, `status.diagnostics[]`                              | string[]                                                          | Specific limitations; invalid structural references are rejected instead of demoted to warnings.                                                                       |
 
 ## 3. Graph — meaning supplied, geometry omitted
 
@@ -128,602 +132,739 @@ The following mappings are **language-neutral metadata**, not source-code parsin
 
 ### Illustrative valid JSON shape
 
-This small, **synthetic** sample includes a nested loop → decision → lambda, switch/case and try/catch. It is **not** a real CodeGraph result, native multilingual test, or current MCP output. Source text is deliberately short; its `tokenSpans` is empty to illustrate the schema (full syntax-color parity needs a populated server token list in production). A mock path contains one loop-body step followed by a loop-exit and caught error; alternatives are clearly marked.
+This **synthetic** sample includes two independently ready variants in one document. The proposed variant has a nested loop → decision → lambda, switch/case and try/catch; the smaller baseline variant has its own source revision, one mock frame, Visit, Values and console snapshot. Neither is a real CodeGraph result, native multilingual test, or current MCP output. Source text is deliberately short; `tokenSpans` are empty to illustrate the schema (full syntax-color parity needs populated server tokens in production). The proposed fixture's separate control-path/navigation consistency defects remain tracked as CA042, not corrected under CA040.
 
 ```json
 {
   "schemaVersion": "3.0.0",
-  "artifact": {
-    "id": "artifact:demo",
-    "sessionId": "session:demo",
-    "revision": "rev:1",
-    "createdAt": "2026-10-29T00:00:00Z",
-    "sourceHash": "synthetic-fixture-only",
-    "producer": "code-anime-mcp"
+  "comparison": {
+    "defaultVariantId": "proposed",
+    "variantOrder": ["proposed", "baseline"]
   },
-  "scenario": {
-    "entrypoint": "demo",
-    "description": "Synthetic nested flow",
-    "mockInputLabel": "one item"
-  },
-  "provenance": {
-    "provider": "codegraph",
-    "simulationMode": "ai-mock",
-    "receipts": []
-  },
-  "status": {
-    "complete": false,
-    "truncated": false,
-    "coverage": {
-      "status": "unresolved",
-      "reasons": ["Synthetic fixture; no native CodeGraph receipt"]
-    },
-    "warnings": ["All outcomes and values are illustrative mock data"],
-    "diagnostics": []
-  },
-  "graph": {
-    "nodes": [
-      {
-        "id": "node:entry",
-        "kind": "entry",
-        "label": "demo",
-        "eventIds": ["event:1"],
-        "order": 0,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "groupPathIds": [],
-        "sourceRef": { "fileId": "file:demo", "line": 1, "endLine": 1 },
-        "certainty": "mock",
-        "evidenceIds": [],
-        "note": null
+  "variantsById": {
+    "proposed": {
+      "availability": "ready",
+      "artifact": {
+        "id": "artifact:demo",
+        "sessionId": "session:demo",
+        "revision": "rev:1",
+        "createdAt": "2026-10-29T00:00:00Z",
+        "sourceHash": "synthetic-fixture-only",
+        "projectRoot": "synthetic-project",
+        "target": "demo",
+        "producer": "code-anime-mcp"
       },
-      {
-        "id": "node:loop",
-        "kind": "loop",
-        "label": "for each item",
-        "eventIds": ["event:2"],
-        "order": 1,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "groupPathIds": ["group:loop"],
-        "sourceRef": { "fileId": "file:demo", "line": 2, "endLine": 2 },
-        "certainty": "mock",
-        "evidenceIds": [],
-        "note": null
+      "scenario": {
+        "entrypoint": "demo",
+        "description": "Synthetic nested flow",
+        "mockInputLabel": "one item"
       },
-      {
-        "id": "node:if",
-        "kind": "decision",
-        "label": "if ready",
-        "eventIds": ["event:3"],
-        "order": 2,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "groupPathIds": ["group:loop", "group:iteration", "group:decision"],
-        "sourceRef": { "fileId": "file:demo", "line": 3, "endLine": 3 },
-        "certainty": "mock",
-        "evidenceIds": [],
-        "note": null
+      "provenance": {
+        "provider": "codegraph",
+        "simulationMode": "ai-mock",
+        "receipts": []
       },
-      {
-        "id": "node:lambda",
-        "kind": "lambda",
-        "label": "apply value",
-        "eventIds": ["event:4"],
-        "order": 3,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "groupPathIds": [
-          "group:loop",
-          "group:iteration",
-          "group:decision",
-          "group:branch",
-          "group:lambda"
+      "status": {
+        "complete": false,
+        "truncated": false,
+        "coverage": {
+          "status": "unresolved",
+          "reasons": ["Synthetic fixture; no native CodeGraph receipt"]
+        },
+        "warnings": ["All outcomes and values are illustrative mock data"],
+        "diagnostics": []
+      },
+      "graph": {
+        "nodes": [
+          {
+            "id": "node:entry",
+            "kind": "entry",
+            "label": "demo",
+            "eventIds": ["event:1"],
+            "order": 0,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "groupPathIds": [],
+            "sourceRef": { "fileId": "file:demo", "line": 1, "endLine": 1 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          },
+          {
+            "id": "node:loop",
+            "kind": "loop",
+            "label": "for each item",
+            "eventIds": ["event:2"],
+            "order": 1,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "groupPathIds": ["group:loop"],
+            "sourceRef": { "fileId": "file:demo", "line": 2, "endLine": 2 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          },
+          {
+            "id": "node:if",
+            "kind": "decision",
+            "label": "if ready",
+            "eventIds": ["event:3"],
+            "order": 2,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "groupPathIds": ["group:loop", "group:iteration", "group:decision"],
+            "sourceRef": { "fileId": "file:demo", "line": 3, "endLine": 3 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          },
+          {
+            "id": "node:lambda",
+            "kind": "lambda",
+            "label": "apply value",
+            "eventIds": ["event:4"],
+            "order": 3,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "groupPathIds": [
+              "group:loop",
+              "group:iteration",
+              "group:decision",
+              "group:branch",
+              "group:lambda"
+            ],
+            "sourceRef": { "fileId": "file:demo", "line": 4, "endLine": 4 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          },
+          {
+            "id": "node:switch",
+            "kind": "switch",
+            "label": "switch kind",
+            "eventIds": ["event:5"],
+            "order": 4,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "groupPathIds": ["group:loop", "group:iteration", "group:switch"],
+            "sourceRef": { "fileId": "file:demo", "line": 5, "endLine": 5 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          },
+          {
+            "id": "node:case",
+            "kind": "case",
+            "label": "case A",
+            "eventIds": ["event:6"],
+            "order": 5,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "groupPathIds": [
+              "group:loop",
+              "group:iteration",
+              "group:switch",
+              "group:case"
+            ],
+            "sourceRef": { "fileId": "file:demo", "line": 6, "endLine": 6 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          },
+          {
+            "id": "node:try",
+            "kind": "try",
+            "label": "fallback",
+            "eventIds": ["event:7"],
+            "order": 6,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "groupPathIds": ["group:try"],
+            "sourceRef": { "fileId": "file:demo", "line": 7, "endLine": 7 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          },
+          {
+            "id": "node:catch",
+            "kind": "catch",
+            "label": "handle error",
+            "eventIds": ["event:8"],
+            "order": 7,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "groupPathIds": ["group:try", "group:catch"],
+            "sourceRef": { "fileId": "file:demo", "line": 8, "endLine": 8 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          }
         ],
-        "sourceRef": { "fileId": "file:demo", "line": 4, "endLine": 4 },
-        "certainty": "mock",
-        "evidenceIds": [],
-        "note": null
-      },
-      {
-        "id": "node:switch",
-        "kind": "switch",
-        "label": "switch kind",
-        "eventIds": ["event:5"],
-        "order": 4,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "groupPathIds": ["group:loop", "group:iteration", "group:switch"],
-        "sourceRef": { "fileId": "file:demo", "line": 5, "endLine": 5 },
-        "certainty": "mock",
-        "evidenceIds": [],
-        "note": null
-      },
-      {
-        "id": "node:case",
-        "kind": "case",
-        "label": "case A",
-        "eventIds": ["event:6"],
-        "order": 5,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "groupPathIds": [
-          "group:loop",
-          "group:iteration",
-          "group:switch",
-          "group:case"
+        "edges": [
+          {
+            "id": "edge:1",
+            "fromNodeId": "node:entry",
+            "toNodeId": "node:loop",
+            "kind": "sequence",
+            "label": "next",
+            "certainty": "mock",
+            "evidenceIds": [],
+            "executionStatus": "simulated-taken",
+            "callTransition": null
+          },
+          {
+            "id": "edge:2",
+            "fromNodeId": "node:loop",
+            "toNodeId": "node:if",
+            "kind": "loop-body",
+            "label": "iteration 1",
+            "certainty": "mock",
+            "evidenceIds": [],
+            "executionStatus": "simulated-taken",
+            "callTransition": null
+          },
+          {
+            "id": "edge:3",
+            "fromNodeId": "node:if",
+            "toNodeId": "node:lambda",
+            "kind": "branch-true",
+            "label": "ready",
+            "certainty": "mock",
+            "evidenceIds": [],
+            "executionStatus": "simulated-taken",
+            "callTransition": null
+          },
+          {
+            "id": "edge:4",
+            "fromNodeId": "node:if",
+            "toNodeId": "node:loop",
+            "kind": "branch-false",
+            "label": "not ready",
+            "certainty": "unresolved",
+            "evidenceIds": [],
+            "executionStatus": "unresolved",
+            "callTransition": null
+          },
+          {
+            "id": "edge:5",
+            "fromNodeId": "node:lambda",
+            "toNodeId": "node:switch",
+            "kind": "sequence",
+            "label": "next",
+            "certainty": "mock",
+            "evidenceIds": [],
+            "executionStatus": "simulated-taken",
+            "callTransition": null
+          },
+          {
+            "id": "edge:6",
+            "fromNodeId": "node:switch",
+            "toNodeId": "node:case",
+            "kind": "case",
+            "label": "A",
+            "certainty": "mock",
+            "evidenceIds": [],
+            "executionStatus": "simulated-taken",
+            "callTransition": null
+          },
+          {
+            "id": "edge:7",
+            "fromNodeId": "node:case",
+            "toNodeId": "node:loop",
+            "kind": "loop-back",
+            "label": "next item",
+            "certainty": "mock",
+            "evidenceIds": [],
+            "executionStatus": "alternative",
+            "callTransition": null
+          },
+          {
+            "id": "edge:8",
+            "fromNodeId": "node:loop",
+            "toNodeId": "node:try",
+            "kind": "loop-exit",
+            "label": "end",
+            "certainty": "mock",
+            "evidenceIds": [],
+            "executionStatus": "simulated-taken",
+            "callTransition": null
+          },
+          {
+            "id": "edge:9",
+            "fromNodeId": "node:try",
+            "toNodeId": "node:catch",
+            "kind": "exception",
+            "label": "mock throw",
+            "certainty": "mock",
+            "evidenceIds": [],
+            "executionStatus": "simulated-taken",
+            "callTransition": null
+          }
         ],
-        "sourceRef": { "fileId": "file:demo", "line": 6, "endLine": 6 },
-        "certainty": "mock",
-        "evidenceIds": [],
-        "note": null
+        "groups": [
+          {
+            "id": "group:loop",
+            "kind": "loop",
+            "label": "for each item",
+            "parentGroupId": null,
+            "memberNodeIds": ["node:loop"],
+            "order": 0,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": null,
+            "iteration": null,
+            "sourceRef": null,
+            "certainty": "mock",
+            "evidenceIds": []
+          },
+          {
+            "id": "group:iteration",
+            "kind": "iteration",
+            "label": "iteration 1",
+            "parentGroupId": "group:loop",
+            "memberNodeIds": [],
+            "order": 1,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": null,
+            "iteration": 1,
+            "sourceRef": null,
+            "certainty": "mock",
+            "evidenceIds": []
+          },
+          {
+            "id": "group:decision",
+            "kind": "decision",
+            "label": "ready?",
+            "parentGroupId": "group:iteration",
+            "memberNodeIds": ["node:if"],
+            "order": 2,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": null,
+            "iteration": null,
+            "sourceRef": null,
+            "certainty": "mock",
+            "evidenceIds": []
+          },
+          {
+            "id": "group:branch",
+            "kind": "branch",
+            "label": "ready",
+            "parentGroupId": "group:decision",
+            "memberNodeIds": [],
+            "order": 3,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": { "id": "arm:true", "label": "true" },
+            "iteration": null,
+            "sourceRef": null,
+            "certainty": "mock",
+            "evidenceIds": []
+          },
+          {
+            "id": "group:lambda",
+            "kind": "lambda",
+            "label": "apply",
+            "parentGroupId": "group:branch",
+            "memberNodeIds": ["node:lambda"],
+            "order": 4,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": null,
+            "iteration": null,
+            "sourceRef": null,
+            "certainty": "mock",
+            "evidenceIds": []
+          },
+          {
+            "id": "group:switch",
+            "kind": "switch",
+            "label": "kind",
+            "parentGroupId": "group:iteration",
+            "memberNodeIds": ["node:switch"],
+            "order": 5,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": null,
+            "iteration": null,
+            "sourceRef": null,
+            "certainty": "mock",
+            "evidenceIds": []
+          },
+          {
+            "id": "group:case",
+            "kind": "case",
+            "label": "A",
+            "parentGroupId": "group:switch",
+            "memberNodeIds": ["node:case"],
+            "order": 6,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": { "id": "arm:A", "label": "A" },
+            "iteration": null,
+            "sourceRef": null,
+            "certainty": "mock",
+            "evidenceIds": []
+          },
+          {
+            "id": "group:try",
+            "kind": "try",
+            "label": "fallback",
+            "parentGroupId": null,
+            "memberNodeIds": ["node:try"],
+            "order": 7,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": null,
+            "iteration": null,
+            "sourceRef": null,
+            "certainty": "mock",
+            "evidenceIds": []
+          },
+          {
+            "id": "group:catch",
+            "kind": "catch",
+            "label": "caught error",
+            "parentGroupId": "group:try",
+            "memberNodeIds": ["node:catch"],
+            "order": 8,
+            "callId": "call:main",
+            "taskId": "task:main",
+            "arm": null,
+            "iteration": null,
+            "sourceRef": null,
+            "certainty": "mock",
+            "evidenceIds": []
+          }
+        ]
       },
-      {
-        "id": "node:try",
-        "kind": "try",
-        "label": "fallback",
-        "eventIds": ["event:7"],
-        "order": 6,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "groupPathIds": ["group:try"],
-        "sourceRef": { "fileId": "file:demo", "line": 7, "endLine": 7 },
-        "certainty": "mock",
-        "evidenceIds": [],
-        "note": null
+      "source": {
+        "files": [
+          {
+            "id": "file:demo",
+            "path": "demo.pseudo",
+            "text": "function demo() {\n  for each item\n  if ready\n  lambda apply\n  switch kind\n  case A\n  try fallback\n  catch error\n}\n",
+            "languageHint": null,
+            "tokenSpans": []
+          }
+        ]
       },
-      {
-        "id": "node:catch",
-        "kind": "catch",
-        "label": "handle error",
-        "eventIds": ["event:8"],
-        "order": 7,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "groupPathIds": ["group:try", "group:catch"],
-        "sourceRef": { "fileId": "file:demo", "line": 8, "endLine": 8 },
-        "certainty": "mock",
-        "evidenceIds": [],
-        "note": null
+      "playback": {
+        "initial": {
+          "valueSnapshotId": "value:empty",
+          "stackSnapshotId": "stack:empty",
+          "consoleThrough": 0
+        },
+        "frames": [
+          {
+            "id": "frame:1",
+            "eventId": "event:1",
+            "step": 1,
+            "activeNodeIds": ["node:entry"],
+            "activeEdgeIds": [],
+            "callId": "call:main",
+            "taskId": "task:main",
+            "sourceRef": { "fileId": "file:demo", "line": 1, "endLine": 1 },
+            "valueSnapshotId": "value:empty",
+            "stackSnapshotId": "stack:main",
+            "consoleThrough": 0
+          },
+          {
+            "id": "frame:2",
+            "eventId": "event:2",
+            "step": 2,
+            "activeNodeIds": ["node:loop"],
+            "activeEdgeIds": ["edge:1"],
+            "callId": "call:main",
+            "taskId": "task:main",
+            "sourceRef": { "fileId": "file:demo", "line": 2, "endLine": 2 },
+            "valueSnapshotId": "value:one",
+            "stackSnapshotId": "stack:main",
+            "consoleThrough": 0
+          },
+          {
+            "id": "frame:3",
+            "eventId": "event:3",
+            "step": 3,
+            "activeNodeIds": ["node:if"],
+            "activeEdgeIds": ["edge:2"],
+            "callId": "call:main",
+            "taskId": "task:main",
+            "sourceRef": { "fileId": "file:demo", "line": 3, "endLine": 3 },
+            "valueSnapshotId": "value:one",
+            "stackSnapshotId": "stack:main",
+            "consoleThrough": 0
+          },
+          {
+            "id": "frame:4",
+            "eventId": "event:4",
+            "step": 4,
+            "activeNodeIds": ["node:lambda"],
+            "activeEdgeIds": ["edge:3"],
+            "callId": "call:main",
+            "taskId": "task:main",
+            "sourceRef": { "fileId": "file:demo", "line": 4, "endLine": 4 },
+            "valueSnapshotId": "value:one",
+            "stackSnapshotId": "stack:main",
+            "consoleThrough": 0
+          },
+          {
+            "id": "frame:5",
+            "eventId": "event:5",
+            "step": 5,
+            "activeNodeIds": ["node:switch"],
+            "activeEdgeIds": ["edge:5"],
+            "callId": "call:main",
+            "taskId": "task:main",
+            "sourceRef": { "fileId": "file:demo", "line": 5, "endLine": 5 },
+            "valueSnapshotId": "value:one",
+            "stackSnapshotId": "stack:main",
+            "consoleThrough": 0
+          },
+          {
+            "id": "frame:6",
+            "eventId": "event:6",
+            "step": 6,
+            "activeNodeIds": ["node:case"],
+            "activeEdgeIds": ["edge:6"],
+            "callId": "call:main",
+            "taskId": "task:main",
+            "sourceRef": { "fileId": "file:demo", "line": 6, "endLine": 6 },
+            "valueSnapshotId": "value:one",
+            "stackSnapshotId": "stack:main",
+            "consoleThrough": 0
+          },
+          {
+            "id": "frame:7",
+            "eventId": "event:7",
+            "step": 7,
+            "activeNodeIds": ["node:try"],
+            "activeEdgeIds": ["edge:8"],
+            "callId": "call:main",
+            "taskId": "task:main",
+            "sourceRef": { "fileId": "file:demo", "line": 7, "endLine": 7 },
+            "valueSnapshotId": "value:one",
+            "stackSnapshotId": "stack:main",
+            "consoleThrough": 0
+          },
+          {
+            "id": "frame:8",
+            "eventId": "event:8",
+            "step": 8,
+            "activeNodeIds": ["node:catch"],
+            "activeEdgeIds": ["edge:9"],
+            "callId": "call:main",
+            "taskId": "task:main",
+            "sourceRef": { "fileId": "file:demo", "line": 8, "endLine": 8 },
+            "valueSnapshotId": "value:one",
+            "stackSnapshotId": "stack:main",
+            "consoleThrough": 0
+          }
+        ],
+        "valueSnapshots": [
+          { "id": "value:empty", "variables": {}, "objects": {} },
+          {
+            "id": "value:one",
+            "variables": { "item": { "ready": true, "kind": "A" } },
+            "objects": {}
+          }
+        ],
+        "stackSnapshots": [
+          { "id": "stack:empty", "frames": [] },
+          {
+            "id": "stack:main",
+            "frames": [{ "callId": "call:main", "label": "demo" }]
+          }
+        ],
+        "consoleEntries": [],
+        "sourceVisits": [
+          {
+            "fileId": "file:demo",
+            "line": 1,
+            "callId": "call:main",
+            "stepIds": [1]
+          },
+          {
+            "fileId": "file:demo",
+            "line": 2,
+            "callId": "call:main",
+            "stepIds": [2]
+          },
+          {
+            "fileId": "file:demo",
+            "line": 3,
+            "callId": "call:main",
+            "stepIds": [3]
+          },
+          {
+            "fileId": "file:demo",
+            "line": 4,
+            "callId": "call:main",
+            "stepIds": [4]
+          },
+          {
+            "fileId": "file:demo",
+            "line": 5,
+            "callId": "call:main",
+            "stepIds": [5]
+          },
+          {
+            "fileId": "file:demo",
+            "line": 6,
+            "callId": "call:main",
+            "stepIds": [6]
+          },
+          {
+            "fileId": "file:demo",
+            "line": 7,
+            "callId": "call:main",
+            "stepIds": [7]
+          },
+          {
+            "fileId": "file:demo",
+            "line": 8,
+            "callId": "call:main",
+            "stepIds": [8]
+          }
+        ],
+        "invocations": [
+          {
+            "callId": "call:main",
+            "symbolId": "symbol:demo",
+            "parentCallId": null,
+            "entryStep": 1,
+            "stepIds": [1, 2, 3, 4, 5, 6, 7, 8]
+          }
+        ]
       }
-    ],
-    "edges": [
-      {
-        "id": "edge:1",
-        "fromNodeId": "node:entry",
-        "toNodeId": "node:loop",
-        "kind": "sequence",
-        "label": "next",
-        "certainty": "mock",
-        "evidenceIds": [],
-        "executionStatus": "simulated-taken",
-        "callTransition": null
-      },
-      {
-        "id": "edge:2",
-        "fromNodeId": "node:loop",
-        "toNodeId": "node:if",
-        "kind": "loop-body",
-        "label": "iteration 1",
-        "certainty": "mock",
-        "evidenceIds": [],
-        "executionStatus": "simulated-taken",
-        "callTransition": null
-      },
-      {
-        "id": "edge:3",
-        "fromNodeId": "node:if",
-        "toNodeId": "node:lambda",
-        "kind": "branch-true",
-        "label": "ready",
-        "certainty": "mock",
-        "evidenceIds": [],
-        "executionStatus": "simulated-taken",
-        "callTransition": null
-      },
-      {
-        "id": "edge:4",
-        "fromNodeId": "node:if",
-        "toNodeId": "node:loop",
-        "kind": "branch-false",
-        "label": "not ready",
-        "certainty": "unresolved",
-        "evidenceIds": [],
-        "executionStatus": "unresolved",
-        "callTransition": null
-      },
-      {
-        "id": "edge:5",
-        "fromNodeId": "node:lambda",
-        "toNodeId": "node:switch",
-        "kind": "sequence",
-        "label": "next",
-        "certainty": "mock",
-        "evidenceIds": [],
-        "executionStatus": "simulated-taken",
-        "callTransition": null
-      },
-      {
-        "id": "edge:6",
-        "fromNodeId": "node:switch",
-        "toNodeId": "node:case",
-        "kind": "case",
-        "label": "A",
-        "certainty": "mock",
-        "evidenceIds": [],
-        "executionStatus": "simulated-taken",
-        "callTransition": null
-      },
-      {
-        "id": "edge:7",
-        "fromNodeId": "node:case",
-        "toNodeId": "node:loop",
-        "kind": "loop-back",
-        "label": "next item",
-        "certainty": "mock",
-        "evidenceIds": [],
-        "executionStatus": "alternative",
-        "callTransition": null
-      },
-      {
-        "id": "edge:8",
-        "fromNodeId": "node:loop",
-        "toNodeId": "node:try",
-        "kind": "loop-exit",
-        "label": "end",
-        "certainty": "mock",
-        "evidenceIds": [],
-        "executionStatus": "simulated-taken",
-        "callTransition": null
-      },
-      {
-        "id": "edge:9",
-        "fromNodeId": "node:try",
-        "toNodeId": "node:catch",
-        "kind": "exception",
-        "label": "mock throw",
-        "certainty": "mock",
-        "evidenceIds": [],
-        "executionStatus": "simulated-taken",
-        "callTransition": null
-      }
-    ],
-    "groups": [
-      {
-        "id": "group:loop",
-        "kind": "loop",
-        "label": "for each item",
-        "parentGroupId": null,
-        "memberNodeIds": ["node:loop"],
-        "order": 0,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "arm": null,
-        "iteration": null,
-        "sourceRef": null,
-        "certainty": "mock",
-        "evidenceIds": []
-      },
-      {
-        "id": "group:iteration",
-        "kind": "iteration",
-        "label": "iteration 1",
-        "parentGroupId": "group:loop",
-        "memberNodeIds": [],
-        "order": 1,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "arm": null,
-        "iteration": 1,
-        "sourceRef": null,
-        "certainty": "mock",
-        "evidenceIds": []
-      },
-      {
-        "id": "group:decision",
-        "kind": "decision",
-        "label": "ready?",
-        "parentGroupId": "group:iteration",
-        "memberNodeIds": ["node:if"],
-        "order": 2,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "arm": null,
-        "iteration": null,
-        "sourceRef": null,
-        "certainty": "mock",
-        "evidenceIds": []
-      },
-      {
-        "id": "group:branch",
-        "kind": "branch",
-        "label": "ready",
-        "parentGroupId": "group:decision",
-        "memberNodeIds": [],
-        "order": 3,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "arm": { "id": "arm:true", "label": "true" },
-        "iteration": null,
-        "sourceRef": null,
-        "certainty": "mock",
-        "evidenceIds": []
-      },
-      {
-        "id": "group:lambda",
-        "kind": "lambda",
-        "label": "apply",
-        "parentGroupId": "group:branch",
-        "memberNodeIds": ["node:lambda"],
-        "order": 4,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "arm": null,
-        "iteration": null,
-        "sourceRef": null,
-        "certainty": "mock",
-        "evidenceIds": []
-      },
-      {
-        "id": "group:switch",
-        "kind": "switch",
-        "label": "kind",
-        "parentGroupId": "group:iteration",
-        "memberNodeIds": ["node:switch"],
-        "order": 5,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "arm": null,
-        "iteration": null,
-        "sourceRef": null,
-        "certainty": "mock",
-        "evidenceIds": []
-      },
-      {
-        "id": "group:case",
-        "kind": "case",
-        "label": "A",
-        "parentGroupId": "group:switch",
-        "memberNodeIds": ["node:case"],
-        "order": 6,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "arm": { "id": "arm:A", "label": "A" },
-        "iteration": null,
-        "sourceRef": null,
-        "certainty": "mock",
-        "evidenceIds": []
-      },
-      {
-        "id": "group:try",
-        "kind": "try",
-        "label": "fallback",
-        "parentGroupId": null,
-        "memberNodeIds": ["node:try"],
-        "order": 7,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "arm": null,
-        "iteration": null,
-        "sourceRef": null,
-        "certainty": "mock",
-        "evidenceIds": []
-      },
-      {
-        "id": "group:catch",
-        "kind": "catch",
-        "label": "caught error",
-        "parentGroupId": "group:try",
-        "memberNodeIds": ["node:catch"],
-        "order": 8,
-        "callId": "call:main",
-        "taskId": "task:main",
-        "arm": null,
-        "iteration": null,
-        "sourceRef": null,
-        "certainty": "mock",
-        "evidenceIds": []
-      }
-    ]
-  },
-  "source": {
-    "files": [
-      {
-        "id": "file:demo",
-        "path": "demo.pseudo",
-        "text": "function demo() {\n  for each item\n  if ready\n  lambda apply\n  switch kind\n  case A\n  try fallback\n  catch error\n}\n",
-        "languageHint": null,
-        "tokenSpans": []
-      }
-    ]
-  },
-  "playback": {
-    "initial": {
-      "valueSnapshotId": "value:empty",
-      "stackSnapshotId": "stack:empty",
-      "consoleThrough": 0
     },
-    "frames": [
-      {
-        "id": "frame:1",
-        "eventId": "event:1",
-        "step": 1,
-        "activeNodeIds": ["node:entry"],
-        "activeEdgeIds": [],
-        "callId": "call:main",
-        "taskId": "task:main",
-        "sourceRef": { "fileId": "file:demo", "line": 1, "endLine": 1 },
-        "valueSnapshotId": "value:empty",
-        "stackSnapshotId": "stack:main",
-        "consoleThrough": 0
+    "baseline": {
+      "availability": "ready",
+      "artifact": {
+        "id": "artifact:baseline-demo",
+        "sessionId": "session:baseline-demo",
+        "revision": "rev:baseline-1",
+        "createdAt": "2026-10-29T00:00:00Z",
+        "sourceHash": "synthetic-baseline-different-source",
+        "projectRoot": "synthetic-project",
+        "target": "demo",
+        "producer": "code-anime-mcp"
       },
-      {
-        "id": "frame:2",
-        "eventId": "event:2",
-        "step": 2,
-        "activeNodeIds": ["node:loop"],
-        "activeEdgeIds": ["edge:1"],
-        "callId": "call:main",
-        "taskId": "task:main",
-        "sourceRef": { "fileId": "file:demo", "line": 2, "endLine": 2 },
-        "valueSnapshotId": "value:one",
-        "stackSnapshotId": "stack:main",
-        "consoleThrough": 0
+      "scenario": {
+        "entrypoint": "demo",
+        "description": "Synthetic baseline scenario before the proposed change",
+        "mockInputLabel": "one item"
       },
-      {
-        "id": "frame:3",
-        "eventId": "event:3",
-        "step": 3,
-        "activeNodeIds": ["node:if"],
-        "activeEdgeIds": ["edge:2"],
-        "callId": "call:main",
-        "taskId": "task:main",
-        "sourceRef": { "fileId": "file:demo", "line": 3, "endLine": 3 },
-        "valueSnapshotId": "value:one",
-        "stackSnapshotId": "stack:main",
-        "consoleThrough": 0
+      "provenance": {
+        "provider": "codegraph",
+        "simulationMode": "ai-mock",
+        "receipts": []
       },
-      {
-        "id": "frame:4",
-        "eventId": "event:4",
-        "step": 4,
-        "activeNodeIds": ["node:lambda"],
-        "activeEdgeIds": ["edge:3"],
-        "callId": "call:main",
-        "taskId": "task:main",
-        "sourceRef": { "fileId": "file:demo", "line": 4, "endLine": 4 },
-        "valueSnapshotId": "value:one",
-        "stackSnapshotId": "stack:main",
-        "consoleThrough": 0
+      "status": {
+        "complete": false,
+        "truncated": false,
+        "coverage": {
+          "status": "unresolved",
+          "reasons": ["Synthetic baseline fixture; no native CodeGraph receipt"]
+        },
+        "warnings": ["Baseline variables and output are mock values"],
+        "diagnostics": []
       },
-      {
-        "id": "frame:5",
-        "eventId": "event:5",
-        "step": 5,
-        "activeNodeIds": ["node:switch"],
-        "activeEdgeIds": ["edge:5"],
-        "callId": "call:main",
-        "taskId": "task:main",
-        "sourceRef": { "fileId": "file:demo", "line": 5, "endLine": 5 },
-        "valueSnapshotId": "value:one",
-        "stackSnapshotId": "stack:main",
-        "consoleThrough": 0
+      "graph": {
+        "nodes": [
+          {
+            "id": "node:baseline-console",
+            "kind": "console",
+            "label": "console.log('baseline')",
+            "eventIds": ["event:baseline-1"],
+            "order": 0,
+            "callId": "call:baseline",
+            "taskId": "task:baseline",
+            "groupPathIds": [],
+            "sourceRef": { "fileId": "file:baseline", "line": 1, "endLine": 1 },
+            "certainty": "mock",
+            "evidenceIds": [],
+            "note": null
+          }
+        ],
+        "edges": [],
+        "groups": []
       },
-      {
-        "id": "frame:6",
-        "eventId": "event:6",
-        "step": 6,
-        "activeNodeIds": ["node:case"],
-        "activeEdgeIds": ["edge:6"],
-        "callId": "call:main",
-        "taskId": "task:main",
-        "sourceRef": { "fileId": "file:demo", "line": 6, "endLine": 6 },
-        "valueSnapshotId": "value:one",
-        "stackSnapshotId": "stack:main",
-        "consoleThrough": 0
+      "source": {
+        "files": [
+          {
+            "id": "file:baseline",
+            "path": "demo-baseline.js",
+            "text": "console.log('baseline');\r\n",
+            "languageHint": "javascript",
+            "tokenSpans": []
+          }
+        ]
       },
-      {
-        "id": "frame:7",
-        "eventId": "event:7",
-        "step": 7,
-        "activeNodeIds": ["node:try"],
-        "activeEdgeIds": ["edge:8"],
-        "callId": "call:main",
-        "taskId": "task:main",
-        "sourceRef": { "fileId": "file:demo", "line": 7, "endLine": 7 },
-        "valueSnapshotId": "value:one",
-        "stackSnapshotId": "stack:main",
-        "consoleThrough": 0
-      },
-      {
-        "id": "frame:8",
-        "eventId": "event:8",
-        "step": 8,
-        "activeNodeIds": ["node:catch"],
-        "activeEdgeIds": ["edge:9"],
-        "callId": "call:main",
-        "taskId": "task:main",
-        "sourceRef": { "fileId": "file:demo", "line": 8, "endLine": 8 },
-        "valueSnapshotId": "value:one",
-        "stackSnapshotId": "stack:main",
-        "consoleThrough": 0
+      "playback": {
+        "initial": {
+          "valueSnapshotId": "value:baseline-zero",
+          "stackSnapshotId": "stack:baseline-empty",
+          "consoleThrough": 0
+        },
+        "frames": [
+          {
+            "id": "frame:baseline-1",
+            "eventId": "event:baseline-1",
+            "step": 1,
+            "activeNodeIds": ["node:baseline-console"],
+            "activeEdgeIds": [],
+            "callId": "call:baseline",
+            "taskId": "task:baseline",
+            "sourceRef": { "fileId": "file:baseline", "line": 1, "endLine": 1 },
+            "valueSnapshotId": "value:baseline-one",
+            "stackSnapshotId": "stack:baseline-main",
+            "consoleThrough": 1
+          }
+        ],
+        "valueSnapshots": [
+          { "id": "value:baseline-zero", "variables": {}, "objects": {} },
+          {
+            "id": "value:baseline-one",
+            "variables": { "message": "baseline mock" },
+            "objects": {}
+          }
+        ],
+        "stackSnapshots": [
+          { "id": "stack:baseline-empty", "frames": [] },
+          {
+            "id": "stack:baseline-main",
+            "frames": [{ "callId": "call:baseline", "label": "demo" }]
+          }
+        ],
+        "consoleEntries": [
+          {
+            "id": "console:baseline-one",
+            "text": "baseline\n",
+            "certainty": "mock",
+            "sourceStep": 1
+          }
+        ],
+        "sourceVisits": [
+          {
+            "fileId": "file:baseline",
+            "line": 1,
+            "callId": "call:baseline",
+            "stepIds": [1]
+          }
+        ],
+        "invocations": [
+          {
+            "callId": "call:baseline",
+            "symbolId": "symbol:demo-baseline",
+            "parentCallId": null,
+            "entryStep": 1,
+            "stepIds": [1]
+          }
+        ]
       }
-    ],
-    "valueSnapshots": [
-      { "id": "value:empty", "variables": {}, "objects": {} },
-      {
-        "id": "value:one",
-        "variables": { "item": { "ready": true, "kind": "A" } },
-        "objects": {}
-      }
-    ],
-    "stackSnapshots": [
-      { "id": "stack:empty", "frames": [] },
-      {
-        "id": "stack:main",
-        "frames": [{ "callId": "call:main", "label": "demo" }]
-      }
-    ],
-    "consoleEntries": [],
-    "sourceVisits": [
-      {
-        "fileId": "file:demo",
-        "line": 1,
-        "callId": "call:main",
-        "stepIds": [1]
-      },
-      {
-        "fileId": "file:demo",
-        "line": 2,
-        "callId": "call:main",
-        "stepIds": [2]
-      },
-      {
-        "fileId": "file:demo",
-        "line": 3,
-        "callId": "call:main",
-        "stepIds": [3]
-      },
-      {
-        "fileId": "file:demo",
-        "line": 4,
-        "callId": "call:main",
-        "stepIds": [4]
-      },
-      {
-        "fileId": "file:demo",
-        "line": 5,
-        "callId": "call:main",
-        "stepIds": [5]
-      },
-      {
-        "fileId": "file:demo",
-        "line": 6,
-        "callId": "call:main",
-        "stepIds": [6]
-      },
-      {
-        "fileId": "file:demo",
-        "line": 7,
-        "callId": "call:main",
-        "stepIds": [7]
-      },
-      {
-        "fileId": "file:demo",
-        "line": 8,
-        "callId": "call:main",
-        "stepIds": [8]
-      }
-    ],
-    "invocations": [
-      {
-        "callId": "call:main",
-        "symbolId": "symbol:demo",
-        "parentCallId": null,
-        "entryStep": 1,
-        "stepIds": [1, 2, 3, 4, 5, 6, 7, 8]
-      }
-    ]
+    }
   }
 }
 ```
