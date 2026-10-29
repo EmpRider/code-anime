@@ -87,10 +87,11 @@ BA communication uses ADHD next action and a compact numbered checklist, Attenti
 
 ### CA024 — FE adaptive graph and compact desktop visual design (P1)
 
-- **Owner:** frontend graph/UX specialist; independent geometry and accessibility reviewer. **Status: `BLOCKED_ON_CA022_LEDGER_GATE`**.
+- **Owner:** frontend graph/UX specialist; independent geometry and accessibility reviewer. **Status: `PARTIAL/INDEPENDENT_REVIEW_APPROVED_WITH_KNOWN_CA040_CA041/WAITING_ON_TASK_PUSH` (NOT DONE)**. CA022 ledger-first push and the CA040/041 issue discovery gate remotely verified; CA023 architecture+schema baseline PARTIAL remote `6f5aace5fe769752e7f55ad079ed7316e3066143`.
 - **Files:** `docs/v3/frontend-graph-design.md` only.
 - **Scope:** Render-only boundary; typed visual node shapes/colors, nested group containers/gutters, clear labels, strict edge endpoint routing, orientation-aware 2D ELK wrapping based on actual canvas `{width,height}` and card/Values sizes, zoom and worker epochs. Document deterministic spacing, collision/label protection, fallback, cache invalidation, accessibility, source/Visit/Values interaction parity and locked exterior UI.
 - **Acceptance:** Both orientation examples and group/edge invariants; no invented edge semantics or lexical source parser; no externally rearranged panels/controls; exact visual QA matrix and user screenshot gate. No UI source edits during documentation.
+- **Initial baseline evidence:** `docs/v3/frontend-graph-design.md` drafted with Mermaid horizontal multi-row and vertical multi-column examples, explicit semantic/visual boundary, graph group/card/connector/port invariants, dark token candidates, and a future visual acceptance matrix. Independent QA approved a **PARTIAL baseline-only commit** while CA040 comparison-selector documentation and CA041 invalid-vs-unresolved/hidden-edge distinctions remain tracked; not a final design or visual pass. No runtime browser or native CodeGraph test was run for this document.
 
 ### CA025 — Future MCP producer, trust/budget and migration architecture (P1)
 
