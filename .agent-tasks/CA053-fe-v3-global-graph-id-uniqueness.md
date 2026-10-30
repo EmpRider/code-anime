@@ -1,6 +1,6 @@
 # CA053 — Enforce variant-local global graph ID uniqueness
 
-Status: READY (issue-first; no code fix)
+Status: DONE — source/tests GitHub-plugin pushed, independently reviewed, CI verified; CA029/CA030 remain open
 Priority: P1 FE V3 acceptance blocker; no live production outage observed
 Branch: `fix/react-layout-collapse`
 Owner: FE V3 adapter developer; review: TL, independent QA and contract reviewer
@@ -33,4 +33,11 @@ After per-kind indexing, enforce a common variant-local graph ID Set across node
 
 ## Delivery state
 
-Issue-first creation awaiting GitHub plugin write. CA052 verified DONE at commit `6161da12a0b4965cc65d7b615fb04285f0efa78f`. No CA053 source edit or remote implementation commit yet.
+- Issue-first task commit `c5b7a341c1e5b6baafa3bf80ba713f58e654b985` (pushed before code).
+- Adapter source fix `001006dc3474ed05d5d7b186a8147d9fb300ee06`; regression test commit `5d8c39066d00bf1acc62bf92b43ca682e1cf76bc`.
+- Both source and tests independently re-fetched from remote; byte-exact to TL/PM-approved staging.
+- TDD RED cross-kind alias cases → GREEN **26/26** adapter tests; node↔group, node↔edge, group↔edge and cross-variant positive.
+- Independent QA and contract reviewer PASS; Node syntax and repository-configured Prettier PASS.
+- GitHub Actions [run 41043972199](https://github.com/EmpRider/code-anime/actions/runs/41043972199): **completed/success, 5/5 jobs** (Ubuntu Node 22/24, Windows Node 22/24, Chromium browser).
+- CA054 malformed Worker ACK requires separate issue-first fix. CA029 remains IN_PROGRESS, CA030 WAITING_ON_CA029. The passing browser suite is legacy, not V3 E2E.
+- Roll back only CA053 task-specific adapter/test commits if a confirmed regression appears.
