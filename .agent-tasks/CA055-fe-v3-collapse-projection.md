@@ -1,0 +1,38 @@
+# CA055 — FE V3 collapsed-group presentation projection before ELK
+
+- **Priority:** P1 (CA029 G1 correctness and FE V3 compactness prerequisite).
+- **Status:** `READY / ISSUE-FIRST`; no code authorized until this task ledger is committed and remotely verified.
+- **Branch:** `fix/react-layout-collapse`.
+- **Owner:** TL/FE geometry developer, independent QA and semantic-contract reviewer; PM delivery, BA GitHub plugin relay.
+- **Dependencies:** CA028 validated graph contract; CA052 private ELK root collision fix DONE; CA053 globally unique graph IDs within variant DONE; CA054 Worker ACK protocol safety DONE; approved CA029/CA030 architecture and the independent CA055 engineering Council decision. Real Chromium proof depends on opt-in CA030 isolated preview and stays pending until its browser tests run.
+- **Related documents:** `docs/v3/implementation-plan.md` (CA029/CA030), `docs/v3/ca055-projection-council-20261030.md` (to be committed after Council final), `docs/v3/ca030-build-council-20261030.md`.
+
+## Observed versus expected
+
+- **Observed:** `public/v3-scene-geometry.js` builds ELK geometry for every validated graph node/group/edge; collapsed descendants still consume space. `flattenV3ElkGraph(elk,variant)` expects the complete graph; no `prepareV3LayoutInput(readyVariant,presentationState,measuredCards)` or collapse-aware topology key exists. Renderer-side hiding alone leaves blank space and can route edges to invisible endpoints.
+- **Expected:** Compact, faithful nested collapse/expand in either orientation, using only original semantic identities and edges. FE computes layout visibility and routing anchors, never invents a transition or mutates MCP-supplied graph/playback/source/Values data. Playback seeking alone must not re-run ELK.
+
+## Limited implementation scope
+
+1. Add a presentation-only `prepareV3LayoutInput(readyVariant,presentationState,measuredCards)` contract yielding `{cards,regions,edges,topologyKey}` and explicit mapping from immutable original semantic endpoints to effective visible ELK anchors. Fully expanded input remains identical in graph meaning.
+2. Project only visible nodes and expanded regions before ELK. A collapsed group becomes one measurable presentation leaf under its original **group ID** (not a synthetic semantic node), with inherited nearest visible collapsed-ancestor anchor for hidden external endpoints. Preserve nested hierarchy and boundaries. Treat internal edges whose projected source and destination coincide inside the same collapsed group as hidden _for painting/layout only_.
+3. For every exposed edge, preserve the original edge ID, original from/to IDs, label, type, certainty, status, highlighting metadata and `underlyingEdgeIds: [originalEdge.id]`; retain distinct parallel edge identities even if visible anchors coincide. Never fabricate group-to-node semantic edges, deduplicate originals, or delete internal semantic records. Keep hidden active edges inspectable in the immutable model; do not paint a deceptive visible transition.
+4. Make the flatten/geometry validator aware of the **projected visible input**, not the full immutable variant, and normalize root-listed nested `edge.container` coordinates before strict orthogonal/card-interior checks. Fail closed to a conspicuous V3 layout error if ELK cannot provide valid group-leaf routing; do not silently switch to semantic inference or an unsafe paint path.
+5. Build deterministic `topologyKey` scoped to variant/revision, collapsed-group IDs, expanded Values/card measurements, orientation and both viewport dimensions. Exclude playback cursor/frame/activeEdgeIds; preserve Worker abort/epoch stale-result protection.
+6. Keep changes within CA029 presentation geometry/tests and a narrowly reviewed CA030 consumer interface if strictly required. No legacy player change, no MCP/backend change, no CA031 live cutover, no generated bundle mutation except separately reviewed preview build gate.
+
+## RED-to-GREEN verification and acceptance
+
+- Construct nested Outer → Inner → X/Y with sibling W and external Z; parallel branch/return external edges with distinct metadata, an inner-only edge, and an internal-to-sibling boundary edge. Cover collapse Inner, collapse Outer, re-expand each, both horizontal/vertical, small/large viewports, and measured Values cards.
+- Real bundled `elkjs`/ELK Worker fixture must prove group-as-leaf endpoints route correctly, nested `edge.container` offsets normalize, no diagonal/card-interior crossing, compact collapsed bounding box is smaller, and parallel edges retain separately addressable IDs/labels/provenance.
+- Assert deep equality for original `variant.graph` before/after projection and every layout; exact visible-edge subset, absent internal-only painted edges, correct nearest-ancestor anchors, no accidental self-loops or missing exposed edges.
+- Assert topology key invalidates on collapse/expand, variant/revision, card-size/Values, viewport/orientation changes; cursor-only navigation/active-edge highlights leave key stable and trigger zero new Worker layout calls.
+- Focused TDD RED then GREEN (`node --test tests/v3-scene-geometry.test.mjs tests/diagram-elk-layout.test.mjs`); independent FE contract/QA review; repository-config Prettier; applicable `npm run check` plus GitHub Actions 5/5 green after plugin commits.
+- Browser integration and screenshot human visual acceptance remain separately **PENDING_CA030** until real isolated preview renders in Chromium; native unit success alone cannot close CA029 G1 visual gate.
+
+## Commit, status and ownership gates
+
+1. BA GitHub plugin creates this issue-first task file with a detailed commit, verifies remote SHA; only then start CA055 production code changes.
+2. Exclusive FE geometry author writes focused tests/fix in isolated staging. Independent QA and semantic reviewer examine same exact bytes/hashes. PM sends full reviewed source/test to BA for GitHub-plugin compare-and-swap commits and remote blob revalidation.
+3. Record each scoped commit, RED/GREEN commands, Windows/Linux CI URL, and residual Chromium/visual gate here. Mark `DONE` only after full acceptance; otherwise `IN_PROGRESS / PENDING_CA030`. Preserve task file until explicit owner cleanup authorization.
+4. If the GitHub plugin fails, stop **all work immediately** and notify BA/user; no Git CLI workaround.
