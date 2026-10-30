@@ -1102,9 +1102,8 @@ for (const mobile of [false, true]) {
         page.locator('.diagram-control-region[data-control-type="decision"]'),
       ).toHaveCount(2);
       await expect(page.locator('[data-edge-kind="branch"]')).toHaveCount(2);
-      await expect(page.locator('.diagram-path-note')).toHaveText(
-        'Path not selected',
-      );
+      // Both prepared loop visits cover their branches; no fallback path is needed.
+      await expect(page.locator('.diagram-path-note')).toHaveCount(0);
       await expect(page.locator('.diagram-path-note button')).toHaveCount(0);
       await expect(
         page
@@ -1857,33 +1856,40 @@ for (const mobile of [false, true]) {
       const inner = page.locator(
         `.diagram-card[data-parent-id=${JSON.stringify(methodNode)}]`,
       );
-      await expect(inner).toHaveCount(2);
-      await expect(inner.first().locator('.diagram-name')).toContainText(
+      // The prepared method keeps enter, assignment, and return events.
+      await expect(inner).toHaveCount(3);
+      const assignment = inner.nth(1);
+      await expect(inner.nth(0).locator('.diagram-kind')).toHaveText(
+        'Simulated: enter B.work',
+      );
+      await expect(assignment.locator('.diagram-name')).toContainText(
         'const value = 2;',
       );
-      await expect(inner.first().locator('.diagram-kind')).toHaveText(
+      await expect(assignment.locator('.diagram-kind')).toHaveText(
         'Simulated: assign B.work',
       );
-      await expect(inner.locator('.diagram-kind')).not.toContainText([
-        'enter',
-        'call',
-      ]);
+      await expect(inner.nth(2).locator('.diagram-kind')).toHaveText(
+        'Simulated: return B.work',
+      );
       await expect(page.locator('.diagram-inline-steps')).toHaveCount(0);
       const firstStep = (await inner.nth(0).boundingBox())!;
       const secondStep = (await inner.nth(1).boundingBox())!;
       expect(secondStep.y).toBeGreaterThan(firstStep.y + firstStep.height);
       expect(Math.abs(secondStep.x - firstStep.x)).toBeLessThan(1);
-      const stepHeight = await inner.first().evaluate((el) => el.clientHeight);
-      await inner.first().locator('summary').focus();
+      const stepHeight = await assignment.evaluate((el) => el.clientHeight);
+      await assignment.locator('summary').focus();
       await page.keyboard.press('Enter');
-      await expect(inner.first().locator('.diagram-value')).toBeVisible();
+      await expect(assignment.locator('.diagram-value')).toBeVisible();
+      await expect(
+        page.locator('#canvas[data-layout-state="ready"]'),
+      ).toHaveCount(1);
       expect(
-        await inner.first().evaluate((el) => el.clientHeight),
+        await assignment.evaluate((el) => el.clientHeight),
       ).toBeGreaterThan(stepHeight);
       expect(
-        await inner
-          .first()
-          .evaluate((el) => el.scrollHeight <= el.clientHeight + 1),
+        await assignment.evaluate(
+          (el) => el.scrollHeight <= el.clientHeight + 1,
+        ),
       ).toBe(true);
       const outerBounds = (await expanded.boundingBox())!;
       for (const child of await inner.all()) {
@@ -1898,7 +1904,7 @@ for (const mobile of [false, true]) {
         );
       }
       await page.screenshot({ path: info.outputPath('expanded-values.png') });
-      const innerValues = inner.first().locator('summary');
+      const innerValues = assignment.locator('summary');
       await expect
         .poll(() =>
           innerValues.evaluate((summary) => {
@@ -1915,7 +1921,7 @@ for (const mobile of [false, true]) {
         )
         .toMatchObject({ reachable: true });
       await innerValues.click();
-      await expect(inner.first().locator('.diagram-value')).toBeHidden();
+      await expect(assignment.locator('.diagram-value')).toBeHidden();
       await page.locator('#next').click();
       await expect(page.locator('#progress')).toHaveText('5 / 8');
       await page.locator('#previous').click();
