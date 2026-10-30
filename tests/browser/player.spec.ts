@@ -326,6 +326,35 @@ for (const mobile of [false, true]) {
       reducedMotion: 'reduce',
       hasTouch: mobile,
     });
+    test('exports desktop and mobile UI screenshots for CI review', async ({
+      page,
+    }, testInfo) => {
+      const capture = async (name: string) => {
+        const path = testInfo.outputPath(`ui-${name}.png`);
+        await page.screenshot({ path, fullPage: true, animations: 'disabled' });
+        await testInfo.attach(name, { path, contentType: 'image/png' });
+      };
+      await open(page, 'flow');
+      await seek(page, 4);
+      await show(page, mobile, 'flow');
+      await expect(
+        page.locator('#canvas[data-layout-state="ready"]'),
+      ).toHaveCount(1);
+      await capture('01-full-map');
+      await page
+        .getByRole('button', { name: 'Expand method B.work', exact: true })
+        .click();
+      await expect(
+        page.locator('#canvas[data-layout-state="ready"]'),
+      ).toHaveCount(1);
+      await expect(
+        page.locator('.diagram-card[data-parent-id]').first(),
+      ).toBeVisible();
+      await capture('02-expanded-method');
+      await show(page, mobile, 'code');
+      await expect(page.locator('#source-line')).toBeVisible();
+      await capture('03-source-view');
+    });
     test('explicit Fit makes far source steps pointer reachable and remains idempotent', async ({
       page,
     }) => {
