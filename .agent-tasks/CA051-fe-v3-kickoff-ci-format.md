@@ -1,6 +1,6 @@
 # CA051 — FE V3 kickoff Markdown CI formatting regression
 
-Status: OPEN
+Status: DONE — remotely verified; CI green
 Priority: P1 — CI matrix blocker
 Branch: `fix/react-layout-collapse`
 Owner: FE V3 delivery PM / independent QA
@@ -30,3 +30,11 @@ No V3 source changes, MCP work, live-player cutover, merge, release, or task del
 - CI run: https://github.com/EmpRider/code-anime/actions/runs/41025374940
 - Parent ledger: `.agent-tasks/code-anime-v3-design-20261029.md`
 - Delivery kickoff: `.agent-tasks/code-anime-v3-fe-kickoff-20261030.md`
+
+## Completion evidence
+
+- Issue-first task commit: `980acf9bbd64145d5b28d1ddf427b9c89d3eab7d`.
+- Formatting-only implementation commit: `e2a9aabb7a56acc12492d1374e73612795cc7156`.
+- Verified formatting fix: exactly four blank lines after the existing section headings; source/semantic files untouched.
+- GitHub Actions run: https://github.com/EmpRider/code-anime/actions/runs/41032925030 — completed with success; Ubuntu/Windows Node 22/24 and Chromium browser jobs all 5/5 PASS.
+- Legacy browser coverage is not FE V3 visual acceptance. CA029/CA030 remain in progress.
