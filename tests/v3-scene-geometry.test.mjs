@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ELK from 'elkjs/lib/elk.bundled.js';
+import { renderV3Scene } from '../public/v3-scene-diagram.js';
 import {
   buildV3ElkGraph,
   flattenV3ElkGraph,
@@ -1034,4 +1035,433 @@ test('RED CA055: cursor-only changes reuse Worker pending and completed geometry
   assert.equal(FakeWorker.instances.length, 2);
   engine.dispose();
   await assert.rejects(newEpoch, /disposed/);
+});
+
+function reverseObjectProperties(value) {
+  if (Array.isArray(value)) return value.map(reverseObjectProperties);
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .reverse()
+      .map(([key, entry]) => [key, reverseObjectProperties(entry)]),
+  );
+}
+
+test('RED CA057: canonical full graph metadata changes key; clone property order does not', () => {
+  const clone = structuredClone(collapseScene);
+  const original = prepareV3LayoutInput(
+    clone,
+    collapsePresentation,
+  ).topologyKey;
+  assert.equal(
+    original,
+    prepareV3LayoutInput(reverseObjectProperties(clone), {
+      ...collapsePresentation,
+      collapsedGroupIds: new Set(['inner']),
+    }).topologyKey,
+    'equal semantic content with different object insertion order has one key',
+  );
+  function expectChange(change) {
+    const variant = structuredClone(collapseScene);
+    change(variant.graph);
+    assert.notEqual(
+      original,
+      prepareV3LayoutInput(variant, collapsePresentation).topologyKey,
+    );
+  }
+  expectChange((graph) => {
+    graph.edges[0].label = 'different label only';
+  });
+  expectChange((graph) => {
+    graph.edges[0].certainty = 'unresolved';
+  });
+  expectChange((graph) => {
+    graph.nodes[0].label = 'changed node label';
+  });
+  expectChange((graph) => {
+    graph.nodes[0].id = 'Χ';
+    graph.groups[1].memberNodeIds = graph.groups[1].memberNodeIds.map((id) =>
+      id === 'X' ? 'Χ' : id,
+    );
+    for (const edge of graph.edges) {
+      if (edge.fromNodeId === 'X') edge.fromNodeId = 'Χ';
+      if (edge.toNodeId === 'X') edge.toNodeId = 'Χ';
+    }
+  });
+  expectChange((graph) => {
+    graph.edges[0].toNodeId = 'W';
+  });
+  expectChange((graph) => {
+    graph.nodes[2].groupPathIds = [];
+    graph.groups[0].memberNodeIds = [];
+  });
+  expectChange((graph) => {
+    graph.edges.reverse();
+  });
+  expectChange((graph) => {
+    graph.nodes[0].order = -0;
+  });
+  const unicode = structuredClone(collapseScene);
+  unicode.graph.nodes.push({
+    ...unicode.graph.nodes[0],
+    id: 'é',
+    groupPathIds: [],
+    order: 10,
+  });
+  unicode.graph.nodes.push({
+    ...unicode.graph.nodes[0],
+    id: 'e\u0301',
+    groupPathIds: [],
+    order: 11,
+  });
+  const sizeA = { width: 151, height: 91 };
+  const sizeB = { width: 152, height: 92 };
+  const first = prepareV3LayoutInput(
+    unicode,
+    collapsePresentation,
+    new Map([
+      ['é', sizeA],
+      ['e\u0301', sizeB],
+    ]),
+  ).topologyKey;
+  const second = prepareV3LayoutInput(
+    unicode,
+    collapsePresentation,
+    new Map([
+      ['e\u0301', sizeB],
+      ['é', sizeA],
+    ]),
+  ).topologyKey;
+  assert.equal(
+    first,
+    second,
+    'Unicode-distinct measurement IDs sort by code units, independent of insertion order',
+  );
+  const invalid = structuredClone(collapseScene);
+  invalid.graph.nodes[0].order = NaN;
+  assert.throws(
+    () => prepareV3LayoutInput(invalid, collapsePresentation),
+    /Invalid V3 topology number/,
+  );
+});
+
+test('RED CA057: returned geometry is deeply immutable without freezing caller variant', async () => {
+  class FakeWorker {
+    constructor() {
+      FakeWorker.instance = this;
+      this.messages = [];
+    }
+    postMessage(message) {
+      this.messages.push(message);
+    }
+    terminate() {
+      this.terminated = true;
+    }
+    reply(data) {
+      this.onmessage({ data });
+    }
+  }
+  const variant = structuredClone(collapseScene);
+  const engine = createV3SceneLayout({ WorkerClass: FakeWorker });
+  const pending = engine.layout(variant, {
+    presentationState: collapsePresentation,
+  });
+  const worker = FakeWorker.instance;
+  const id = worker.messages[0].id;
+  worker.reply({ id });
+  const native = await new ELK().layout(worker.messages[1].graph);
+  worker.reply({ id, data: native });
+  const geometry = await pending;
+  assert(Object.isFrozen(geometry));
+  assert(Object.isFrozen(geometry.nodes));
+  assert(Object.isFrozen(geometry.nodes[0]));
+  assert(Object.isFrozen(geometry.groups));
+  assert(Object.isFrozen(geometry.groups[0]));
+  assert(Object.isFrozen(geometry.edges[0].sections));
+  assert(Object.isFrozen(geometry.edges[0].sections[0][0]));
+  assert(Object.isFrozen(geometry.edges[0].underlyingEdgeIds));
+  assert.throws(() => {
+    geometry.nodes[0].id = 'CORRUPTED_BY_CONSUMER';
+  }, TypeError);
+  assert.throws(() => {
+    geometry.groups[0].label = 'CORRUPTED';
+  }, TypeError);
+  assert.throws(() => {
+    geometry.edges[0].sections[0][0].x = -900;
+  }, TypeError);
+  assert.throws(() => {
+    geometry.edges[0].underlyingEdgeIds.push('phantom');
+  }, TypeError);
+  assert.equal(
+    await engine.layout(variant, {
+      presentationState: { ...collapsePresentation, cursor: 200 },
+    }),
+    geometry,
+  );
+  assert.equal(geometry.nodes[0].id, 'W');
+  assert.equal(geometry.edges[0].underlyingEdgeIds.length, 1);
+  assert.equal(FakeWorker.instance, worker);
+  assert.equal(Object.isFrozen(variant.graph), false);
+  variant.graph.nodes[0].label = 'caller owns this editable input';
+  assert.equal(variant.graph.nodes[0].label, 'caller owns this editable input');
+  engine.dispose();
+});
+
+test('RED CA057: midflight caller mutation cannot mix old Worker routing with new semantic metadata', async () => {
+  class FakeWorker {
+    constructor() {
+      FakeWorker.instance = this;
+      this.messages = [];
+    }
+    postMessage(message) {
+      this.messages.push(message);
+    }
+    terminate() {
+      this.terminated = true;
+    }
+    reply(data) {
+      this.onmessage({ data });
+    }
+  }
+  const variant = structuredClone(collapseScene);
+  const original = structuredClone(variant);
+  const engine = createV3SceneLayout({ WorkerClass: FakeWorker });
+  const pending = engine.layout(variant, {
+    presentationState: collapsePresentation,
+  });
+  const worker = FakeWorker.instance;
+  const id = worker.messages[0].id;
+  worker.reply({ id });
+  const sentGraph = structuredClone(worker.messages[1].graph);
+  variant.graph.nodes[0].label = 'MUTATED AFTER_DISPATCH';
+  variant.graph.nodes[2].label = 'MUTATED AFTER_DISPATCH';
+  variant.graph.groups[0].label = 'MUTATED AFTER_DISPATCH';
+  variant.graph.edges[1].label = 'MUTATED AFTER_DISPATCH';
+  variant.graph.edges[1].toNodeId = 'W';
+  worker.reply({ id, data: await new ELK().layout(sentGraph) });
+  const geometry = await pending;
+  assert.equal(
+    geometry.nodes.find(({ id }) => id === 'W').label,
+    original.graph.nodes[2].label,
+  );
+  assert.equal(
+    geometry.groups.find(({ id }) => id === 'outer').label,
+    original.graph.groups[0].label,
+  );
+  const edge = geometry.edges.find(({ id }) => id === 'e:xz:a');
+  assert.equal(edge.toNodeId, 'Z');
+  assert.equal(edge.label, 'parallel A');
+  assert.equal(edge.layoutTargetId, 'Z');
+  assert.equal(
+    geometry.topologyKey,
+    prepareV3LayoutInput(original, collapsePresentation).topologyKey,
+  );
+  assert.notEqual(
+    geometry.topologyKey,
+    prepareV3LayoutInput(variant, collapsePresentation).topologyKey,
+  );
+  engine.dispose();
+});
+
+test('CA057: changed graph with identical revision dispatches a new Worker; single-entry cache evicts prior result', async () => {
+  class FakeWorker {
+    static instances = [];
+    constructor() {
+      this.messages = [];
+      FakeWorker.instances.push(this);
+    }
+    postMessage(message) {
+      this.messages.push(message);
+    }
+    terminate() {
+      this.terminated = true;
+    }
+    reply(data) {
+      this.onmessage({ data });
+    }
+  }
+  const variant = structuredClone(simpleScene);
+  const original = structuredClone(variant.graph.edges[0]);
+  const state = { ...options, collapsedGroupIds: [] };
+  const elk = new ELK();
+  const engine = createV3SceneLayout({ WorkerClass: FakeWorker });
+  async function complete(promise) {
+    const worker = FakeWorker.instances.at(-1);
+    const id = worker.messages[0].id;
+    worker.reply({ id });
+    worker.reply({ id, data: await elk.layout(worker.messages[1].graph) });
+    return promise;
+  }
+  const first = await complete(
+    engine.layout(variant, { presentationState: state }),
+  );
+  variant.graph.edges[0].fromNodeId = 'node:two';
+  variant.graph.edges[0].toNodeId = 'node:one';
+  variant.graph.edges[0].label = 'reversed in same revision';
+  const second = await complete(
+    engine.layout(variant, { presentationState: state }),
+  );
+  assert.equal(FakeWorker.instances.length, 2);
+  assert.notEqual(second, first);
+  assert.equal(second.edges[0].fromNodeId, 'node:two');
+  assert.equal(second.edges[0].toNodeId, 'node:one');
+  assert.equal(second.edges[0].label, 'reversed in same revision');
+  assert.equal(
+    await engine.layout(variant, {
+      presentationState: { ...state, cursor: 7 },
+    }),
+    second,
+  );
+  assert.equal(FakeWorker.instances.length, 2);
+  variant.graph.edges[0] = original;
+  const third = await complete(
+    engine.layout(variant, { presentationState: state }),
+  );
+  assert.equal(
+    FakeWorker.instances.length,
+    3,
+    'one-entry cache evicts the older key',
+  );
+  assert.notEqual(third, first);
+  assert.equal(third.edges[0].fromNodeId, original.fromNodeId);
+  engine.dispose();
+});
+
+test('CA057: graph change while Worker pending supersedes epoch and ignores stale reply', async () => {
+  class FakeWorker {
+    static instances = [];
+    constructor() {
+      this.messages = [];
+      FakeWorker.instances.push(this);
+    }
+    postMessage(message) {
+      this.messages.push(message);
+    }
+    terminate() {
+      this.terminated = true;
+    }
+    reply(data) {
+      this.onmessage({ data });
+    }
+  }
+  const variant = structuredClone(simpleScene);
+  const engine = createV3SceneLayout({ WorkerClass: FakeWorker });
+  const state = { ...options, collapsedGroupIds: [] };
+  const stale = engine.layout(variant, { presentationState: state });
+  const staleWorker = FakeWorker.instances[0];
+  variant.graph.edges[0].label = 'new semantic version same revision';
+  const fresh = engine.layout(variant, { presentationState: state });
+  await assert.rejects(stale, /Stale V3 layout request/);
+  assert.equal(staleWorker.terminated, true);
+  assert.equal(FakeWorker.instances.length, 2);
+  staleWorker.reply({ id: staleWorker.messages[0].id });
+  const worker = FakeWorker.instances[1];
+  const id = worker.messages[0].id;
+  worker.reply({ id });
+  worker.reply({ id, data: simpleElk });
+  assert.equal(
+    (await fresh).edges[0].label,
+    'new semantic version same revision',
+  );
+  engine.dispose();
+});
+
+test('CA057: frozen Worker result is readable by CA030 X6 cell-config consumer', async () => {
+  class FakeWorker {
+    constructor() {
+      FakeWorker.instance = this;
+      this.messages = [];
+    }
+    postMessage(message) {
+      this.messages.push(message);
+    }
+    terminate() {
+      this.terminated = true;
+    }
+    reply(data) {
+      this.onmessage({ data });
+    }
+  }
+  class FakeGraph {
+    constructor() {
+      this.nodes = [];
+      this.edges = [];
+    }
+    addNode(spec) {
+      const cell = { ...spec, addChild() {} };
+      this.nodes.push(cell);
+      return cell;
+    }
+    addEdge(spec) {
+      this.edges.push(spec);
+      return spec;
+    }
+    dispose() {
+      this.disposed = true;
+    }
+  }
+  const container = {
+    replaceChildren() {},
+    setAttribute() {},
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const variant = structuredClone(simpleScene);
+  variant.graph.edges[0].label = '';
+  const engine = createV3SceneLayout({ WorkerClass: FakeWorker });
+  const pending = engine.layout(variant, {
+    presentationState: { ...options, collapsedGroupIds: [] },
+  });
+  const worker = FakeWorker.instance;
+  const id = worker.messages[0].id;
+  worker.reply({ id });
+  worker.reply({ id, data: simpleElk });
+  const frozen = await pending;
+  assert(Object.isFrozen(frozen.edges[0].points[0]));
+  const rendered = await renderV3Scene(
+    container,
+    variant,
+    frozen,
+    {},
+    { GraphClass: FakeGraph },
+  );
+  assert.deepEqual(
+    rendered.graph.nodes.map(({ id }) => id),
+    ['node:one', 'node:two'],
+  );
+  assert.deepEqual(
+    rendered.graph.edges.map(({ id }) => id),
+    ['edge:1'],
+  );
+  assert.notEqual(rendered.graph.edges[0].source, frozen.edges[0].points[0]);
+  assert.equal(Object.isFrozen(frozen.edges[0].points[0]), true);
+  rendered.dispose();
+  engine.dispose();
+});
+
+test('RED CA057: canonical key rejects a cyclic ancestor without exhausting the key budget', () => {
+  const variant = structuredClone(simpleScene);
+  // A large property makes the old unguarded serializer reach its 32 MiB
+  // budget in only two visits. The pre-fix RED cannot run indefinitely.
+  const cyclic = { payload: 'x'.repeat(17 * 1024 * 1024) };
+  cyclic.self = cyclic;
+  variant.graph.nodes[0].sourceRef = cyclic;
+  assert.throws(
+    () => prepareV3LayoutInput(variant, { viewport: options.viewport }),
+    /Cyclic V3 topology/,
+  );
+});
+
+test('CA057: canonical key accepts shared acyclic graph metadata references', () => {
+  const shared = { fileId: 'source:shared', line: 7, endLine: 7 };
+  const variant = structuredClone(simpleScene);
+  variant.graph.nodes[0].sourceRef = shared;
+  variant.graph.nodes[1].sourceRef = shared;
+  const equivalent = structuredClone(variant);
+  equivalent.graph.nodes[1].sourceRef = structuredClone(shared);
+  const presentation = { viewport: options.viewport };
+  assert.equal(
+    prepareV3LayoutInput(variant, presentation).topologyKey,
+    prepareV3LayoutInput(equivalent, presentation).topologyKey,
+  );
 });

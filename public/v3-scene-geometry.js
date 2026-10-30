@@ -71,6 +71,88 @@ function normalizeV3EdgeContainers(elk) {
 
 const DEFAULT_NODE_SIZE = { width: 260, height: 124 };
 const DEFAULT_COLLAPSED_SIZE = { width: 220, height: 90 };
+const MAX_V3_TOPOLOGY_KEY_CODE_UNITS = 32 * 1024 * 1024;
+
+// JSON objects are unordered; ELK child/edge arrays are not. Keep their order
+// while using Unicode code-unit sorting for every object's property names.
+function canonicalV3Json(value) {
+  const fragments = [];
+  let length = 0;
+  const pending = [{ value }];
+  const ancestors = new WeakSet();
+  function append(fragment) {
+    length += fragment.length;
+    if (length > MAX_V3_TOPOLOGY_KEY_CODE_UNITS)
+      throw new Error('V3 topology key exceeds safe resource budget');
+    fragments.push(fragment);
+  }
+  while (pending.length) {
+    const next = pending.pop();
+    if (Object.hasOwn(next, 'exit')) {
+      ancestors.delete(next.exit);
+      continue;
+    }
+    if (Object.hasOwn(next, 'literal')) {
+      append(next.literal);
+      continue;
+    }
+    const item = next.value;
+    if (item === null) append('null');
+    else if (typeof item === 'string') append(JSON.stringify(item));
+    else if (typeof item === 'boolean') append(String(item));
+    else if (typeof item === 'number') {
+      if (!Number.isFinite(item))
+        throw new TypeError('Invalid V3 topology number');
+      append(Object.is(item, -0) ? '-0' : JSON.stringify(item));
+    } else if (Array.isArray(item)) {
+      if (ancestors.has(item)) throw new TypeError('Cyclic V3 topology');
+      ancestors.add(item);
+      append('[');
+      pending.push({ exit: item });
+      pending.push({ literal: ']' });
+      for (let i = item.length - 1; i >= 0; i--) {
+        pending.push({ value: item[i] });
+        if (i > 0) pending.push({ literal: ',' });
+      }
+    } else if (
+      item &&
+      typeof item === 'object' &&
+      (Object.getPrototypeOf(item) === Object.prototype ||
+        Object.getPrototypeOf(item) === null)
+    ) {
+      if (ancestors.has(item)) throw new TypeError('Cyclic V3 topology');
+      ancestors.add(item);
+      append('{');
+      pending.push({ exit: item });
+      pending.push({ literal: '}' });
+      const keys = Object.keys(item).sort();
+      for (let i = keys.length - 1; i >= 0; i--) {
+        pending.push({ value: item[keys[i]] });
+        pending.push({ literal: ':' });
+        pending.push({ literal: JSON.stringify(keys[i]) });
+        if (i > 0) pending.push({ literal: ',' });
+      }
+    } else {
+      throw new TypeError('Invalid V3 topology JSON value');
+    }
+  }
+  return fragments.join('');
+}
+
+function detachedFrozenV3Geometry(value) {
+  const detached = structuredClone(value);
+  const seen = new WeakSet();
+  const pending = [detached];
+  while (pending.length) {
+    const current = pending.pop();
+    if (!current || typeof current !== 'object' || seen.has(current)) continue;
+    seen.add(current);
+    for (const child of Object.values(current))
+      if (child && typeof child === 'object') pending.push(child);
+    Object.freeze(current);
+  }
+  return detached;
+}
 
 function cardMeasurements(measuredCards) {
   if (measuredCards instanceof Map) return [...measuredCards.entries()];
@@ -213,12 +295,15 @@ export function prepareV3LayoutInput(
   );
   // Only geometry-affecting state belongs here. In particular, playback
   // cursor, frames, active IDs, selection and highlight do not relayout.
-  const topologyKey = JSON.stringify([
-    'v3-layout-projection-1',
+  const topologyKey = canonicalV3Json([
+    'v3-layout-projection-2',
     presentationState.variantId ?? readyVariant.variantId ?? null,
     readyVariant.artifact?.id ?? null,
     readyVariant.artifact?.revision ?? null,
     readyVariant.artifact?.sourceHash ?? null,
+    // Cached output includes these original records, not just geometry. This
+    // prevents stale labels/provenance when artifact metadata is reused.
+    readyVariant.graph,
     orientation,
     viewport.width,
     viewport.height,
@@ -231,7 +316,7 @@ export function prepareV3LayoutInput(
       presentationState.groupHeaderHeight ?? 42,
       'group header height',
     ),
-    [...sizes].sort(([a], [b]) => a.localeCompare(b)),
+    [...sizes].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
   ]);
   return {
     cards,
@@ -579,18 +664,21 @@ export function createV3SceneLayout({
     if (disposed) return Promise.reject(new Error('V3 layout disposed'));
     let graph;
     let projection;
+    let variantSnapshot;
     try {
       if (settings.signal?.aborted) throw new Error('V3 layout aborted');
+      // One detached request-time snapshot owns the layout graph, key and
+      // later Worker reply flatten. Caller mutation cannot cross epochs.
+      variantSnapshot = structuredClone(variant);
       if (settings.presentationState !== undefined) {
-        const state = resolvedPresentation(settings);
-        projection = prepareV3LayoutInput(
-          variant,
-          state,
+        const state = structuredClone(resolvedPresentation(settings));
+        const measured = structuredClone(
           settings.measuredCards ?? settings.nodeSizes ?? {},
         );
-        graph = buildV3ElkGraphFromPrepared(projection, state, variant);
+        projection = prepareV3LayoutInput(variantSnapshot, state, measured);
+        graph = buildV3ElkGraphFromPrepared(projection, state, variantSnapshot);
       } else {
-        graph = buildV3ElkGraph(variant, settings);
+        graph = buildV3ElkGraph(variantSnapshot, settings);
       }
       if (
         !Number.isFinite(settings.timeoutMs ?? 30000) ||
@@ -691,7 +779,12 @@ export function createV3SceneLayout({
             ),
           );
         try {
-          settle(null, flattenV3ElkGraph(reply.data, variant, projection));
+          settle(
+            null,
+            detachedFrozenV3Geometry(
+              flattenV3ElkGraph(reply.data, variantSnapshot, projection),
+            ),
+          );
         } catch (error) {
           settle(error);
         }
