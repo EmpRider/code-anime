@@ -72,6 +72,31 @@ function normalizeV3EdgeContainers(elk) {
 const DEFAULT_NODE_SIZE = { width: 260, height: 124 };
 const DEFAULT_COLLAPSED_SIZE = { width: 220, height: 90 };
 const MAX_V3_TOPOLOGY_KEY_CODE_UNITS = 32 * 1024 * 1024;
+const MAX_V3_EDGE_LABEL_CODE_UNITS = 4096;
+
+// ELK needs at least the renderer's collision envelope before it routes edges.
+// Wide glyphs reserve extra space without changing supplied labels or semantics.
+function nativeV3EdgeLabels(text) {
+  if (!text) return [];
+  if (typeof text !== 'string' || text.length > MAX_V3_EDGE_LABEL_CODE_UNITS)
+    throw new Error('V3 edge label exceeds safe resource budget');
+  const lines = text.split('\n');
+  if (lines.length > 64)
+    throw new Error('V3 edge label exceeds safe resource budget');
+  let width = 46;
+  for (const line of lines) {
+    let reserved = 20;
+    for (const character of line) {
+      const point = character.codePointAt(0);
+      reserved += point < 128 ? 6 : point >= 0x1f000 ? 16 : 12;
+    }
+    width = Math.max(width, line.length * 6 + 20, reserved);
+  }
+  const height = lines.length * 14 + 12;
+  if (width > 4096 || height > 1024)
+    throw new Error('V3 edge label exceeds safe resource budget');
+  return [{ text, width, height }];
+}
 
 // JSON objects are unordered; ELK child/edge arrays are not. Keep their order
 // while using Unicode code-unit sorting for every object's property names.
@@ -501,6 +526,7 @@ function buildV3ElkGraphFromPrepared(
     id: edge.id,
     sources: [edge.source],
     targets: [edge.target],
+    labels: nativeV3EdgeLabels(edge.label),
   }));
   for (const container of containers.values())
     container.layoutOptions['elk.layered.wrapping.strategy'] = wrappingFor(

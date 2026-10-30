@@ -1465,3 +1465,151 @@ test('CA057: canonical key accepts shared acyclic graph metadata references', ()
     prepareV3LayoutInput(equivalent, presentation).topologyKey,
   );
 });
+
+test('CA058: ELK reserves native label dimensions for exact visible original edges', () => {
+  for (const variant of [simpleScene, scene]) {
+    for (const orientation of ['horizontal', 'vertical']) {
+      const root = buildV3ElkGraph(variant, { ...options, orientation });
+      assert.deepEqual(
+        root.edges.map(({ id, sources, targets }) => [
+          id,
+          ...sources,
+          ...targets,
+        ]),
+        variant.graph.edges.map(({ id, fromNodeId, toNodeId }) => [
+          id,
+          fromNodeId,
+          toNodeId,
+        ]),
+      );
+      for (const input of root.edges) {
+        const original = variant.graph.edges.find(({ id }) => id === input.id);
+        assert.equal(input.labels?.length, 1);
+        assert.equal(input.labels[0].text, original.label);
+        assert(Number.isFinite(input.labels[0].width));
+        assert(Number.isFinite(input.labels[0].height));
+        assert(input.labels[0].width >= 46);
+        assert(input.labels[0].height >= 26);
+      }
+    }
+  }
+});
+
+test('CA058: Unicode and multiline ELK reservations are conservative and immutable', () => {
+  const variant = structuredClone(simpleScene);
+  variant.graph.edges[0].label = 'සිංහල\n漢字漢字漢字漢字 🌟🌟🌟🌟';
+  const before = structuredClone(variant);
+  const input = buildV3ElkGraph(variant, options).edges[0];
+  assert.equal(input.labels[0].text, before.graph.edges[0].label);
+  assert(input.labels[0].width >= 148);
+  assert(input.labels[0].height >= 40);
+  assert.deepEqual(variant, before);
+});
+
+test('CA058: Arabic edge labels reserve conservative native ELK bounds', () => {
+  const variant = structuredClone(simpleScene);
+  variant.graph.edges[0].label = 'مسار الشرط\nعودة';
+  const input = buildV3ElkGraph(variant, options).edges[0];
+  assert.equal(input.labels[0].text, variant.graph.edges[0].label);
+  assert(input.labels[0].width >= 90);
+  assert(input.labels[0].height >= 40);
+});
+
+test('CA058: oversized edge labels fail closed under a finite resource budget', () => {
+  const variant = structuredClone(simpleScene);
+  variant.graph.edges[0].label = 'X'.repeat(200_000);
+  assert.throws(
+    () => buildV3ElkGraph(variant, options),
+    /V3 edge label.*budget/,
+  );
+});
+
+test('CA058: 10k original edge labels produce bounded, distinct ELK reservations', (t) => {
+  const variant = structuredClone(simpleScene);
+  const original = variant.graph.edges[0];
+  variant.graph.edges = Array.from({ length: 10_000 }, (_, index) => ({
+    ...original,
+    id: `edge:bulk:${index}`,
+    label: `next ${index}`,
+  }));
+  const start = performance.now();
+  const input = buildV3ElkGraph(variant, options);
+  const elapsed = performance.now() - start;
+  assert.equal(input.edges.length, 10_000);
+  assert.equal(new Set(input.edges.map(({ id }) => id)).size, 10_000);
+  assert(input.edges.every(({ labels }) => labels.length === 1));
+  assert.equal(input.edges[9999].labels[0].text, 'next 9999');
+  t.diagnostic(`10k CA058 ELK label reservations: ${elapsed.toFixed(2)}ms`);
+});
+
+test('CA058: official ELK/X6 preflight preserves original labels across orientations and nested collapse', async () => {
+  class FakeGraph {
+    constructor() {
+      this.nodes = [];
+      this.edges = [];
+    }
+    addNode(spec) {
+      const cell = { ...spec, addChild() {} };
+      this.nodes.push(cell);
+      return cell;
+    }
+    addEdge(spec) {
+      this.edges.push(spec);
+      return spec;
+    }
+    dispose() {}
+  }
+  const container = {
+    replaceChildren() {},
+    setAttribute() {},
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const elk = new ELK();
+  const variants = [
+    { variant: simpleScene, collapsedGroupIds: [] },
+    { variant: scene, collapsedGroupIds: [] },
+    { variant: collapseScene, collapsedGroupIds: [] },
+    { variant: collapseScene, collapsedGroupIds: ['inner'] },
+    { variant: collapseScene, collapsedGroupIds: ['outer'] },
+  ];
+  for (const { variant, collapsedGroupIds } of variants) {
+    for (const orientation of ['horizontal', 'vertical']) {
+      const state = { ...options, orientation, collapsedGroupIds };
+      const input = buildV3ElkGraph(variant, {
+        ...state,
+        presentationState: state,
+      });
+      const prepared = prepareV3LayoutInput(variant, state);
+      assert.deepEqual(
+        input.edges.map(({ id }) => id),
+        prepared.edges.map(({ id }) => id),
+      );
+      for (const edge of input.edges) {
+        const original = variant.graph.edges.find(({ id }) => id === edge.id);
+        assert.equal(edge.labels[0].text, original.label);
+      }
+      const geometry = flattenV3ElkGraph(
+        await elk.layout(input),
+        variant,
+        prepared,
+      );
+      const painted = await renderV3Scene(container, variant, geometry, state, {
+        GraphClass: FakeGraph,
+      });
+      assert.deepEqual(
+        painted.graph.edges.map(({ id }) => id),
+        prepared.edges.map(({ id }) => id),
+      );
+      assert(
+        painted.graph.edges.every(({ labels }) => labels.length === 1),
+        `${orientation}/${collapsedGroupIds.join(',') || 'expanded'}: original visible labels`,
+      );
+      for (const edge of painted.graph.edges) {
+        const original = variant.graph.edges.find(({ id }) => id === edge.id);
+        assert.equal(edge.labels[0].attrs.label.text, original.label);
+      }
+      painted.dispose();
+    }
+  }
+});

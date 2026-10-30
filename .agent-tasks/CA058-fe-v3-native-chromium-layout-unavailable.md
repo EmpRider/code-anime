@@ -1,7 +1,9 @@
 # CA058 — FE V3 native Chromium preview fails before graph ready
 
 - **Priority:** P0 — approved CA029/CA030 genuine browser acceptance is blocked.
-- **Status:** `READY / ISSUE-FIRST / ROOT_CAUSE_UNCONFIRMED`. No code change is authorized until BA has committed and independently verified this task file, and the failing browser evidence has been triaged.
+- **Status:** `IMPLEMENTED / PENDING_CI`. Council Option D patch has
+  independent QA and semantic-contract review; GitHub Actions Chromium and
+  screenshot acceptance remain pending.
 - **Branch:** `fix/react-layout-collapse`.
 - **Owner:** TL with exclusive FE preview/Worker developer, independent browser QA and semantic-contract reviewer; PM delivery; BA GitHub plugin relay.
 - **First observed:** GitHub Actions run [41052613150](https://github.com/EmpRider/code-anime/actions/runs/41052613150), browser job `124052136083`, following CA030 opt-in preview commit `eb1c307a97d058b0d8ef5101149b594fde55d1f6`.
@@ -33,3 +35,31 @@
 1. BA creates this issue-first file via the GitHub plugin and verifies remote commit/blob SHA **before** any production fix. Keep the ledger status honest; do not mark `DONE` based on local Node or static tests alone.
 2. TL coordinates diagnosis, an exclusive patch author and independent browser QA/semantic review. PM routes exact staged full-file hashes to BA for scoped plugin commits and GitHub Actions verification.
 3. On **any GitHub plugin error**, halt all tasks immediately and report through PM→BA to the user. No Git CLI fallback.
+
+## Reviewed implementation checkpoint (not DONE)
+
+- Root cause confirmed from Chromium artifacts: the previous ELK graph did not
+  reserve native edge-label bounds, leaving some valid original routes too short
+  for the strict X6 label-placement preflight.
+- Council decision: `docs/v3/ca058-label-council-20261030.md` Option D only.
+  Add deterministic, bounded labels to existing visible projected original ELK
+  edges, without changing semantic graph identity, the strict renderer, CSP,
+  Worker protocol, legacy player or MCP backend.
+- Exact reviewed files:
+  - `public/v3-scene-geometry.js` SHA-256
+    `cb8fa8367cc6530054a4697207621c53eb0247a184e56d0f9be488fd4289163f`
+  - `tests/v3-scene-geometry.test.mjs` SHA-256
+    `832ea2647dcdfc11b6afdc39ff14b5e8cb0f65581f31592efc5e003c856514aa`
+- TDD: three new focused assertions failed against the old code; final focused
+  GREEN tests 5/5 PASS. Both files pass Node syntax checks. Independent QA and
+  semantic-contract reviewer accepted these exact bytes for the remote CI gate.
+- Added native ELK to strict X6 renderer test matrix (10 cases) for baseline,
+  nested, collapsed and parallel original edges, horizontal/vertical layouts,
+  preserved IDs, labels and provenance. Multilingual, multiline, oversized and
+  10k-edge bounded input-building cases included.
+- 10k-edge input preparation in isolated Node 24 was approximately 95–127 ms;
+  this is **not** full ELK/X6 layout or Chromium performance evidence.
+- **Pending before DONE:** remote 5/5 CI checks; four previously failing real
+  Worker/X6 Chromium tests; original labels/IDs, CSP and console assertions;
+  six desktop orientation screenshots plus collapsed case; actual visual
+  collision/readability inspection; exact pushed source/test SHA verification.
