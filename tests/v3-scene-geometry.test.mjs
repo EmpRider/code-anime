@@ -259,6 +259,137 @@ test('worker registration/layout produces an isolated, validated result', async 
   engine.dispose();
 });
 
+test('malformed Worker registration ACKs fail closed without dispatching layout', async (t) => {
+  const malformed = [
+    ['unexpected field', (id) => ({ id, notAnAck: true })],
+    ['premature data', (id) => ({ id, data: simpleElk })],
+    ['registration error', (id) => ({ id, error: 'unavailable' })],
+    ['wrong id', (id) => ({ id: id + 1 })],
+    ['missing id', () => ({})],
+    [
+      'array with id',
+      (id) => {
+        const reply = [];
+        reply.id = id;
+        return reply;
+      },
+    ],
+    ['inherited id', (id) => Object.create({ id })],
+    ['symbol key', (id) => ({ id, [Symbol('hidden')]: true })],
+    [
+      'non-enumerable key',
+      (id) => Object.defineProperty({ id }, 'hidden', { value: true }),
+    ],
+    [
+      'throwing id getter',
+      () =>
+        Object.defineProperty({}, 'id', {
+          enumerable: true,
+          get() {
+            throw new Error('malicious id getter');
+          },
+        }),
+    ],
+    [
+      'throwing proxy ownKeys',
+      (id) =>
+        new Proxy(
+          { id },
+          {
+            ownKeys() {
+              throw new Error('malicious proxy keys');
+            },
+          },
+        ),
+    ],
+  ];
+  for (const [label, makeReply] of malformed) {
+    await t.test(label, async () => {
+      class FakeWorker {
+        constructor() {
+          FakeWorker.instance = this;
+          this.messages = [];
+        }
+        postMessage(message) {
+          this.messages.push(message);
+        }
+        terminate() {
+          this.terminated = true;
+        }
+      }
+      const engine = createV3SceneLayout({ WorkerClass: FakeWorker });
+      const pending = engine.layout(simpleScene, {
+        ...options,
+        timeoutMs: 35,
+      });
+      const worker = FakeWorker.instance;
+      const id = worker.messages[0].id;
+      try {
+        assert.doesNotThrow(() => {
+          worker.onmessage({ data: makeReply(id) });
+        });
+        await assert.rejects(pending, /Malformed V3 ELK registration ACK/);
+        assert.deepEqual(
+          worker.messages.map((message) => message.cmd),
+          ['register'],
+        );
+        assert.equal(worker.terminated, true);
+      } finally {
+        engine.dispose();
+        await pending.catch(() => {});
+      }
+    });
+  }
+});
+
+test('malformed ACK and timeout do not poison later Worker layout epochs', async () => {
+  class FakeWorker {
+    constructor() {
+      FakeWorker.instances.push(this);
+      this.messages = [];
+    }
+    postMessage(message) {
+      this.messages.push(message);
+    }
+    terminate() {
+      this.terminated = true;
+    }
+  }
+  FakeWorker.instances = [];
+  const engine = createV3SceneLayout({ WorkerClass: FakeWorker });
+  const rejected = engine.layout(simpleScene, options);
+  const first = FakeWorker.instances[0];
+  first.onmessage({ data: { id: first.messages[0].id, invalid: true } });
+  await assert.rejects(rejected, /Malformed V3 ELK registration ACK/);
+  assert.equal(first.terminated, true);
+  assert.deepEqual(
+    first.messages.map((message) => message.cmd),
+    ['register'],
+  );
+
+  const timedOut = engine.layout(simpleScene, { ...options, timeoutMs: 20 });
+  const second = FakeWorker.instances[1];
+  await assert.rejects(timedOut, /V3 ELK Worker timeout/);
+  assert.equal(second.terminated, true);
+
+  const fresh = engine.layout(simpleScene, options);
+  const third = FakeWorker.instances[2];
+  const id = third.messages[0].id;
+  third.onmessage({ data: { id } });
+  third.onmessage({ data: { id, data: simpleElk } });
+  const result = await fresh;
+  assert.deepEqual(
+    result.edges.map((edge) => edge.id),
+    ['edge:1'],
+  );
+  assert.deepEqual(
+    third.messages.map((message) => message.cmd),
+    ['register', 'layout'],
+  );
+  assert.equal(third.terminated, true);
+  engine.dispose();
+});
+
 test('new geometry epochs cancel stale Worker responses', async () => {
   class FakeWorker {
     constructor() {
