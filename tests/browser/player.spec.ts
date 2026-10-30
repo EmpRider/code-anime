@@ -343,7 +343,8 @@ for (const mobile of [false, true]) {
       await capture('01-full-map');
       await page
         .getByRole('button', { name: 'Expand method B.work', exact: true })
-        .click();
+        .focus();
+      await page.keyboard.press('Enter');
       await expect(
         page.locator('#canvas[data-layout-state="ready"]'),
       ).toHaveCount(1);
@@ -1089,11 +1090,14 @@ for (const mobile of [false, true]) {
         page.locator('.diagram-card[data-control-type="loop"]'),
       ).toHaveCount(2);
       await seek(page, 6);
-      const decision = page.locator(
-        '.diagram-card[data-control-type="decision"]',
+      const falseDecision = page.locator(
+        '.diagram-card[data-control-type="decision"][data-step="6"]',
       );
-      await expect(decision).toContainText('Condition false');
-      await expect(decision).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+      await expect(falseDecision).toContainText('Condition false');
+      await expect(falseDecision).toHaveCSS(
+        'background-color',
+        'rgba(0, 0, 0, 0)',
+      );
       await expect(
         page.locator('.diagram-control-region[data-control-type="decision"]'),
       ).toHaveCount(2);
@@ -1103,9 +1107,9 @@ for (const mobile of [false, true]) {
       );
       await expect(page.locator('.diagram-path-note button')).toHaveCount(0);
       await expect(
-        page.locator(
-          '.diagram-control-region[data-control-type="loop"] > span',
-        ),
+        page
+          .locator('.diagram-control-region[data-control-type="loop"] > span')
+          .first(),
       ).toHaveCSS('writing-mode', 'horizontal-tb');
       await expect(page.locator('.diagram-routing-status')).toBeHidden();
       expect(
@@ -1145,6 +1149,7 @@ for (const mobile of [false, true]) {
       expect(
         await page
           .locator('.diagram-card[data-control-type="loop"]')
+          .first()
           .evaluate((card) => {
             const box = card.getBoundingClientRect();
             const surface = document
@@ -1352,7 +1357,11 @@ for (const mobile of [false, true]) {
       await expect(page.locator('[data-edge-kind="branch"]')).toHaveCount(2);
       await picker.selectOption('0');
       await expect(page.locator('#progress')).toHaveText('2 / 8');
-      await expect(decision).toContainText('Condition true');
+      await expect(
+        page.locator(
+          '.diagram-card[data-control-type="decision"][data-step="3"]',
+        ),
+      ).toContainText('Condition true');
     });
     test('diagram navigation remains usable in desktop grid and mobile in-flow layouts', async ({
       page,
@@ -1830,9 +1839,13 @@ for (const mobile of [false, true]) {
         page.locator('.diagram-card:not([data-parent-id])'),
       ).toHaveCount(2);
       await expect(page.locator('.diagram-boundary-owner')).toHaveCount(2);
-      await expect(
-        page.locator('.x6-edge:not([data-edge-kind="return"])'),
-      ).toHaveCount(2);
+      // The expanded method retains two prepared step arrows and one call arrow.
+      await expect(page.locator('.x6-edge[data-edge-kind="step"]')).toHaveCount(
+        2,
+      );
+      await expect(page.locator('.x6-edge[data-edge-kind="call"]')).toHaveCount(
+        1,
+      );
       const expanded = page.locator(
         '.diagram-card[data-call-id="b"]:not([data-parent-id])',
       );
