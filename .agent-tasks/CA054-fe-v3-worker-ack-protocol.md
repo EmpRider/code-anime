@@ -1,6 +1,6 @@
 # CA054 — Fail closed on malformed ELK Worker registration ACK
 
-Status: READY — Council-reviewed issue-first; no source fix committed
+Status: DONE — strict Worker ACK source/tests pushed, independently reviewed and fresh branch CI verified; CA029/CA030 OPEN
 Priority: P1 FE V3 G0 protocol correctness blocker; no observed live production outage/security exploit
 Branch: `fix/react-layout-collapse`
 Owner: FE V3 geometry developer; independent QA and Worker contract reviewer; TL technical supervisor; PM delivery
@@ -34,4 +34,14 @@ Approval: FE V3 implementation approved; no CA031 cutover or MCP/backend changes
 
 ## Risk and delivery
 
-Strict ACK rejects undocumented custom Worker metadata, pinned vendor unaffected. Revert isolated commit if protocol evidence changes. CA029/CA030 remain OPEN until browser/visual acceptance. **Issue-first GitHub plugin commit/verification required before any CA054 code fix. No CA054 source edit/remote implementation commit yet.**
+Strict ACK rejects undocumented custom Worker metadata; pinned vendor unaffected. Revert isolated CA054 commit if protocol evidence changes. CA029/CA030 remain OPEN until V3 Chromium/visual acceptance.
+
+## Verified delivery
+
+- Issue-first task commit `ec56983a4a0e0b8601d507600314282fd48128c8` preceded code.
+- Worker geometry source fix `894b01e65458437bb7388ab9605732c2b2b24de8`; regression tests commit `ac8b440407b04bef828706ff12ceb33622a6dfd2`, both remotely re-fetched byte-identical to QA-reviewed staging.
+- TDD RED malformed ACK cases → GREEN **27/27** geometry/Worker tests (11 malformed/protocol scenarios plus timeout recovery), independent QA and code review PASS; adapter 26/26 PASS; Node syntax and repository Prettier PASS.
+- Durable [CA054 engineering Council decision](../../docs/v3/ca054-worker-council-20261030.md) at `9daa2e26867e829de4fc9c5c9efeb37f71b7edca`.
+- Initial CA054 code commits' CI inherited the unrelated Prettier error in CA030 Council Markdown. CA056 fixed this in `be6da80ed57515243592deb12a956d82297fda07` and closed at `60ca9f66fc3dd241b861918888b351d863438bde`.
+- Fresh descendant GitHub Actions [run 41045854664](https://github.com/EmpRider/code-anime/actions/runs/41045854664) **completed/success, 5/5 jobs** (Ubuntu Node22/24, Windows Node22/24, Chromium browser).
+- Genuine V3 Chromium Worker test still PENDING_CA030; CA029 G1 collapse projection and CA030 isolated visual preview NOT DONE. Legacy browser suite does not establish V3 E2E.
