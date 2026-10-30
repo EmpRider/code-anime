@@ -8,14 +8,14 @@
 
 Source: user-provided complete `upload/agent-team-skill(2).md`; freshly GitHub-plugin-verified mandatory upstream instruction files under `skill_pins/20261029`. Loader fetched **29/29 full required instruction/reference files** across canonical repositories, pinned their default-branch HEADs and recorded SHA-256 in `skill_pins/20261029/MANIFEST.md`.
 
-| Repo | Latest verified pinned SHA |
-| --- | --- |
-| `obra/superpowers` | `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b` |
+| Repo                                 | Latest verified pinned SHA                 |
+| ------------------------------------ | ------------------------------------------ |
+| `obra/superpowers`                   | `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b` |
 | `EmpRider/claude-skills-llm-council` | `a7565e21d5ab03551fe66e36818e05af245467b8` |
-| `JuliusBrussee/caveman` | `9b68f7ed12b05e7efaff18e65c5a3fc2849fd0a4` |
-| `DietrichGebert/ponytail` | `7801d061243d7b753bad0e0b3c057cd250b11755` |
-| `ayghri/i-have-adhd` | `1ecea1993b7fce257ffbd686c070948b5e07eda6` |
-| `alexgreensh/attention-span` | `8a6e2250dbc1dfb1b4186e03a92484d8c799c1b0` |
+| `JuliusBrussee/caveman`              | `9b68f7ed12b05e7efaff18e65c5a3fc2849fd0a4` |
+| `DietrichGebert/ponytail`            | `7801d061243d7b753bad0e0b3c057cd250b11755` |
+| `ayghri/i-have-adhd`                 | `1ecea1993b7fce257ffbd686c070948b5e07eda6` |
+| `alexgreensh/attention-span`         | `8a6e2250dbc1dfb1b4186e03a92484d8c799c1b0` |
 
 Council skill root SHA-256 `6387755b0cd0f069720549c7e81d90b724433d4ff46cb127271b902939ad586d`. PM and EDO independently read complete pinned Council root; advisor specialists confirmed independent reads before peer-review. This does not certify source code or frontend screenshots.
 
@@ -36,7 +36,7 @@ Council skill root SHA-256 `6387755b0cd0f069720549c7e81d90b724433d4ff46cb127271b
 The five role-stripped proposal bodies were distributed under letter identifiers in `FE_KICKOFF_COUNCIL_ANON.md` **before** peer reviews; concise faithful full substance is retained here.
 
 - **A:** Reuse existing viewport-capable ELK and pure route/label helpers; direct live path and new layout library have much larger coupling. Preserve independent semantic edge fields versus visual proxy anchors at collapse; RED tests for 28-node wraps, group ancestry, stale Worker, long labels, parallel alternatives. Existing `checkPrepared` rejects group-anchor edge endpoints, requiring controlled geometry-only handling. Fixture-only cannot change current app.
-- **B:** Deliver A with an isolated screenshot/preview checkpoint using the *same* V3 rendering pipeline; fixture-only commits could otherwise produce zero visible live desktop effect. Direct live patch might give rapid feedback but violates user-approved CA031/backend dependency. Test nested multilingual groups and actual two desktop viewport dimensions; never call a fixture demo a production fix.
+- **B:** Deliver A with an isolated screenshot/preview checkpoint using the _same_ V3 rendering pipeline; fixture-only commits could otherwise produce zero visible live desktop effect. Direct live patch might give rapid feedback but violates user-approved CA031/backend dependency. Test nested multilingual groups and actual two desktop viewport dimensions; never call a fixture demo a production fix.
 - **C:** Strict CA028→CA029→CA030 dependencies, task-specific remote GitHub verification, exclusive file locks and rollback. Existing dirty files and initially `NOT_AUTHORIZED` ledger demand **remote approved-status kickoff push first**. A malformed ready baseline is the top schema failure and invisible semantic edge alias the top geometry failure. Report `FIXTURE_VERIFIED`, not end-to-end readiness.
 - **D:** Isolated `v3-scene-adapter.js` with atomic whole-root validation, variant-local IDs and `Map`/own-key safety. Negative cases: ready-baseline dangling references, group cycle, explicit unresolved vs structurally missing, CRLF+UTF-16 surrogates, `__proto__` keys, repeated Visits, cursor 0..N navigation, no source-scanning imports. No guessed byte/depth quotas or new dependencies.
 - **E:** Existing legacy ELK and route tests PASS but are not V3 JSON coverage. Require malicious-key/text safety, original graph edge set unchanged through collapse, inactive alternatives painted while `activeEdgeIds` highlights only, camera/Worker staleness, actual desktop browser proof separately. Seven user dirty files are off-limits.
@@ -77,7 +77,7 @@ Every reviewer was given all A–E texts without their author roles, no other pe
 
 **EDO asked original QA advisor:** Node tests and separate preview might be entirely unmounted in current product; CSP, fonts, style and keyboard may differ; user expects visual improvement. What can be truthfully accepted without CA031?
 
-**Real advisor rebuttal/concession:** Concede nothing in CA028–030 changes current live player. Safe statuses are per-task isolated adapter/geometry/renderer independently pushed, with `LIVE_PLAYER_NOT_WIRED` and complete V3 source/Visit/Values acceptance blocked. If feasible, use disposable local browser fixture harness importing *same actual* `v3-scene-diagram.js`, graph CSS/fonts, X6/ELK; no `public/player.js`/`index.html` or locked UI change. Inspect geometry/ARIA/contrast at 800×600/1920×1080 in two orientations, record deviations from actual CSP/shell. If Chromium unavailable, `BROWSER_VISUAL_UNVERIFIED` and `OWNER_FEEDBACK_PENDING`, never full UI or E2E PASS. Include unsafe label and original-edge collapse negative tests.
+**Real advisor rebuttal/concession:** Concede nothing in CA028–030 changes current live player. Safe statuses are per-task isolated adapter/geometry/renderer independently pushed, with `LIVE_PLAYER_NOT_WIRED` and complete V3 source/Visit/Values acceptance blocked. If feasible, use disposable local browser fixture harness importing _same actual_ `v3-scene-diagram.js`, graph CSS/fonts, X6/ELK; no `public/player.js`/`index.html` or locked UI change. Inspect geometry/ARIA/contrast at 800×600/1920×1080 in two orientations, record deviations from actual CSP/shell. If Chromium unavailable, `BROWSER_VISUAL_UNVERIFIED` and `OWNER_FEEDBACK_PENDING`, never full UI or E2E PASS. Include unsafe label and original-edge collapse negative tests.
 
 **EDO resolution: ACCEPT CONCESSION.** Add fixture preview only within approved isolated QA/demo surface if technically feasible with existing dependencies; otherwise mark explicitly unavailable and do not broaden live production scope. BA should warn owner the existing desktop will remain unchanged until future authorized integration.
 
@@ -85,7 +85,7 @@ Every reviewer was given all A–E texts without their author roles, no other pe
 
 **Decision:** **GO for isolated fixture-driven CA028→CA029→CA030 only**, conditional on mandatory verified **GitHub kickoff ledger update BEFORE code**. Preserve user-approved plan and no new library. CA028 creates strict schema adapter + fixtures; CA029 transforms only supplied graph into local ELK 2D geometry while retaining semantic IDs and honest group collapse; CA030 paints labeled, accessible semantic shapes, edge ports/labels and scoped dark chart theme via pure geometry. All source/Visit/Values/controls in current product are untouched. Work proceeds via fresh task implementer and independent QA/spec+quality reviewer with RED→GREEN and separately verified GitHub plugin commits/status. Do not mark any task DONE until remote commit+status verified.
 
-**Dissent/unknowns:** (1) No current desktop improvement from these isolated tasks because live `public/diagram.js` does not consume V3 fixture and its viewport caller omits dimensions. (2) Group-boundary route clarity and multi-row/column on actual browser fonts remain unverified. (3) Future MCP one immutable JSON producer, CodeGraph multilingual support, source/Visit/Values live parity and full package/Windows acceptance are *not* completed. (4) Browser fixture preview may be unavailable without extra build harness; do not fake it.
+**Dissent/unknowns:** (1) No current desktop improvement from these isolated tasks because live `public/diagram.js` does not consume V3 fixture and its viewport caller omits dimensions. (2) Group-boundary route clarity and multi-row/column on actual browser fonts remain unverified. (3) Future MCP one immutable JSON producer, CodeGraph multilingual support, source/Visit/Values live parity and full package/Windows acceptance are _not_ completed. (4) Browser fixture preview may be unavailable without extra build harness; do not fake it.
 
 **Hard rollout/rollback:** Existing live player and seven dirty files untouched; no new source-semantic module, no `CA031` cutover, no MCP backend work. If adapter/geometry/renderer fails, no live production regression introduced; task-specific isolated commits remain individually revertible with authorized, non-destructive follow-up.
 
