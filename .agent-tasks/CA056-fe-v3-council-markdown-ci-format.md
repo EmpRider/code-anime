@@ -1,6 +1,6 @@
 # CA056 — Format CA030 Council document to unblock CI
 
-Status: READY — issue-first; no formatting fix yet
+Status: DONE — one-token Prettier correction remotely verified; full branch CI 5/5 green
 Priority: P1 CI delivery gate blocker (four npm-check matrix jobs red; browser job green; no live outage)
 Branch: `fix/react-layout-collapse`
 Owner: documentation/format specialist; independent QA and TL review; PM delivery
@@ -29,4 +29,9 @@ Ordinary mechanical Prettier regression analogous CA051, no new architecture cho
 
 ## Delivery state
 
-Issue-first GitHub file not yet created; no formatting fix committed. CA054/CA055/CA030 read-only/isolated prep may continue; CI-dependent completion BLOCKED.
+- Issue-first record commit `b82fddcdd6a849622c8f0f5a1cf9cd5c6ef580b9`, verified before formatting.
+- Scoped Markdown formatting fix `be6da80ed57515243592deb12a956d82297fda07`, re-fetched byte-exact by BA.
+- Independent editorial reviewer proved only `*latest*` → `_latest_`; Council decisions, advisors, peer reviews, rebuttals, EDO outcomes and technical content unchanged.
+- Repository-config Prettier RED before, GREEN after; source/tests/workflow untouched.
+- [GitHub Actions run 41045854664](https://github.com/EmpRider/code-anime/actions/runs/41045854664) at `be6da80`: **completed/success, 5/5 jobs** (Ubuntu Node 22/24, Windows Node 22/24, Chromium browser).
+- CA056 is DONE after verified status commit. CA054 Worker source/tests previously byte-verified and inherited formatting blocker removed; CA029 G1/CA030 Chromium V3 visual acceptance remain OPEN.
