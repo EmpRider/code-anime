@@ -291,6 +291,85 @@ test('rejects duplicate node, edge, group, event and frame IDs', () => {
   });
 });
 
+test('rejects cross-kind graph IDs before playback checks, even with updated references', () => {
+  const raw = fixture('proposed-baseline');
+  const variant = raw.variantsById.proposed;
+  variant.graph.edges[0].id = variant.graph.nodes[0].id;
+  variant.playback.frames[1].activeEdgeIds = [variant.graph.nodes[0].id];
+  assert.throws(
+    () => validateFlowSceneDocument(raw),
+    (error) => {
+      assert.equal(error.code, 'INVALID_ARTIFACT');
+      assert.match(error.message, /duplicate graph ID node:one.*nodes.*edges/);
+      return true;
+    },
+  );
+});
+
+test('rejects node/group ID collisions with otherwise consistent nesting', () => {
+  const nodeGroup = fixture('nested-multilingual');
+  const p = nodeGroup.variantsById.proposed;
+  const oldGroupId = 'group:outer';
+  const sharedId = p.graph.nodes[0].id;
+  p.graph.groups.find((group) => group.id === oldGroupId).id = sharedId;
+  for (const group of p.graph.groups) {
+    if (group.parentGroupId === oldGroupId) group.parentGroupId = sharedId;
+  }
+  for (const node of p.graph.nodes) {
+    node.groupPathIds = node.groupPathIds.map((id) =>
+      id === oldGroupId ? sharedId : id,
+    );
+  }
+  assert.throws(
+    () => validateFlowSceneDocument(nodeGroup),
+    (error) => {
+      assert.equal(error.code, 'INVALID_ARTIFACT');
+      assert.match(
+        error.message,
+        /duplicate graph ID node:入口.*nodes.*groups/,
+      );
+      return true;
+    },
+  );
+});
+
+test('rejects group/edge ID collisions with updated playback references', () => {
+  const groupEdge = fixture('nested-multilingual');
+  const q = groupEdge.variantsById.proposed;
+  const oldEdgeId = q.graph.edges[0].id;
+  const sameId = q.graph.groups[0].id;
+  q.graph.edges[0].id = sameId;
+  for (const frame of q.playback.frames) {
+    frame.activeEdgeIds = frame.activeEdgeIds.map((id) =>
+      id === oldEdgeId ? sameId : id,
+    );
+  }
+  assert.throws(
+    () => validateFlowSceneDocument(groupEdge),
+    (error) => {
+      assert.equal(error.code, 'INVALID_ARTIFACT');
+      assert.match(
+        error.message,
+        /duplicate graph ID group:outer.*edges.*groups/,
+      );
+      return true;
+    },
+  );
+});
+
+test('allows identical graph IDs in different ready variants without remapping', () => {
+  const raw = fixture('proposed-baseline');
+  const baseline = raw.variantsById.baseline;
+  baseline.graph.nodes[0].id = raw.variantsById.proposed.graph.nodes[0].id;
+  baseline.playback.frames[0].activeNodeIds = [baseline.graph.nodes[0].id];
+  const validated = validateFlowSceneDocument(raw);
+  assert.equal(validated.variantsById.proposed.graph.nodes[0].id, 'node:one');
+  assert.equal(validated.variantsById.baseline.graph.nodes[0].id, 'node:one');
+  assert.deepEqual(raw.variantsById.baseline.playback.frames[0].activeNodeIds, [
+    'node:one',
+  ]);
+});
+
 test('rejects graph, source and evidence references missing from the same ready variant', () => {
   invalid((root, p) => {
     p.graph.edges[0].toNodeId = 'node:baseline';
