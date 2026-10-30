@@ -625,7 +625,7 @@ for (const mobile of [false, true]) {
         await page
           .locator('html > body')
           .evaluate((body) => getComputedStyle(body).backgroundColor),
-      ).toBe('rgb(11, 16, 32)');
+      ).toBe('rgb(7, 13, 22)');
       const theme = page.getByRole('button', {
         name: 'Dark theme',
         exact: true,
@@ -1055,9 +1055,10 @@ for (const mobile of [false, true]) {
       await picker.selectOption('1');
       await expect(picker).toHaveCount(1);
       await expect(page.locator('#progress')).toHaveText('5 / 8');
+      // Both prepared loop visits retain a visible header; the visit picker is shared.
       await expect(
         page.locator('.diagram-card[data-control-type="loop"]'),
-      ).toHaveCount(1);
+      ).toHaveCount(2);
       await seek(page, 6);
       const decision = page.locator(
         '.diagram-card[data-control-type="decision"]',
@@ -1438,6 +1439,7 @@ for (const mobile of [false, true]) {
         expect(samples.first).toHaveLength(2);
         expect(samples.second).toEqual(samples.first);
       };
+      await waitForSettledDirection('vertical');
       const beforeDirection = await children.evaluateAll((nodes) =>
         nodes.map((node) => node.getAttribute('data-step')),
       );
@@ -1587,10 +1589,10 @@ for (const mobile of [false, true]) {
       const inactiveEvent = page
         .locator('.method-event:not([aria-current="step"])')
         .first();
-      await expect(action).toHaveCSS('background-color', 'rgb(30, 44, 67)');
+      await expect(action).toHaveCSS('background-color', 'rgb(23, 38, 58)');
       await expect(inactiveEvent).toHaveCSS(
         'background-color',
-        'rgb(30, 44, 67)',
+        'rgb(23, 38, 58)',
       );
       await page
         .getByRole('button', { name: 'Dark theme', exact: true })
@@ -1740,6 +1742,9 @@ for (const mobile of [false, true]) {
         .locator('.x6-graph-svg-viewport')
         .evaluate((el) => new DOMMatrix(el.getAttribute('transform')!).a);
       await page.keyboard.press('Enter');
+      await expect(
+        page.locator('#canvas[data-layout-state="ready"]'),
+      ).toHaveCount(1);
       const afterMethod = (await valuesCard.boundingBox())!;
       await expect(
         page.locator('.x6-edge[data-selected-pair="true"]'),
