@@ -1191,7 +1191,10 @@ for (const mobile of [false, true]) {
         .locator('[data-edge-kind="branch"]')
         .evaluateAll((edges) =>
           edges.map((edge) => ({
-            points: JSON.parse(edge.getAttribute('data-route')!),
+            points: JSON.parse(edge.getAttribute('data-route')!) as {
+              x: number;
+              y: number;
+            }[],
             path: edge.querySelector('path')?.getAttribute('d'),
           })),
         );
