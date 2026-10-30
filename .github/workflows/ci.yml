@@ -34,10 +34,17 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run build
-      - run: npm run test:browser
+      - name: Run browser tests with evidence
+        run: npm run test:browser -- --reporter=list,html,json --trace=retain-on-failure
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+          PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/results.json
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: ${{ !cancelled() }}
         with:
           name: browser-test-results
-          path: test-results/
-          if-no-files-found: ignore
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: warn
