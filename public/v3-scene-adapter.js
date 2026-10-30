@@ -315,6 +315,23 @@ function validateGraph(graph, files, receipts, path) {
   const nodes = indexed(field(graph, 'nodes', path), `${path}.nodes`);
   const edges = indexed(field(graph, 'edges', path), `${path}.edges`);
   const groups = indexed(field(graph, 'groups', path), `${path}.groups`);
+  const graphIds = new Map();
+  for (const [kind, records] of [
+    ['nodes', nodes],
+    ['edges', edges],
+    ['groups', groups],
+  ]) {
+    for (const graphId of records.keys()) {
+      const previousKind = graphIds.get(graphId);
+      if (previousKind) {
+        fail(
+          `${path}.${kind}(${graphId})`,
+          `duplicate graph ID ${graphId} across ${previousKind} and ${kind}`,
+        );
+      }
+      graphIds.set(graphId, kind);
+    }
+  }
   const events = new Map();
   for (const [nodeId, node] of nodes) {
     const at = `${path}.nodes(${nodeId})`;
