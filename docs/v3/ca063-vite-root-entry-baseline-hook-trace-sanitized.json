@@ -1,0 +1,163 @@
+{
+  "task": "CA063",
+  "mode": "baseline",
+  "startedAt": "2026-10-30T19:46:31.863Z",
+  "endedAt": "2026-10-30T19:46:31.948Z",
+  "runtime": {
+    "node": "v22.23.4",
+    "cwd": "<REPO>",
+    "vite": "8.3.4",
+    "rolldown": "1.2.15",
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "status": "UNRESOLVED_HARNESS",
+  "firstError": {
+    "code": "UNKNOWN",
+    "name": "Error",
+    "message": "Build failed with 1 error:\n\n[UNRESOLVED_ENTRY] Cannot resolve entry module virtual:ca059-harness-entry.\n",
+    "plugin": null,
+    "id": null
+  },
+  "traceCompleteWithinCap": true,
+  "events": [
+    {
+      "event": "frozen_source",
+      "data": {
+        "file": "tests/browser/v3-label-association.spec.ts",
+        "sha256": "68c77c8aa2f5e50f72a3a3c6859a9ab4fa4124ea61acd3396d71d50f0d4ebeba",
+        "selectedSourceSha256": "0f9238c81d1a59c973df43b2b5d75a53982900572a648f5b73d16633f39a766a",
+        "originalSourceBytes": 5474
+      },
+      "offsetMs": 46
+    },
+    {
+      "event": "configResolved",
+      "data": {
+        "root": "<REPO>",
+        "publicDir": "",
+        "pluginOrder": [
+          "vite:optimized-deps",
+          "vite:watch-package-data",
+          "vite:pre-alias",
+          "alias",
+          "ca059-exact-renderer-import-smoke",
+          "vite:modulepreload-polyfill",
+          "vite:bundled-dev-client-imports",
+          "vite:resolve-builtin:get-environment",
+          "vite:resolve-builtin",
+          "vite:html-inline-proxy",
+          "vite:css",
+          "builtin:oxc-runtime",
+          "vite:oxc",
+          "builtin:vite-json",
+          "vite:wasm-helper",
+          "vite:worker",
+          "vite:asset",
+          "vite:forward-console",
+          "vite:define",
+          "vite:css-post",
+          "vite:build-html",
+          "vite:worker-import-meta-url",
+          "vite:asset-import-meta-url",
+          "vite:prepare-out-dir",
+          "vite:rollup-options-plugins",
+          "vite:dynamic-import-vars",
+          "vite:import-glob",
+          "vite:build-import-analysis",
+          "native:import-analysis-build",
+          "vite:terser",
+          "vite:license",
+          "native:manifest",
+          "vite:ssr-manifest",
+          "native:reporter",
+          "builtin:vite-load-fallback",
+          "vite:client-inject",
+          "vite:css-analysis",
+          "vite:import-analysis"
+        ],
+        "build": {
+          "write": false,
+          "lib": {
+            "entry": "virtual:ca059-harness-entry",
+            "formats": [
+              "iife"
+            ],
+            "name": "CA059HarnessSmoke"
+          },
+          "rollupInput": null,
+          "rolldownInput": null
+        }
+      },
+      "offsetMs": 59
+    },
+    {
+      "event": "options.input",
+      "data": {
+        "input": "<REPO>/virtual:ca059-harness-entry",
+        "keys": [
+          "preserveEntrySignatures",
+          "platform",
+          "output",
+          "tsconfig",
+          "resolve",
+          "input",
+          "plugins",
+          "onLog",
+          "transform",
+          "moduleTypes",
+          "experimental"
+        ]
+      },
+      "offsetMs": 63
+    },
+    {
+      "event": "buildStart",
+      "data": {
+        "input": [
+          "<REPO>/virtual:ca059-harness-entry"
+        ]
+      },
+      "offsetMs": 78
+    },
+    {
+      "event": "resolveId.call",
+      "data": {
+        "id": "<REPO>/virtual:ca059-harness-entry",
+        "importer": null,
+        "isEntry": true
+      },
+      "offsetMs": 80
+    },
+    {
+      "event": "resolveId.return",
+      "data": {
+        "id": "<REPO>/virtual:ca059-harness-entry",
+        "result": null
+      },
+      "offsetMs": 80
+    },
+    {
+      "event": "buildEnd.error",
+      "data": {
+        "code": "UNKNOWN",
+        "name": "Error",
+        "message": "Build failed with 1 error:\n\n[UNRESOLVED_ENTRY] Cannot resolve entry module virtual:ca059-harness-entry.\n",
+        "plugin": null,
+        "id": null
+      },
+      "offsetMs": 81
+    },
+    {
+      "event": "firstThrownError",
+      "data": {
+        "code": "UNKNOWN",
+        "name": "Error",
+        "message": "Build failed with 1 error:\n\n[UNRESOLVED_ENTRY] Cannot resolve entry module virtual:ca059-harness-entry.\n",
+        "plugin": null,
+        "id": null
+      },
+      "offsetMs": 85
+    }
+  ]
+}

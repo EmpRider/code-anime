@@ -1,0 +1,76 @@
+{
+  "task": "CA063",
+  "classification": "UNRESOLVED_LIMIT",
+  "rootCauseConfidence": "LOCALLY_OBSERVED_IMMEDIATE_CAUSE_H1",
+  "permanentChangeApproved": false,
+  "ci2Approved": false,
+  "timebox": {
+    "startedNoLaterThanUtc": "2026-10-30T19:42:05Z",
+    "firstViteAttemptUtc": "2026-10-30T19:46:31.863Z",
+    "secondViteAttemptUtcApprox": "2026-10-30T19:47:11Z",
+    "maximumOneFactorAttempts": 2,
+    "actualOneFactorAttempts": 2,
+    "thirdAttemptForbidden": true
+  },
+  "parity": {
+    "branch": "fix/react-layout-collapse",
+    "head": "40feb3f6c4d061bd5384e514679307228b8966ae",
+    "frozenTestSha256": "68c77c8aa2f5e50f72a3a3c6859a9ab4fa4124ea61acd3396d71d50f0d4ebeba",
+    "node": "v22.23.4",
+    "ciNodeMajor": 22,
+    "vite": "8.3.4",
+    "rolldown": "1.2.15",
+    "rolldownLinuxX64Binding": "1.2.15",
+    "npmCi": "PASS: 175 exact-lockfile packages; --ignore-scripts --no-audit --no-fund; task-scoped cache",
+    "os": "linux",
+    "sourceCwd": "task-owned repo snapshot root; same repository-relative structure as CI"
+  },
+  "attempt1": {
+    "mode": "UNCHANGED_ROOT_BASELINE",
+    "status": "RED_REPRODUCED",
+    "source": "Original frozen bundleSmoke() and LABELS extracted/transpiled in memory without changing original bytes",
+    "traceSanitizedPath": "tmp/ca063-local-probe-dev/ca063-baseline-hook-trace-sanitized.json",
+    "traceSanitizedSha256": "f44be867728c1e1ce98720551c3b3a48a3f617a6695e1c3fe498245225848944",
+    "traceSanitizedBytes": 4299,
+    "observedInput": "<REPO>/virtual:ca059-harness-entry",
+    "observedResolveId": {
+      "id": "<REPO>/virtual:ca059-harness-entry",
+      "importer": null,
+      "isEntry": true,
+      "originalReturn": null
+    },
+    "loadInvoked": false,
+    "observedError": "[UNRESOLVED_ENTRY] Cannot resolve entry module virtual:ca059-harness-entry",
+    "observedDurationMs": 85
+  },
+  "attempt2": {
+    "mode": "ROOT_ONLY_EXACT_OBSERVED_ID_CONTRAST",
+    "singleChangedFactor": "When original resolver declines, map only the absolute observed root ID with importer=null and isEntry=true to the existing NUL-prefixed virtual entry ID",
+    "scratchScriptSha256": "a6c842b2a941c77c1c3eae42995b6ff744e5fe6bbd7b4b21c5d3a89703670a45",
+    "exitCode": 1,
+    "failure": "CA063: capped output unexpectedly exceeded 16KiB (19328)",
+    "failureStage": "After Vite returned or threw, at JSON evidence serialization guard",
+    "outputFileWritten": false,
+    "resolutionOrLoadOutcome": "UNKNOWN_UNRECORDED",
+    "bundleOrAliasOutcome": "UNKNOWN_UNRECORDED",
+    "result": "UNRESOLVED_LIMIT",
+    "thirdBuildAttemptPermitted": false
+  },
+  "negativeControls": {
+    "nearMissRootGenuineViteBuild": "NOT_RUN_BUDGET_EXHAUSTED",
+    "wrongImporterGenuineViteBuild": "NOT_RUN_BUDGET_EXHAUSTED",
+    "disabledAliasGenuineViteBuild": "NOT_RUN_BUDGET_EXHAUSTED",
+    "workerElkX6CspRuntime": "NOT_RUN_NO_SEMANTIC_PROOF"
+  },
+  "mutations": {
+    "taskOwnedScratchOnly": true,
+    "originalTestEdited": false,
+    "productionSourceEdited": false,
+    "ciTriggered": false,
+    "gitRemoteWrite": false,
+    "githubPluginInvoked": false,
+    "globalInstall": false
+  },
+  "stopReason": "Two authorized local Vite attempts were consumed. Although the baseline discriminates the immediate root-entry mismatch, the one-factor contrast exceeded evidence bounds and lacks a valid complete trace. Keep CA063 UNRESOLVED_LIMIT/UNRESOLVED_HARNESS; no permanent patch or CI2.",
+  "nextGate": "Review sanitized baseline, the bounded second-attempt failure and source exactness through Council/QA/security; separate human authority is needed for any further local Vite build or repository test change."
+}
