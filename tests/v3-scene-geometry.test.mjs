@@ -100,6 +100,65 @@ const simpleScene = JSON.parse(
     new URL('./fixtures/v3/proposed-baseline.json', import.meta.url),
   ),
 ).variantsById.proposed;
+
+test('avoids private root collisions with node, edge, and suffix IDs while preserving graph identity', async () => {
+  const variant = structuredClone(simpleScene);
+  const firstId = variant.graph.nodes[0].id;
+  const secondId = variant.graph.nodes[1].id;
+  variant.graph.nodes[0].id = 'v3-scene-root';
+  variant.graph.nodes[1].id = 'v3-scene-root#1';
+  variant.graph.edges[0].id = 'v3-scene-root#2';
+  for (const edge of variant.graph.edges) {
+    if (edge.fromNodeId === firstId) edge.fromNodeId = 'v3-scene-root';
+    if (edge.fromNodeId === secondId) edge.fromNodeId = 'v3-scene-root#1';
+    if (edge.toNodeId === firstId) edge.toNodeId = 'v3-scene-root';
+    if (edge.toNodeId === secondId) edge.toNodeId = 'v3-scene-root#1';
+  }
+  const baseline = structuredClone(variant);
+  for (const orientation of ['horizontal', 'vertical']) {
+    const input = buildV3ElkGraph(variant, { ...options, orientation });
+    assert.equal(input.id, 'v3-scene-root#3');
+    assert.deepEqual(
+      input.children.map((node) => node.id),
+      ['v3-scene-root', 'v3-scene-root#1'],
+    );
+    const output = await new ELK().layout(input);
+    const geometry = flattenV3ElkGraph(output, variant);
+    assert.deepEqual(
+      geometry.nodes.map((node) => node.id),
+      input.children.map((node) => node.id),
+    );
+    assert.deepEqual(
+      geometry.edges.map((edge) => edge.id),
+      ['v3-scene-root#2'],
+    );
+  }
+  assert.deepEqual(variant, baseline);
+});
+
+test('avoids private root collisions with nested group IDs in real ELK output', async () => {
+  const variant = structuredClone(scene);
+  const original = 'group:outer';
+  variant.graph.groups.find((group) => group.id === original).id =
+    'v3-scene-root';
+  for (const group of variant.graph.groups) {
+    if (group.parentGroupId === original) group.parentGroupId = 'v3-scene-root';
+  }
+  for (const node of variant.graph.nodes) {
+    node.groupPathIds = node.groupPathIds.map((id) =>
+      id === original ? 'v3-scene-root' : id,
+    );
+  }
+  for (const orientation of ['horizontal', 'vertical']) {
+    const graph = buildV3ElkGraph(variant, { ...options, orientation });
+    assert.equal(graph.id, 'v3-scene-root#1');
+    assert(graph.children.some((child) => child.id === 'v3-scene-root'));
+    const geometry = flattenV3ElkGraph(await new ELK().layout(graph), variant);
+    assert(geometry.groups.some((group) => group.id === 'v3-scene-root'));
+    assert.equal(geometry.nodes.length, variant.graph.nodes.length);
+  }
+});
+
 const simpleElk = {
   id: 'v3-scene-root',
   width: 600,
