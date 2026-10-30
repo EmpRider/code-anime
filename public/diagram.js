@@ -482,6 +482,12 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
   let pendingFit = false;
   let pendingFitRevision = 0;
   let pendingFitFull = false;
+  let pendingExpansionAnchor;
+  function renderedCardBox(id) {
+    return [...container.querySelectorAll('.diagram-card')]
+      .find((node) => node.dataset.nodeId === id)
+      ?.getBoundingClientRect();
+  }
   function showGeometryStatus() {
     const failures = [...wantedGeometry.keys()].filter((key) =>
       geometryFailures.has(key),
@@ -576,6 +582,19 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
           pendingFit = false;
           render(options, false);
           if (shouldFit && !disposed) fit({ full: fullFit });
+          // A method expansion can finish after an asynchronous ELK layout.
+          // Preserve the original on-screen anchor only if the user has not
+          // independently panned or zoomed while geometry was preparing.
+          const anchor = pendingExpansionAnchor;
+          pendingExpansionAnchor = undefined;
+          if (
+            anchor &&
+            anchor.traceRevision === traceRevision &&
+            anchor.viewportRevision === viewportRevision
+          ) {
+            const after = renderedCardBox(anchor.id);
+            if (after) pan(anchor.x - after.x, anchor.y - after.y);
+          }
         }
       });
   }
@@ -671,19 +690,26 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
       if (options.mode === 'map' && !scope) {
         onPause?.();
         const anchorId = nodeCells.has(card.id) ? card.id : card.callId;
-        const anchorBox = (id) =>
-          [...container.querySelectorAll('.diagram-card')]
-            .find((node) => node.dataset.nodeId === id)
-            ?.getBoundingClientRect();
-        const before = anchorBox(anchorId);
+        const before = renderedCardBox(anchorId);
+        pendingExpansionAnchor = undefined;
         if (expanded.has(card.id)) expanded.delete(card.id);
         else expanded.add(card.id);
         signature = '';
         render(options, false);
         const cell = nodeCells.get(anchorId) ?? nodeCells.get(card.callId);
         if (cell && before) {
-          const after = anchorBox(cell.id);
-          if (after) pan(before.x - after.x, before.y - after.y);
+          if (container.dataset.layoutState === 'pending') {
+            pendingExpansionAnchor = {
+              id: cell.id,
+              x: before.x,
+              y: before.y,
+              traceRevision,
+              viewportRevision,
+            };
+          } else {
+            const after = renderedCardBox(cell.id);
+            if (after) pan(before.x - after.x, before.y - after.y);
+          }
           selectNode(cell.id);
         }
       } else changeScope({ kind: 'method', id: card.callId });
@@ -756,6 +782,7 @@ export function createDiagram(container, { onSelect, onSeek, onPause }) {
     wantedGeometry = new Map();
     pendingFit = false;
     pendingFitFull = false;
+    pendingExpansionAnchor = undefined;
     runningGeometry?.abort.abort();
     ++valuesRevision;
     flow = value;
