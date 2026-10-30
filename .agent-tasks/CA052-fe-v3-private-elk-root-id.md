@@ -1,6 +1,6 @@
 # CA052 — FE V3 private ELK root ID collision
 
-Status: READY (issue-first; no fix committed)
+Status: DONE — independently verified CA052 implementation pushed; no V3 visual acceptance claimed.
 Priority: P1 FE V3 acceptance blocker (isolated preview, no known live-player outage)
 Branch: `fix/react-layout-collapse`
 Owner: TL FE V3 → geometry developer; independent QA and code reviewer
@@ -36,4 +36,12 @@ Use synthetic V3 ready fixture with a node `id: "v3-scene-root"`, another reacha
 
 ## Delivery state
 
-Issue-first creation pending BA GitHub plugin write. No CA052 code edits or remote implementation commits yet.
+- Issue-first ledger commit: `2424096c8e0733628244401be0816458d810a4c2` (pushed before code).
+- Geometry source fix commit: `08d4377beeb63ed904d838413b3dbeddea785965`.
+- Regression tests / implementation HEAD: `eb7aec27e25448100a35300cf05f9fa94267faf2`.
+- Both source and test files re-fetched from GitHub; byte-identical to independently reviewed staging files.
+- TDD RED for two root-collision cases; GREEN **14/14** real bundled ELK geometry tests, both orientations, nested groups, semantic node/edge ID and suffix collisions, immutability.
+- Independent QA and code review PASS; Node syntax and repository-configured Prettier PASS.
+- GitHub Actions [run 41042980049](https://github.com/EmpRider/code-anime/actions/runs/41042980049) **completed/success, 5/5 jobs**: Ubuntu Node 22/24, Windows Node 22/24, Chromium browser.
+- Remaining CA053 variant-global IDs and malformed Worker ACK require separate issue-first tasks; CA029 still IN_PROGRESS; CA030 not started. Browser screenshots/test job are legacy, not V3 visual E2E.
+- Roll back isolated CA052 commits if a verified regression appears.
