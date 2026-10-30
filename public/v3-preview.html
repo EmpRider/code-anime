@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Code Anime · V3 isolated preview</title>
+    <link rel="stylesheet" href="/v3-preview.css" />
+    <script type="module" src="/v3-preview-entry.js"></script>
+  </head>
+  <body class="v3-preview-page">
+    <main id="v3-preview" class="v3-preview" data-v3-state="idle">
+      <header class="v3-preview-header">
+        <div class="v3-preview-brand">
+          <span class="v3-preview-mark" aria-hidden="true">▶</span>
+          <span>code<span class="v3-preview-brand-accent">anime</span></span>
+          <span class="v3-preview-version">V3 PREVIEW</span>
+        </div>
+        <span class="v3-preview-badge">Static · AI mock only</span>
+      </header>
+
+      <div class="v3-preview-body">
+        <aside
+          class="v3-preview-panel"
+          aria-label="Preview source and graph summary"
+        >
+          <div class="v3-preview-panel-heading">
+            <span class="v3-preview-eyebrow">Isolated test surface</span>
+            <h1>Flow scene preview</h1>
+            <p>
+              Inspect a local V3 JSON fixture. This isolated shell does not
+              animate, infer transitions, or affect the live player.
+            </p>
+          </div>
+
+          <label class="v3-preview-field" for="v3-file">
+            <span>FlowSceneDocument JSON</span>
+            <input id="v3-file" type="file" accept=".json,application/json" />
+          </label>
+          <p
+            id="v3-status"
+            class="v3-preview-status"
+            role="status"
+            aria-live="polite"
+          >
+            Choose a local V3 JSON fixture to validate.
+          </p>
+
+          <label class="v3-preview-field" for="v3-variant">
+            <span>Declared variant</span>
+            <select id="v3-variant" disabled></select>
+          </label>
+
+          <dl class="v3-preview-counts" aria-label="Declared graph totals">
+            <div>
+              <dt>Nodes</dt>
+              <dd id="v3-nodes">—</dd>
+            </div>
+            <div>
+              <dt>Edges</dt>
+              <dd id="v3-edges">—</dd>
+            </div>
+            <div>
+              <dt>Groups</dt>
+              <dd id="v3-groups">—</dd>
+            </div>
+          </dl>
+          <p class="v3-preview-note">
+            All numbers are read from the supplied, adapter-validated document.
+            No nodes or edges are generated here.
+          </p>
+        </aside>
+
+        <section
+          class="v3-preview-canvas"
+          aria-label="V3 diagram rendering status"
+        >
+          <div class="v3-preview-placeholder">
+            <span class="v3-preview-placeholder-icon" aria-hidden="true"
+              >◇</span
+            >
+            <h2>Rendering not connected</h2>
+            <p>
+              The X6 renderer and Worker geometry will be mounted here after the
+              CA029 scene-projection safety gate and isolated Vite build.
+            </p>
+            <span class="v3-preview-placeholder-tag">SCAFFOLD ONLY</span>
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
