@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ELK from 'elkjs/lib/elk.bundled.js';
+import { reserveRouteLabel } from '../public/diagram-label-placement.js';
 import { renderV3Scene } from '../public/v3-scene-diagram.js';
 import {
   buildV3ElkGraph,
@@ -1542,7 +1543,253 @@ test('CA058: 10k original edge labels produce bounded, distinct ELK reservations
   t.diagnostic(`10k CA058 ELK label reservations: ${elapsed.toFixed(2)}ms`);
 });
 
-test('CA058: official ELK/X6 preflight preserves original labels across orientations and nested collapse', async () => {
+// CA059 D0: diagnostic-only mirror of the unchanged renderer's edge-label
+// placement inputs. This is a test reconstruction, not renderer telemetry;
+// preserve the original strict renderer exception after printing the evidence.
+function ca059TraceFailedOriginalLabel(variant, state, input, raw, geometry) {
+  const targetId = 'e:yw';
+  const original = variant.graph.edges.find(({ id }) => id === targetId);
+  const target = geometry.edges.find(({ id }) => id === targetId);
+  if (!original || !target) return 'CA059 target absent from projection';
+  const number = (value) =>
+    Number.isFinite(value) ? Number(value.toFixed(3)) : null;
+  const point = ({ x, y }) => ({ x: number(x), y: number(y) });
+  const rectangle = ({ x, y, width, height }) => ({
+    x: number(x),
+    y: number(y),
+    width: number(width),
+    height: number(height),
+  });
+  const obstacles = [
+    ...geometry.nodes.map((node) => ({
+      id: node.id,
+      kind: 'node',
+      x: node.x,
+      y: node.y,
+      width: node.width,
+      height: node.height,
+    })),
+    ...geometry.groups.map((group) => ({
+      id: group.id,
+      kind: 'group-header',
+      x: group.x,
+      y: group.y,
+      width: group.width,
+      height: Math.min(42, group.height),
+    })),
+  ];
+  if (obstacles.length > 128)
+    return JSON.stringify({
+      issue: 'CA059-D0',
+      case: { orientation: state.orientation, collapsedGroupIds: state.collapsedGroupIds },
+      targetId,
+      obstacleCount: obstacles.length,
+      diagnosticsTruncated: '128-obstacle investigation cap',
+    });
+  const reserved = [];
+  const preceding = [];
+  const byId = new Map(variant.graph.edges.map((edge) => [edge.id, edge]));
+  for (const edge of geometry.edges) {
+    if (edge.id === targetId) break;
+    const label = byId.get(edge.id)?.label;
+    if (!label) continue;
+    const placement = reserveRouteLabel(edge.points, label, obstacles, reserved);
+    preceding.push({
+      id: edge.id,
+      placed: Boolean(placement),
+      box: placement ? rectangle(placement) : null,
+    });
+    if (!placement) break;
+  }
+  const lines = original.label.split('\n');
+  const width = Math.max(46, ...lines.map((line) => line.length * 6 + 20));
+  const height = lines.length * 14 + 12;
+  const collides = (a, b) =>
+    a.x < b.x + b.width + 6 &&
+    a.x + a.width + 6 > b.x &&
+    a.y < b.y + b.height + 6 &&
+    a.y + a.height + 6 > b.y;
+  const segments = [];
+  const skipped = { short: 0, diagonal: 0, nonfinite: 0 };
+  for (let i = 1; i < target.points.length; i++) {
+    const a = target.points[i - 1];
+    const b = target.points[i];
+    if (![a.x, a.y, b.x, b.y].every(Number.isFinite)) {
+      skipped.nonfinite++;
+      continue;
+    }
+    const horizontal = a.y === b.y;
+    const vertical = a.x === b.x;
+    const length = Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+    if (!horizontal && !vertical) skipped.diagonal++;
+    else if (length < 32) skipped.short++;
+    else segments.push({ a, b, horizontal, length, index: i - 1 });
+  }
+  segments.sort((a, b) => b.length - a.length);
+  const candidates = [];
+  let totalCandidates = 0;
+  let firstAccepted = null;
+  candidateSearch: for (const segment of segments) {
+    for (const ratio of [0.5, 0.25, 0.75, 0.125, 0.875]) {
+      const midX = segment.a.x + (segment.b.x - segment.a.x) * ratio;
+      const midY = segment.a.y + (segment.b.y - segment.a.y) * ratio;
+      for (const side of [-1, 1]) {
+        if (totalCandidates >= 32) break candidateSearch;
+        const box = segment.horizontal
+          ? {
+              x: midX - width / 2,
+              y: midY + (side < 0 ? -height - 10 : 10),
+              width,
+              height,
+            }
+          : {
+              x: midX + (side < 0 ? -width - 10 : 10),
+              y: midY - height / 2,
+              width,
+              height,
+            };
+        const obstacle = obstacles.find((item) => collides(box, item));
+        const reservation = reserved.findIndex((item) => collides(box, item));
+        const rejectedBy = obstacle
+          ? { kind: obstacle.kind, id: obstacle.id }
+          : reservation >= 0
+            ? { kind: 'preceding-label', id: preceding[reservation]?.id ?? '?' }
+            : null;
+        const collidingBox = obstacle ?? (reservation >= 0 ? reserved[reservation] : null);
+        totalCandidates++;
+        if (candidates.length < 32)
+          candidates.push({
+            segment: segment.index,
+            ratio,
+            side,
+            box: rectangle(box),
+            rejectedBy,
+            // Positive values on all axes are the unchanged helper's 6px
+            // asymmetric-overlap inequalities (unrounded input arithmetic).
+            overlapTerms: collidingBox
+              ? {
+                  left: number(collidingBox.x + collidingBox.width + 6 - box.x),
+                  right: number(box.x + box.width + 6 - collidingBox.x),
+                  top: number(collidingBox.y + collidingBox.height + 6 - box.y),
+                  bottom: number(box.y + box.height + 6 - collidingBox.y),
+                }
+              : null,
+          });
+        if (!rejectedBy && !firstAccepted)
+          firstAccepted = { segment: segment.index, ratio, side };
+      }
+    }
+  }
+  // ELK edge sections can be owned by a nested container even when listed on
+  // root.edges; make coordinate ownership explicit and do not mutate raw data.
+  const origins = new Map([[raw.id, { x: 0, y: 0 }]]);
+  const owners = [{ node: raw, origin: { x: 0, y: 0 } }];
+  for (let i = 0; i < owners.length; i++) {
+    const { node, origin } = owners[i];
+    for (const child of node.children ?? []) {
+      const at = { x: origin.x + child.x, y: origin.y + child.y };
+      if (!origins.has(child.id)) {
+        origins.set(child.id, at);
+        owners.push({ node: child, origin: at });
+      }
+    }
+  }
+  let rawEdge = null;
+  for (const { node, origin } of owners) {
+    const edge = (node.edges ?? []).find(({ id }) => id === targetId);
+    if (!edge) continue;
+    const relativeTo = edge.container ?? node.id;
+    const ownerOrigin = origins.get(relativeTo);
+    const sections = (edge.sections ?? []).slice(0, 8).map((section) => {
+      const local = [section.startPoint, ...(section.bendPoints ?? []), section.endPoint]
+        .filter(Boolean)
+        .slice(0, 16);
+      return {
+        local: local.map(point),
+        inferredWorld: ownerOrigin
+          ? local.map(({ x, y }) => point({ x: x + ownerOrigin.x, y: y + ownerOrigin.y }))
+          : null,
+      };
+    });
+    rawEdge = {
+      collectionId: node.id,
+      collectionOrigin: point(origin),
+      reportedContainerId: edge.container ?? null,
+      inferredSectionOwnerId: relativeTo,
+      inferredSectionOwnerOrigin: ownerOrigin ? point(ownerOrigin) : null,
+      sectionCount: (edge.sections ?? []).length,
+      sections,
+      elkLabels: (edge.labels ?? []).slice(0, 2).map((label) => ({
+        ...rectangle(label),
+        textCodeUnits: label.text?.length ?? null,
+      })),
+    };
+    break;
+  }
+  const trace = {
+    issue: 'CA059-D0',
+    evidenceType: 'test-only reconstruction; renderer exception observed',
+    case: {
+      fixture: 'collapseScene',
+      orientation: state.orientation,
+      collapsedGroupIds: state.collapsedGroupIds,
+    },
+    original: {
+      id: original.id,
+      source: original.fromNodeId,
+      target: original.toNodeId,
+      label: original.label,
+      rendererBox: { width, height },
+      nativeElkBox: input.edges.find(({ id }) => id === targetId)?.labels?.[0] ?? null,
+    },
+    rawEdge,
+    flattened: {
+      scene: { width: number(geometry.width), height: number(geometry.height) },
+      points: target.points.slice(0, 32).map(point),
+      pointCount: target.points.length,
+      sections: target.sections?.slice(0, 8).map((section) => section.slice(0, 16).map(point)) ?? null,
+    },
+    rendererObstacleCount: obstacles.length,
+    obstacles: obstacles.slice(0, 128).map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      ...rectangle(item),
+    })),
+    precedingReservations: preceding.slice(0, 32),
+    skippedSegments: skipped,
+    eligibleSegments: segments.slice(0, 16).map(({ a, b, length, index }) => ({
+      index,
+      from: point(a),
+      to: point(b),
+      length: number(length),
+    })),
+    candidateCount: totalCandidates,
+    candidateSearchTruncated: segments.length * 10 > 32,
+    candidates,
+    reconstructionFirstAccepted: firstAccepted,
+    unchangedHelperMirror: reserveRouteLabel(
+      target.points,
+      original.label,
+      obstacles,
+      reserved.slice(),
+    ) == null
+      ? null
+      : 'position-available',
+    diagnosticCaps: { edgeCount: 1, obstacles: 128, candidates: 32, bytes: 16384 },
+  };
+  let serialized = JSON.stringify(trace);
+  if (Buffer.byteLength(serialized, 'utf8') > 16384)
+    serialized = JSON.stringify({
+      issue: trace.issue,
+      case: trace.case,
+      original: trace.original,
+      totalBytesBeforeCap: Buffer.byteLength(serialized, 'utf8'),
+      diagnosticsTruncated: true,
+    });
+  return serialized;
+}
+
+test('CA058: official ELK/X6 preflight preserves original labels across orientations and nested collapse', async (t) => {
   class FakeGraph {
     constructor() {
       this.nodes = [];
@@ -1589,14 +1836,28 @@ test('CA058: official ELK/X6 preflight preserves original labels across orientat
         const original = variant.graph.edges.find(({ id }) => id === edge.id);
         assert.equal(edge.labels[0].text, original.label);
       }
-      const geometry = flattenV3ElkGraph(
-        await elk.layout(input),
-        variant,
-        prepared,
-      );
-      const painted = await renderV3Scene(container, variant, geometry, state, {
-        GraphClass: FakeGraph,
-      });
+      const raw = await elk.layout(input);
+      const geometry = flattenV3ElkGraph(raw, variant, prepared);
+      let painted;
+      try {
+        painted = await renderV3Scene(container, variant, geometry, state, {
+          GraphClass: FakeGraph,
+        });
+      } catch (error) {
+        if (
+          variant === collapseScene &&
+          error?.message === 'No collision-free V3 edge label position for e:yw'
+        ) {
+          try {
+            t.diagnostic(ca059TraceFailedOriginalLabel(variant, state, input, raw, geometry));
+          } catch (diagnosticError) {
+            t.diagnostic(
+              `CA059 D0 trace failed: ${String(diagnosticError?.message).slice(0, 160)}`,
+            );
+          }
+        }
+        throw error;
+      }
       assert.deepEqual(
         painted.graph.edges.map(({ id }) => id),
         prepared.edges.map(({ id }) => id),

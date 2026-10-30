@@ -1,7 +1,9 @@
 # CA059 — FE V3 native ELK label reservation fails valid collapse/parallel edge
 
 - **Priority:** P0 — FE V3 CI and genuine Chromium acceptance blocked.
-- **Status:** `BLOCKED / ISSUE-FIRST / ROOT_CAUSE_UNCONFIRMED`. This file must be committed and independently verified through the GitHub plugin before any CA059 production or test instrumentation change. No fix is authorized by this issue record alone.
+- **Status:** `DIAG_PENDING_CI / NO_PERMANENT_FIX`. Council-authorized
+  bounded test-only diagnostics are committed for CI evidence; the underlying
+  placement failure remains uncorrected.
 - **Branch:** `fix/react-layout-collapse`.
 - **Owner:** TL with exclusive geometry/renderer investigation specialist, independent QA and semantic-contract reviewer; PM delivery; BA GitHub-plugin relay.
 - **First observed:** GitHub Actions run [41083389952](https://github.com/EmpRider/code-anime/actions/runs/41083389952), after CA058 intermediate code/test commit [`faaad43`](https://github.com/EmpRider/code-anime/commit/faaad43eb2151667520bc7954a3d6347f50965a3).
@@ -39,3 +41,20 @@
 
 - CA058 reviewed source/test bytes prior to plugin commit: source SHA-256 `cb8fa8367cc6530054a4697207621c53eb0247a184e56d0f9be488fd4289163f`; test SHA-256 `832ea2647dcdfc11b6afdc39ff14b5e8cb0f65581f31592efc5e003c856514aa`. Review verdict was conditional GO for CI only.
 - CA059 remains **BLOCKED / PENDING_ROOT_CAUSE_AND_COUNCIL** until issue-first remote push and reproducible geometry evidence. Preserve all existing task files pending explicit user completion approval.
+
+## D0 test-only diagnostic checkpoint (not a production fix)
+
+- CA059 Council decision: `docs/v3/ca059-diagnostic-council-20261030.md`,
+  committed and independently verified at `6655c255`.
+- Single touched path: `tests/v3-scene-geometry.test.mjs` only; **no production
+  geometry/renderer/CSP/Worker changes**. Exact independent-reviewed SHA-256:
+  `cdbb2e8d13c750b3386e8fe618cacaf270d54086d788e235bc359a89a82b1d08`.
+- One original `e:yw` collapse/parallel fixture diagnostic with capped route,
+  node/header obstacles and candidate-rejection reporting; preserve the strict
+  renderer throw so the known CI RED remains visible.
+- Independent QA and semantic-contract reviewer GO for diagnostic CI: syntax
+  PASS; local official ELK/X6 execution unavailable in scratch, so no claim of
+  runtime fix or geometry truth before GitHub Actions.
+- **Next evidence:** latest CI run ID and bounded diagnostic output, then
+  Council review of specific geometry/collision mechanism and a separately
+  authorized permanent remedy. Never mark CA059 DONE from this diagnostic.
