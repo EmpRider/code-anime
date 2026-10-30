@@ -10,11 +10,33 @@ const fixture = await readFile(
 );
 const htmlUrl = new URL('../public/v3-preview.html', import.meta.url);
 
+test('a mounted ready graph hides the placeholder without hiding layout errors', async () => {
+  const dom = new JSDOM(await readFile(htmlUrl, 'utf8'));
+  const style = dom.window.document.createElement('style');
+  style.textContent = await readFile(
+    new URL('../public/v3-preview.css', import.meta.url),
+    'utf8',
+  );
+  dom.window.document.head.append(style);
+  const root = dom.window.document.querySelector('#v3-preview');
+  const placeholder = dom.window.document.querySelector('#v3-empty-state');
+  root.dataset.v3State = 'ready';
+  assert.equal(dom.window.getComputedStyle(placeholder).display, 'none');
+  root.dataset.v3State = 'layout-unavailable';
+  assert.notEqual(dom.window.getComputedStyle(placeholder).display, 'none');
+  dom.window.close();
+});
+
 async function mount() {
   const html = await readFile(htmlUrl, 'utf8');
   const dom = new JSDOM(html, { url: 'http://localhost/v3-preview.html' });
   globalThis.document = dom.window.document;
-  await import(`../public/v3-preview-entry.js?test=${Math.random()}`);
+  const canvas = dom.window.document.querySelector('.v3-preview-canvas');
+  Object.defineProperties(canvas, {
+    clientWidth: { value: 900 },
+    clientHeight: { value: 600 },
+  });
+  await import(`../public/v3-preview/preview.js?test=${Math.random()}`);
   const main = dom.window.document.querySelector('#v3-preview');
   const input = dom.window.document.querySelector('#v3-file');
   const variant = dom.window.document.querySelector('#v3-variant');
@@ -32,25 +54,25 @@ async function mount() {
   return { dom, main, variant, status, upload };
 }
 
-test('a valid synthetic V3 document yields honest scaffold-only counts, never a rendered scene', async () => {
+test('a valid synthetic V3 document exposes graph controls, but fails closed when Worker is unavailable', async () => {
   const ui = await mount();
   await ui.upload(fixture);
-  assert.equal(ui.main.dataset.v3State, 'scaffold-only');
-  assert.match(ui.status.textContent, /validated/i);
+  assert.equal(ui.main.dataset.v3State, 'layout-unavailable');
+  assert.match(ui.status.textContent, /worker unavailable/i);
   assert.equal(ui.main.querySelector('#v3-nodes').textContent, '2');
   assert.equal(ui.main.querySelector('#v3-edges').textContent, '1');
   assert.equal(ui.main.querySelector('#v3-groups').textContent, '0');
-  assert.equal(
-    ui.main.querySelector('.v3-preview-canvas').querySelector('svg'),
-    null,
-  );
-  assert.match(
-    ui.main.querySelector('.v3-preview-canvas').textContent,
-    /not connected/i,
-  );
+  assert.equal(ui.main.querySelector('.v3-preview-canvas svg'), null);
+  const orientation = ui.main.querySelector('#v3-orientation');
+  assert.equal(orientation.value, 'horizontal');
+  orientation.value = 'vertical';
+  orientation.dispatchEvent(new ui.dom.window.Event('change'));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(orientation.value, 'vertical');
   assert.equal(ui.variant.disabled, false);
   ui.variant.value = 'baseline';
   ui.variant.dispatchEvent(new ui.dom.window.Event('change'));
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(ui.main.querySelector('#v3-nodes').textContent, '1');
   assert.equal(ui.main.querySelector('#v3-edges').textContent, '0');
   ui.dom.window.close();

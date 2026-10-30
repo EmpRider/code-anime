@@ -4,8 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Code Anime · V3 isolated preview</title>
-    <link rel="stylesheet" href="/v3-preview.css" />
-    <script type="module" src="/v3-preview-entry.js"></script>
+    <link rel="stylesheet" href="/vendor/x6.css" />
+    <link rel="stylesheet" href="/v3-preview/preview.css" />
+    <script type="module" src="/v3-preview/preview.js"></script>
   </head>
   <body class="v3-preview-page">
     <main id="v3-preview" class="v3-preview" data-v3-state="idle">
@@ -50,6 +51,32 @@
             <select id="v3-variant" disabled></select>
           </label>
 
+          <label class="v3-preview-field" for="v3-orientation">
+            <span>Graph direction</span>
+            <select id="v3-orientation">
+              <option value="horizontal">Horizontal</option>
+              <option value="vertical">Vertical</option>
+            </select>
+          </label>
+          <fieldset id="v3-group-controls" class="v3-preview-groups" disabled>
+            <legend>Collapse declared groups</legend>
+            <div id="v3-group-choices">No groups in selected variant.</div>
+          </fieldset>
+          <label class="v3-preview-field" for="v3-cursor">
+            <span
+              >Prepared playback frame:
+              <output id="v3-cursor-value">0 / 0</output></span
+            >
+            <input
+              id="v3-cursor"
+              type="range"
+              min="0"
+              max="0"
+              value="0"
+              disabled
+            />
+          </label>
+
           <dl class="v3-preview-counts" aria-label="Declared graph totals">
             <div>
               <dt>Nodes</dt>
@@ -74,16 +101,17 @@
           class="v3-preview-canvas"
           aria-label="V3 diagram rendering status"
         >
-          <div class="v3-preview-placeholder">
+          <div id="v3-scene" class="v3-preview-scene"></div>
+          <div id="v3-empty-state" class="v3-preview-placeholder">
             <span class="v3-preview-placeholder-icon" aria-hidden="true"
               >◇</span
             >
-            <h2>Rendering not connected</h2>
+            <h2>Choose a fixture</h2>
             <p>
-              The X6 renderer and Worker geometry will be mounted here after the
-              CA029 scene-projection safety gate and isolated Vite build.
+              Select a local V3 document to run the isolated ELK Worker and X6
+              preview. No source file is sent to the server.
             </p>
-            <span class="v3-preview-placeholder-tag">SCAFFOLD ONLY</span>
+            <span class="v3-preview-placeholder-tag">FIXTURE ONLY</span>
           </div>
         </section>
       </div>

@@ -38,6 +38,23 @@ await build({
     },
   },
 });
+// Keep V3 artifacts separate from the byte-stable legacy diagram output.
+// This mandatory second build fails the overall build if V3 cannot bundle.
+await build({
+  configFile: false,
+  root,
+  publicDir: false,
+  build: {
+    outDir: resolve(root, 'public/v3-preview'),
+    emptyOutDir: true,
+    lib: {
+      entry: { preview: resolve(root, 'public/v3-preview-entry.js') },
+      formats: ['es'],
+      fileName: () => 'preview.js',
+      cssFileName: 'preview',
+    },
+  },
+});
 rmSync(resolve(root, 'dist'), { recursive: true, force: true });
 execFileSync(
   process.execPath,
