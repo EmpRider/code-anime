@@ -1215,7 +1215,7 @@ for (const mobile of [false, true]) {
               ),
         ),
       ).toBe(true);
-      expect(routes.some(({ path }) => /[CQ]/.test(path ?? ''))).toBe(true);
+      expect(routes.every(({ path }) => /^[Mm]/.test(path ?? ''))).toBe(true);
       await expect(page.locator('#source-line')).toHaveText('L3');
       const stepFive = page.locator('.diagram-card[data-step="5"]');
       await expect(stepFive).toHaveCount(1);
@@ -1990,7 +1990,11 @@ for (const mobile of [false, true]) {
         page.locator('.diagram-card[data-call-id="b"]:not([data-parent-id])'),
       ).toHaveCount(1);
       const callNode = await callingStep.getAttribute('data-node-id');
-      const entryNode = methodNode;
+      const entryNode = await page
+        .locator(
+          `.diagram-card[data-parent-id=${JSON.stringify(methodNode)}][data-step="3"]`,
+        )
+        .getAttribute('data-node-id');
       const returnNode = await page
         .locator(
           `.diagram-card[data-parent-id=${JSON.stringify(methodNode)}][data-step="5"]`,
@@ -2007,17 +2011,16 @@ for (const mobile of [false, true]) {
           '.x6-graph-svg-viewport',
         )!;
         const matrix = viewport.getScreenCTM()!.inverse();
-        const method = document
-          .querySelector(
-            '.diagram-card[data-call-id="b"]:not([data-parent-id])',
-          )!
+        const calleeEntry = document
+          .querySelector('.diagram-card[data-call-id="b"][data-step="3"]')!
           .getBoundingClientRect();
-        const topLeft = new DOMPoint(method.left, method.top).matrixTransform(
-          matrix,
-        );
+        const topLeft = new DOMPoint(
+          calleeEntry.left,
+          calleeEntry.top,
+        ).matrixTransform(matrix);
         const bottomRight = new DOMPoint(
-          method.right,
-          method.bottom,
+          calleeEntry.right,
+          calleeEntry.bottom,
         ).matrixTransform(matrix);
         const callRoute = JSON.parse(
           document
@@ -2025,15 +2028,22 @@ for (const mobile of [false, true]) {
             .getAttribute('data-route')!,
         );
         const destination = callRoute.at(-1);
-        if (
+        const onVerticalSide =
           Math.min(
             Math.abs(destination.x - topLeft.x),
             Math.abs(destination.x - bottomRight.x),
-          ) > 1 ||
-          destination.y <= topLeft.y ||
-          destination.y >= topLeft.y + 112
-        )
-          errors.push('call misses method header side');
+          ) <= 2 &&
+          destination.y >= topLeft.y - 2 &&
+          destination.y <= bottomRight.y + 2;
+        const onHorizontalSide =
+          Math.min(
+            Math.abs(destination.y - topLeft.y),
+            Math.abs(destination.y - bottomRight.y),
+          ) <= 2 &&
+          destination.x >= topLeft.x - 2 &&
+          destination.x <= bottomRight.x + 2;
+        if (!onVerticalSide && !onHorizontalSide)
+          errors.push('call misses prepared callee entry boundary');
         const boxes = [
           ...document.querySelectorAll(
             '.diagram-card:not(.diagram-expanded-method)',
