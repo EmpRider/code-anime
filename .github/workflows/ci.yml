@@ -48,3 +48,11 @@ jobs:
             playwright-report/
           retention-days: 7
           if-no-files-found: warn
+      - name: Upload UI preview screenshots
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: ui-preview-screenshots
+          path: test-results/**/ui-*.png
+          retention-days: 7
+          if-no-files-found: warn
