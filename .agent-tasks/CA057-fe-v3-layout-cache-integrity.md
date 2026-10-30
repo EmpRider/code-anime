@@ -1,7 +1,7 @@
 # CA057 — FE V3 semantic graph drift aliases layout cache under unchanged artifact metadata
 
 - **Priority:** P1 (correctness and stale-geometry/cache isolation).
-- **Status:** `READY_FOR_COUNCIL / ISSUE-FIRST`; no CA057 code may be pushed until this ledger is committed and verified and the engineering Council renders its verdict.
+- **Status:** `IN_PROGRESS / PENDING_CA030_BROWSER`; CA057 native fix and full CI verified, genuine X6/Worker Chromium and human visual acceptance remain open.
 - **Owner:** TL/FE geometry engineer with exclusive file lock, independent QA and contract reviewer; PM delivery; BA GitHub plugin relay.
 - **Branch:** `fix/react-layout-collapse`.
 - **Dependencies:** CA028 graph validation, CA052 private root fix, CA053 global graph IDs, CA054 Worker protocol fix; CA055 collapsed presentation projection currently in isolated development; CA030 isolated preview/browser gate later.
@@ -40,3 +40,13 @@ The Council must obtain five genuine independent advisor positions, five anonymi
 2. Reserve exclusive CA057 author ownership; separate CA055 and CA057 task-level source/test commits with detailed descriptions and remote blob SHA verification. Do not bundle a hidden CA057 solution into CA055 and call it one task.
 3. Only mark CA057 `DONE` when focused test, independent QA, remote CI and final task ledger updates pass. Keep CA055 and CA030 statuses honest; Chromium visual remains pending until actual tests/screenshots.
 4. **GitHub plugin hard stop:** if plugin fails, stop all work immediately, notify BA/user; no Git CLI substitute.
+
+## Reviewed implementation checkpoint (not V3 visual completion)
+
+- Issue-first record `fc2e11908f66b586cc572bfcf8620728ab36a8b2`; [durable CA057 Council decision](../../docs/v3/ca057-cache-council-20261030.md) at `f7dec66c63ba82a0679bb5dd1257623c769b907b`.
+- Approved geometry source + regression tests: single atomic GitHub-plugin commit `df46e6099ea311d710df8e8686b4c257b96f0791`, both remotely re-fetched byte-identical to independent QA-reviewed staging.
+- Source SHA-256 `2530bb8557d9ff35f8cd957b6cf45fac12f1a85e9ebbd0f7ab1c91907f3f0873`; test SHA-256 `560e55444555601c80d51195d4ddac2f09bd3a5cc0dbef5676599bff68cbc0b2`.
+- Independent QA and separate semantic-contract reviewer PASS: native V3 geometry **44/44**, X6 fake Graph **9/9**, legacy ELK **20/20**, JavaScript syntax and repo Prettier PASS.
+- Regression evidence: changed semantic topology keys diverge; caller graph copied at dispatch; resolved layout detached and deeply frozen; midflight mutation/one-entry eviction/stale Worker covered. Cyclic objects/arrays fail immediately, shared DAG references supported, Unicode and signed negative-zero cases preserved.
+- GitHub Actions [run 41051715501](https://github.com/EmpRider/code-anime/actions/runs/41051715501) at `df46e60`: **completed/success, 5/5 jobs** (Ubuntu Node22/24, Windows Node22/24, Chromium legacy/scaffold browser).
+- **Not DONE:** actual Chromium running native X6 + bundled ELK Worker in isolated CA030 preview, screenshots, human visual evaluation and related acceptance are still pending. Retain task file until user approves full implementation completion.
