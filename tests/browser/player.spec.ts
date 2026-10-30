@@ -1211,7 +1211,7 @@ for (const mobile of [false, true]) {
               .slice(1)
               .some(
                 (point, index) =>
-                  point.x !== points[index].x || point.y !== points[index].y,
+                  point.x !== points[index]!.x || point.y !== points[index]!.y,
               ),
         ),
       ).toBe(true);
