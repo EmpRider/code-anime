@@ -71,6 +71,7 @@ async function installCspDiagnostics(page: Page): Promise<void> {
     const styleCreation = new WeakMap<Element, { stackHash: string; frame: string }>();
     const originalCreateElement = document.createElement;
     document.createElement = function (
+      this: Document,
       tagName: string,
       options?: ElementCreationOptions,
     ) {
@@ -181,17 +182,19 @@ test('strict production CSP blocks an inline style and the early recorder sees i
   });
   await expect
     .poll(() =>
-      page.evaluate(() =>
-        (window as any).__v3CspViolations.some(
-          (event: {
-            count: number;
-            effectiveDirective: string;
-            blockedURI: string;
-          }) =>
-            event.count > initialCount &&
-            event.effectiveDirective.startsWith('style-src') &&
-            event.blockedURI === 'inline',
-        ),
+      page.evaluate(
+        (baseline) =>
+          (window as any).__v3CspViolations.some(
+            (event: {
+              count: number;
+              effectiveDirective: string;
+              blockedURI: string;
+            }) =>
+              event.count > baseline &&
+              event.effectiveDirective.startsWith('style-src') &&
+              event.blockedURI === 'inline',
+          ),
+        initialCount,
       ),
     )
     .toBe(true);
