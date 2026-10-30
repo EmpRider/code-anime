@@ -1,0 +1,97 @@
+# CA063 — Vite root-entry Engineering Council decision record
+
+**Date:** 2026-10-30 UTC · **Task:** CA063, distinct from CA059/CA060/CA061 · **Repository/branch:** `EmpRider/code-anime` / `fix/react-layout-collapse`  
+**Status:** `COUNCIL_PROPOSED / PENDING_HUMAN_AUTH` · `UNRESOLVED_HARNESS` · `CI2_HARD_STOP` · `PRODUCTION_NO_GO`  
+**Decision authority:** AI EDO delegate `ca063_edo_blind` acting as assumed owning Tech Lead **for technical recommendation only**. The actual authorized human decides scope, test edits and CI budget; Security/SRE approval is additionally required if a security risk is to be accepted. No human sign-off is present.
+
+## Decision at a glance — not execution authorization
+
+The signed EDO decision (`tmp/ca063/council/edo/final-decision.md`, SHA-256 `918878e1526b3680dd4412092c9395d25faa514159603cdbc4502264f01e4926`, 2026-10-30T19:18:47Z) is **NO-GO for test edits and CI2 now**. **Option C (stop, retain `UNRESOLVED_HARNESS`) is operative.** It proposes **Option A, a human-authorized local diagnostic of actual Vite root-entry hook traffic**, limited to at most 60 minutes and two one-factor local attempts, with a correction only if a measured cause supports a narrow change and a further scoped review accepts it. **Option B**, a temporary physical entry, is a contingent fallback only after discriminating trace and parity/equivalence proof. There is **no established permanent root cause, no selected permanent patch, no CI2 approval and no CI3 assumption**.
+
+The issue is provisionally **P2/medium as a release-verification harness gate**, not evidence of a deployed P0 incident. A test-only change could have low production blast radius yet high **false-green assurance risk**. No emergency production mitigation follows from the observed CI harness stop.
+
+## Issue-first remote tracking and exact evidence
+
+- The BA's GitHub-plugin-only issue-first write was independently verified and relayed via PM/TL: repository `EmpRider/code-anime`, branch `fix/react-layout-collapse`, exact target `.agent-tasks/CA063-fe-v3-vite-virtual-entry-unresolved.md`, full commit **`a81685fa8d4f7a3766d5ad0f2456544a05243ee5`**, exact remote issue SHA-256 **`951632ec6db26ed683b32a47a5de8eaba6c30dffb166a98225ed0332285419e0`**. This is a tracking precondition, **not** source-edit, test, CI, or production authorization. This document owner did not independently call the remote plugin.
+- CA059 source-and-ledger commit `2422be4` led to official Actions **run `41110142319` (#514), overall FAILURE**; Chromium **job `124250138367`** reported Vite `[UNRESOLVED_ENTRY] Cannot resolve entry module virtual:ca059-harness-entry` in approximately **69 ms**, at `tests/browser/v3-label-association.spec.ts:367`. These official observations were BA-verified and relayed in the Council evidence; the EDO and this documentation worker did not independently query Actions. Do not infer outcomes for all other jobs.
+- Frozen original test: `tmp/ca059-x6-rescue-dev/tests/browser/v3-label-association.spec.ts`, **569 lines**, SHA-256 **`68c77c8aa2f5e50f72a3a3c6859a9ab4fa4124ea61acd3396d71d50f0d4ebeba`**. Source lines `174–175` define the virtual root/NUL-prefixed ID; `251–264` express an exact-match `resolveId`/`load` plugin; `273–275` place the literal into Vite `build.lib.entry`. `write:false` and renderer-helper `aliasHits` are downstream/distinct. `aliasHits === 1` does **not** trace root entry hooks.
+- **OBSERVED boundary:** bundling failed before mounting Chromium's real Worker→ELK→`renderV3Scene`→X6 route. No glyph, five-label association, original `e:yw` strict-negative re-run, foreign stroke/arrow ownership, keyboard/ARIA, nine-label rollback, 10,000-edge full render, or CA060 application CSP clearance was demonstrated.
+- **UNVERIFIED competing mechanisms:** H1 transformed/normalized root ID missed exact equality; H2 virtual library-root preprocessing/hook order; H3 plugin presence/configuration/load or later module-graph failure. There is no runtime `resolveId` argument/importer/return or `load` trace. **Never record normalization as proven.**
+
+## Council independence, discussion and auditable receipts
+
+The task used the uploaded agent-team instruction SHA-256 `6c2e6a18fcb6bcc61e733fb7ec9f218e3f6e86fff8aec890e873f2d49bc6bed1` and fresh task manifest `tmp/ca063-skills/manifest.md` SHA-256 `7430ad3326f319c0aafba51b1ced7aef2f4fa0e1fcb2edba0669a4f4ae629e1e`. Pinned Council source: `EmpRider/claude-skills-llm-council@a7565e21d5ab03551fe66e36818e05af245467b8`, full Council skill SHA-256 `6387755b0cd0f069720549c7e81d90b724433d4ff46cb127271b902939ad586d`. Other fresh upstream SHAs and file digests remain in the manifest. These digests pin artifacts; they are not human approvals.
+
+**Archive boundary:** Every `tmp/ca063/...` memo, packet, manifest and EDO path referenced below is a **scratch-only local evidence artifact at decision time**, not a confirmed remote GitHub archive; these scratch files can expire. The remote record verified to date is only the original CA063 issue-first file and commit described above. This document embeds the substantive advisor, peer, rebuttal and EDO reasoning plus their complete checksums to preserve an audit trail, but **does not assert raw memo publication**. Any raw-memo archival or further remote publication is a separate BA/PM-authorized action.
+
+1. **Neutral independent evidence brief:** `tmp/ca063/council/neutral-20261030.md`, SHA-256 `f7716fd738197d4857ad781833590c148112b4fff082ed3e3e4def328af5b717`; it framed options A/B/C without a verdict. Original issue-first local copy SHA-256 `951632ec6db26ed683b32a47a5de8eaba6c30dffb166a98225ed0332285419e0`.
+2. **EDO genuinely frozen private, pre-advisor-exposure provisional position:** `tmp/ca063/council/edo/provisional.md`, signed 2026-10-30T19:05:27Z, SHA-256 `2fa3b133bfb8ec0ad935d7f351c8a4f57aa817a17d41990aa30bf56500650ebd`; A for diagnostic only, C operationally now, B conditional, CI2 stop. Some independent advisor drafts are time-stamped earlier; the relevant ordering assertion is that the **EDO did not see their outputs before freezing its own note**, not that every advisor was drafted later.
+3. **Five real independent signed advisor perspectives**, each retained verbatim under `tmp/ca063/council/advisors/`:
+
+   | Advisor | Lens / key independent position | Filename | SHA-256 |
+   | --- | --- | --- | --- |
+   | A1 | Systems architecture: bounded trace A; B only with module/Worker/CSP equivalence | `a1.md` | `5a967cafb5d276596338042086a31a1df1ac488d9da83e732eee2b6596849a6d` |
+   | A2 | Vite/Rollup: `options.input`/hook/load trace, wrong-importer negative | `a2.md` | `e47e162c6824f6962893c0b95959f83e839abbbe964f6afa83a8b39af44e6119` |
+   | A3 | Reliability/security: C now, A if approved, fail-closed CSP/assets | `a3.md` | `af8eebd14949d296bbf6e9e9e8971dd7b0c58380a2191265ab30fbe88a1d4d3d` |
+   | A4 | QA: ordered positive/negative matrix and X6 provenance | `a4.md` | `2f7a08078684598f961d63b0662a8399b99edc55c91faf3fc39a6ba43b11aae3` |
+   | A5 | Devil's advocate: C now, scarce CI2 and false-green opportunity cost | `a5.md` | `d518279d035678ca5d9c0d535e9c48df20100ba998bf66d80da462b6e880fe82` |
+
+4. **Blinded peer packet:** `tmp/ca063/council/anonymous-peer-packet-20261030.md`, SHA-256 `f70688458e78d7db6d076e2282ca29a67dd7f95a890738d39c8f18fa10eebf5a`. It used anonymous letters; no identity mapping is published here. Five separately signed blind peer responses under `tmp/ca063/council/peers/`:
+
+   | Peer | Filename | SHA-256 |
+   | --- | --- | --- |
+   | R1 | `r1.md` | `31c76cf859fd59fef0aa46756064328b6dd013ea8bdce1398facd551dc00eb35` |
+   | R2 | `r2.md` | `19a9a435f72bb4bfbd1e003a92aae09193b0d5fef92965c459446ba12a287575` |
+   | R3 | `r3.md` | `d5a878f19422edec0e48aac553c295c67b52ee29efdf3432a7c983ff743b2f93` |
+   | R4 | `r4.md` | `eb525704e85a3be0a54dabef85922702c36a4577e6ad7c618918dad09f4882b0` |
+   | R5 | `r5.md` | `7c99bf461ccd03e7dfa5f0a7caee91dd2c867fd0e7821618e110e138a8e0e72a` |
+
+   All five preferred **anonymous proposal “B,” a tracing proposal**. This must **not** be confused with **engineering Option B, the temporary physical entry**. The common preference supplied additional scrutiny, not a vote-based technical verdict. Peers challenged local/CI parity, helper-call sufficiency, orphaned files, module graph drift and CI2 opportunity cost.
+
+   **Distinct blind critiques and falsifiers (each signed peer memo, not an EDO-invented perspective):**
+
+   | Blind peer | Specific challenge | Proposed discriminating evidence / falsifier |
+   | --- | --- | --- |
+   | R1 | Five helper calls alone do not prove original IDs/edge ownership or glyph geometry; local Node/cwd/dependencies may diverge from CI. | Check original provenance/X6 DOM and CI parity; literal root `resolveId` returning the virtual ID **and** `load` executing before error falsifies the simple entry-ID mismatch. |
+   | R2 | Vite version matching alone cannot establish CI plugin-order/config/filesystem parity. | Compare a diagnostic Rollup-only virtual root with Vite library mode; capture effective input, actual hook returns/load and first error. Literal root reaching `load` rejects simple H1. |
+   | R3 | `finally` cannot remove a temporary physical entry after process kill; stale assets may contaminate a later run. | Require unique owned paths and bounded orphan audit; compare virtual RED with project-resolving physical control under identical Vite settings. If both fail, neither theory wins; wrong-entry/disabled-alias negatives remain RED. |
+   | R4 | A bundle and SVG could come from a changed module graph that bypasses native Worker→ELK→renderer provenance. | Trace input, entry-flagged root resolve/return/load and chunk; root-only exact mapping may be considered only on measured mismatch. If no entry hook, reject matcher fix; wrong importer stays unredirected. |
+   | R5 | Helper counts can be synthetic; local/CI differences in cwd, Vite and import ancestry threaten causal transfer. | Compare CI-parity local hook/load trace with one owned project-local physical-root control. Literal root resolving/loading rejects H1; absent hook while physical control loads instead suggests virtual-root handling. Require real SVG path/Worker provenance. |
+5. **EDO owner-led challenges:** `tmp/ca063/council/edo/challenges.md`, signed 2026-10-30T19:14:59Z, SHA-256 `967d9ac357d115c6f52d82e2c5d9f3dc6cf54fe04281517d8add9ae4547e346c`; three targeted disputes were sent to the **original live advisor conversations**.
+6. **Five real original-advisor rebuttals** under `tmp/ca063/council/rebuttals/` (not invented EDO summaries):
+
+   | Rebuttal | Main answer | Filename | SHA-256 |
+   | --- | --- | --- |
+   | A1 | Conceded B threshold; path/module/Worker/CSP provenance and owner-marked cleanup | `a1.md` | `6587ae38f72f62c6ac796cb5b3467e793298c10ed0695650fd6cb455819243fc` |
+   | A2 | Exact H1/H2/H3 hook disambiguation and environment-parity caveats | `a2.md` | `4c5ff4541de75fe64a3e9c3d69f6bd06f6f646c3962dfdf53dccb96924803538` |
+   | A3 | CSP/asset/Worker origin false-green counterexamples | `a3.md` | `154ef8962977d06df4c5ef7f2d5409598ca5374632c7f80b40764b88a69f3b1e` |
+   | A4 | Seven-stage positive/negative provenance matrix | `a4.md` | `44a57b284d44a34999f9426f642aaa552d0be9c3f849eee07e59c47e058da7ef` |
+   | A5 | Proposed 60-minute/two-attempt stop and preserve-CI2 threshold | `a5.md` | `213cf68d7c4231b586b314f9e4535bb4d1cf6b4a4e8418b8b116fe8480b2cef0` |
+
+7. **Final EDO deliberation and proposed decision:** `tmp/ca063/council/edo/final-decision.md`, signed 2026-10-30T19:18:47Z, SHA-256 `918878e1526b3680dd4412092c9395d25faa514159603cdbc4502264f01e4926`; it follows the rebuttals, records each challenge disposition and retains unresolved facts. This is an AI technical proposal, **not** a human signature or consent. Routing is EDO→TL→PM→BA→human, rather than direct EDO-to-user Council presentation.
+
+### The three EDO challenge resolutions
+
+| EDO challenge | Owner resolution and still-unknown evidence |
+| --- | --- |
+| H1 normalized ID vs H2 virtual root/order vs H3 later load/config | **Accepted** A2's actual `options.input`, `buildStart`, `resolveId(...,isEntry)` call/return, `load` and first-error discrimination plus A1's B equivalence threshold. **Rejected** claiming normalization, wildcard/suffix matcher or immediate B. Actual hook mechanism **UNRESOLVED**. |
+| Bundle GREEN vs native route and strict CSP | **Accepted** A4/A3's entry/redirect/negative/real-Worker/ELK/renderer/X6/CSP/asset assertions. **Rejected** counting one alias hit, five helper calls, scene dimensions or mock Graph alone as proof. Actual runtime equivalence **UNRESOLVED**. |
+| Bounded local value vs last CI and temp-file residue | **Accepted** A5's proposed ≤60-minute/≤2 one-factor stop and A1/A3 owner-only temporary path/orphan controls. **UNRESOLVED** whether local parity/proof can be obtained or the human will later permit CI2. C applies without either. |
+
+The initial A-diagnostic/C-stop/B-fallback preference **did not change direction**. Objections concretely tightened parity, negatives, provenance and stop criteria; A5's strongest dissent is opportunity cost of spending the sole remaining CI cycle before CA059 semantics.
+
+## Proposed finite gate sequence (all future, none executed or approved)
+
+1. **Human scope gate, then issue-first/task-ledger verification.** BA must ask the actual human to authorize a bounded CA063-only, no-CI, non-production local diagnostic including exact scratch/test-owned paths, maximum elapsed time/attempts, cleanup, and whether any frozen repository test edit is allowed. If repository source edits are later permitted, verify the plugin-backed issue/task ledger and obtain separate edit scope. No production renderer/Worker/CSP/geometry/public changes. Consent cannot be inferred from the Council or the issue-first remote commit.
+2. **Probe 1 (baseline RED), if authorized:** establish CI parity (Node major, locked Vite/Rollup/dependencies, OS/path/cwd/root, plugin order, `configFile:false`, `publicDir:false`, lib IIFE and `write:false`). Record sanitized capped `configResolved`, `options.input`, `buildStart`, root `resolveId(id,importer,isEntry)` call/return, `load(id)` call/return, first thrown error, and chunk/assets. ≤16 KiB trace. Distinguish an entry-flagged transformed root declined before load from literal resolution/load preceding failure or no root hook at all; parity divergence keeps causality unverified.
+3. **Probe 2 (one-factor causal contrast), if warranted and separately scoped:** only a unique measured root mismatch permits an exact **root-only** ID candidate, RED→GREEN with near-miss root still RED. Literal return and load before failure falsifies simple H1; do not change the matcher. For absent hooks inspect plugin/config/input; only if shown necessary consider a controlled physical-root comparison. B requires project-local test-owned unique owner-marked directory, canonical containment, symlink/collision refusal, package ancestry and module/Worker/CSP equivalence, `finally` cleanup plus post-crash orphan audit. Never delete unowned or ambiguous paths. Two failed/inconclusive attempts, ≥60 minutes, parity failure or new risk → **C stop**, no speculative third probe.
+4. **Local QA/security gate before *requesting* CI2:** authorized fresh parse/format/build, root load and one chunk ≤8 MiB with no emitted/unserved assets, **exactly one legitimate renderer-origin alias**, wrong-importer/near-miss-root/disabled-alias RED, unknown-label throw, five genuine renderer-triggered helper calls, original IDs/endpoints/text, real Worker ACK→ELK reply→native `renderV3Scene`→imported X6 `Graph` with actual SVG paths/visible glyph per ID at 900×600. No manual `Graph.addEdge`, no no-op helper or synthetic route. Strict unchanged same-origin `script-src/style-src 'self'`, bounded early CSP recorder, no unexpected violations; CA060's 2,854-unit/`a73d50ec` source-linked signature may be separately attributed **but not waived as CSP PASS**. Keep ≤16 KiB/case, ≤45 s test, ≤30 s Worker, ≤180 s total, ≤2 PNG; exact-byte independent QA and semantic/security review. Any missing positive, unexpectedly passing negative or exceeded limit → `UNRESOLVED_HARNESS`/`UNRESOLVED_LIMIT`.
+5. **Separate human CI2 gate:** Only after genuine reviewed local evidence and any material-new-evidence Council check may BA request **one** specifically scoped CI2. CI1 already spent **1 of at most 2**; CI2 remains a **HARD STOP** now. No CI3 by implication or reset budget. Failure leaves harness unresolved. If approved and green, result is at most **`HARNESS_ONLY_NO_SEMANTIC_PROOF`**, never full CA059/CA060/FE V3 acceptance.
+
+## Non-goals, status and first action
+
+**Unaffected separate unresolved gates:** CA059 original strict `e:yw` RED and six-pixel own/foreign label geometry, foreign stroke/arrow visibility, keyboard/ARIA and five original labels, nine-label transactional rollback and full 10,000-original-edge Worker→ELK→X6 performance; CA060 strict application CSP; CA061 compact screenshot/readability. No five-job CI PASS, production readiness, release or `DONE` is claimed.
+
+**Work performed for this Council record:** documentation synthesis of actual frozen artifacts only. No source/test/CI/build/Git CLI/network/production operation and no claimed security or human sign-off. Keep `COUNCIL_PROPOSED / PENDING_HUMAN_AUTH` with `CI2_HARD_STOP` and `PRODUCTION_NO_GO` until an authorized next transition.
+
+**First action:** TL→PM→BA asks the human for the **CA063-only local evidence probe** with the exact finite scope and safeguards; **CI2 requires a later separate authorization**. If declined, stop as `UNRESOLVED_HARNESS`. Reopen the engineering Council only for materially new hook evidence, scope or risk, not for stylistic preference.
