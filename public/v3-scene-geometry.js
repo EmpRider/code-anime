@@ -326,10 +326,20 @@ export function createV3SceneLayout({
       worker.onmessage = (event) => {
         if (active !== pending) return;
         const reply = event?.data;
-        if (!reply || reply.id !== id)
-          return settle(new Error('Malformed V3 ELK Worker reply'));
         if (!pending.registered) {
-          if ('data' in reply || 'error' in reply)
+          let validAck;
+          try {
+            validAck =
+              reply !== null &&
+              typeof reply === 'object' &&
+              !Array.isArray(reply) &&
+              Reflect.ownKeys(reply).length === 1 &&
+              Object.hasOwn(reply, 'id') &&
+              reply.id === id;
+          } catch {
+            return settle(new Error('Malformed V3 ELK registration ACK'));
+          }
+          if (!validAck)
             return settle(new Error('Malformed V3 ELK registration ACK'));
           pending.registered = true;
           try {
@@ -345,6 +355,8 @@ export function createV3SceneLayout({
           }
           return;
         }
+        if (!reply || reply.id !== id)
+          return settle(new Error('Malformed V3 ELK Worker reply'));
         if ('error' in reply)
           return settle(
             new Error(
