@@ -100,8 +100,14 @@ export function buildV3ElkGraph(
     'elk.aspectRatio': aspect,
     'elk.padding': '[top=20,left=20,bottom=20,right=20]',
   };
+  const occupiedIds = new Set(
+    [...nodes, ...groups, ...edges].map((record) => record.id),
+  );
+  let rootId = 'v3-scene-root';
+  for (let suffix = 1; occupiedIds.has(rootId); suffix++)
+    rootId = `v3-scene-root#${suffix}`;
   const root = {
-    id: 'v3-scene-root',
+    id: rootId,
     layoutOptions: options,
     children: [],
     edges: [],
