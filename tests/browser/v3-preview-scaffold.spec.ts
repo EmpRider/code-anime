@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { createWebApp } from '../../src/web/app.js';
@@ -13,6 +13,124 @@ const nestedPath = fileURLToPath(
 
 let server: Server;
 let baseUrl: string;
+
+// Runs before page scripts. Keep every CSP event, even if the evidence array fills up.
+async function installCspDiagnostics(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const evidence = window as any;
+    const maxEvents = 64;
+    const maxStyles = 64;
+    const fingerprint = (value: string): string => {
+      let hash = 2166136261;
+      for (let i = 0; i < value.length; i++) {
+        hash ^= value.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+      }
+      return (hash >>> 0).toString(16).padStart(8, '0');
+    };
+    const safeText = (value: string, limit: number): string =>
+      value
+        .replace(/(?:https?|file):\/\/[^\s);]+/g, (url) => {
+          try {
+            return new URL(url).pathname.slice(0, 96);
+          } catch {
+            return '[url]';
+          }
+        })
+        .slice(0, limit);
+
+    evidence.__v3CspViolationCount = 0;
+    evidence.__v3CspViolations = [];
+    evidence.__v3StyleInsertionCount = 0;
+    evidence.__v3StyleInsertions = [];
+    document.addEventListener(
+      'securitypolicyviolation',
+      (event) => {
+        evidence.__v3CspViolationCount++;
+        if (evidence.__v3CspViolations.length >= maxEvents) return;
+        evidence.__v3CspViolations.push({
+          count: evidence.__v3CspViolationCount,
+          timingMs: Math.round(performance.now()),
+          effectiveDirective: event.effectiveDirective,
+          violatedDirective: event.violatedDirective,
+          blockedURI: safeText(event.blockedURI, 160),
+          sourceFile: safeText(event.sourceFile, 160),
+          lineNumber: event.lineNumber,
+          columnNumber: event.columnNumber,
+          // Never store raw inline CSS, which could contain private values.
+          sample: event.sample
+            ? `length:${event.sample.length};hash:${fingerprint(event.sample)}`
+            : '',
+          originalPolicy: safeText(event.originalPolicy, 512),
+        });
+      },
+      true,
+    );
+
+    // Test-only provenance for inline styles when blockedURI is just "inline".
+    const styleCreation = new WeakMap<Element, { stackHash: string; frame: string }>();
+    const originalCreateElement = document.createElement;
+    document.createElement = function (
+      tagName: string,
+      options?: ElementCreationOptions,
+    ) {
+      const element = originalCreateElement.call(this, tagName, options);
+      if (tagName.toLowerCase() === 'style') {
+        const stack = new Error().stack ?? '';
+        styleCreation.set(element, {
+          stackHash: fingerprint(stack),
+          frame: safeText(stack.split('\n')[2] ?? '', 160),
+        });
+      }
+      return element;
+    } as typeof document.createElement;
+    const observedStyles = new WeakSet<Element>();
+    const captureStyle = (style: Element) => {
+      if (observedStyles.has(style)) return;
+      observedStyles.add(style);
+      evidence.__v3StyleInsertionCount++;
+      if (evidence.__v3StyleInsertions.length >= maxStyles) return;
+      const origin = styleCreation.get(style);
+      const content = style.textContent ?? '';
+      evidence.__v3StyleInsertions.push({
+        timingMs: Math.round(performance.now()),
+        contentLength: content.length,
+        contentHash: fingerprint(content),
+        createStackHash: origin?.stackHash ?? '',
+        createFrame: origin?.frame ?? '',
+      });
+    };
+    new MutationObserver((changes) => {
+      for (const change of changes) {
+        change.addedNodes.forEach((node) => {
+          if (!(node instanceof Element)) return;
+          if (node.tagName === 'STYLE') captureStyle(node);
+          node.querySelectorAll('style').forEach(captureStyle);
+        });
+      }
+    }).observe(document, { childList: true, subtree: true });
+  });
+}
+
+async function expectNoCspViolations(page: Page): Promise<void> {
+  // Let blocked-style events queued during the last render reach the listener.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => setTimeout(resolve, 0)),
+        ),
+      ),
+  );
+  const result = await page.evaluate(() => ({
+    count: (window as any).__v3CspViolationCount,
+    events: (window as any).__v3CspViolations,
+    styleCount: (window as any).__v3StyleInsertionCount,
+    styles: (window as any).__v3StyleInsertions,
+  }));
+  expect(result.count, JSON.stringify(result)).toBe(0);
+  expect(result.events).toEqual([]);
+}
 
 test.beforeAll(async () => {
   const store: SessionStore = {
@@ -40,6 +158,55 @@ test.afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
+test('strict production CSP blocks an inline style and the early recorder sees it', async ({
+  page,
+}) => {
+  await installCspDiagnostics(page);
+  const response = await page.goto(`${baseUrl}/v3-preview.html`);
+  expect(response?.status()).toBe(200);
+  expect(response?.headers()['content-security-policy']).toContain(
+    "style-src 'self'",
+  );
+  await expect(page.locator('#v3-preview')).toHaveAttribute(
+    'data-v3-state',
+    'idle',
+  );
+  const initialCount = await page.evaluate(
+    () => (window as any).__v3CspViolationCount as number,
+  );
+  await page.evaluate(() => {
+    const blocked = document.createElement('style');
+    blocked.textContent = ':root { --v3-csp-positive-control: blocked; }';
+    document.head.appendChild(blocked);
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__v3CspViolations.some(
+          (event: {
+            count: number;
+            effectiveDirective: string;
+            blockedURI: string;
+          }) =>
+            event.count > initialCount &&
+            event.effectiveDirective.startsWith('style-src') &&
+            event.blockedURI === 'inline',
+        ),
+      ),
+    )
+    .toBe(true);
+  expect(
+    await page.evaluate(() => (window as any).__v3CspViolationCount),
+  ).toBeGreaterThan(initialCount);
+  expect(
+    await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue(
+        '--v3-csp-positive-control',
+      ),
+    ),
+  ).toBe('');
+});
+
 test('local immutable V3 JSON renders X6 using the real same-origin ELK Worker under production CSP', async ({
   page,
 }) => {
@@ -56,13 +223,10 @@ test('local immutable V3 JSON renders X6 using the real same-origin ELK Worker u
     if (/\/api\/flow\/|\/fixtures\/.*\.json/.test(request.url()))
       semanticRequests.push(request.url());
   });
+  await installCspDiagnostics(page);
   await page.addInitScript(() => {
     const original = Worker.prototype.postMessage;
     (window as any).__v3WorkerCommands = [];
-    (window as any).__v3CspViolations = [];
-    document.addEventListener('securitypolicyviolation', (event) => {
-      (window as any).__v3CspViolations.push(event.violatedDirective);
-    });
     Worker.prototype.postMessage = function (message: unknown, ...rest: any[]) {
       (window as any).__v3WorkerCommands.push(
         (message as { cmd?: string })?.cmd,
@@ -129,9 +293,7 @@ test('local immutable V3 JSON renders X6 using the real same-origin ELK Worker u
     'invalid',
   );
   await expect(page.locator('#v3-scene svg')).toHaveCount(0);
-  expect(await page.evaluate(() => (window as any).__v3CspViolations)).toEqual(
-    [],
-  );
+  await expectNoCspViolations(page);
   expect(consoleErrors).toEqual([]);
   expect(pageErrors).toEqual([]);
 });
@@ -152,17 +314,15 @@ for (const { width, height } of [
     page.on('console', (message) => {
       if (message.type() === 'error') consoleErrors.push(message.text());
     });
-    await page.addInitScript(() => {
-      (window as any).__v3CspViolations = [];
-      document.addEventListener('securitypolicyviolation', (event) => {
-        (window as any).__v3CspViolations.push(event.violatedDirective);
-      });
-    });
+    await installCspDiagnostics(page);
     page.on('request', (request) => {
       if (/\/api\/flow\/|\/fixtures\/.*\.json/.test(request.url()))
         semanticRequests.push(request.url());
     });
-    await page.goto(`${baseUrl}/v3-preview.html`);
+    const response = await page.goto(`${baseUrl}/v3-preview.html`);
+    expect(response?.headers()['content-security-policy']).toContain(
+      "style-src 'self'",
+    );
     await page.locator('#v3-file').setInputFiles(nestedPath);
     for (const orientation of ['horizontal', 'vertical'] as const) {
       await page.locator('#v3-orientation').selectOption(orientation);
@@ -239,9 +399,7 @@ for (const { width, height } of [
     await page.keyboard.press('+');
     await expect(viewport).not.toHaveAttribute('transform', beforeZoom ?? '');
     expect(semanticRequests).toEqual([]);
-    expect(
-      await page.evaluate(() => (window as any).__v3CspViolations),
-    ).toEqual([]);
+    await expectNoCspViolations(page);
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);
   });
