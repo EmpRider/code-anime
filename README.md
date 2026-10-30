@@ -123,6 +123,15 @@ The offline demo renders bundled mock data without analyzing a codebase. For the
 
 Run `npm run test:browser` for browser layout and interaction checks at desktop, tablet, and phone sizes. Windows uses installed Microsoft Edge; other platforms use Playwright Chromium (`npx playwright install chromium`). `CODE_ANIME_BROWSER_CHANNEL` overrides the browser channel. Tests cover viewport overflow, accessible playback controls, mobile panel switching without changing the selected event, state inspection, console scrolling, search, and keyboard help. Screenshots are saved under the ignored `test-results` directory.
 
+### Review the UI through GitHub Actions (including Chat mode)
+
+Every push and pull request runs the [CI workflow](.github/workflows/ci.yml). Open the run under **Actions → CI**, then select the **browser** job. Its artifacts contain:
+
+- **`ui-preview-screenshots`**: six PNGs (desktop 1440×900 and mobile 375×812) for the full map, expanded method, and source view. These are captured on passing runs as well as failing runs.
+- **`browser-test-results`**: Playwright HTML/JSON reports and failure screenshots/traces, where available.
+
+Artifacts are retained for **7 days**. In ChatGPT Chat mode, share the Actions run URL and use the GitHub plugin to download the screenshots for review—ChatGPT does not need a locally installed browser. These are static screenshots of Code Anime using synthetic prepared/mock fixtures, not an interactive browser session, deployed-site smoke test, or runtime execution of the analyzed user's project.
+
 ## Structure
 
 `src/services/animation-builder.ts` owns incremental trace construction and snapshots; `src/services/simulation-service.ts` manages CodeGraph evidence receipts and AI trace validation; `src/analysis/` adapts the provider; `src/domain/` defines trace/flow schemas; `src/storage/` manages sessions; `src/mcp/` exposes tools; `public/` renders replay; `skills/code-anime/` supplies agent orchestration.
