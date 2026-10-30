@@ -69,25 +69,287 @@ function normalizeV3EdgeContainers(elk) {
   return copy;
 }
 
+const DEFAULT_NODE_SIZE = { width: 260, height: 124 };
+const DEFAULT_COLLAPSED_SIZE = { width: 220, height: 90 };
+
+function cardMeasurements(measuredCards) {
+  if (measuredCards instanceof Map) return [...measuredCards.entries()];
+  if (
+    measuredCards === null ||
+    typeof measuredCards !== 'object' ||
+    Array.isArray(measuredCards)
+  )
+    throw new TypeError('Invalid V3 measured cards');
+  return Object.entries(measuredCards);
+}
+
+function canonicalIds(value, label) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) && !(value instanceof Set))
+    throw new TypeError(`Invalid V3 ${label}`);
+  const ids = [...value];
+  if (ids.some((id) => typeof id !== 'string' || !id))
+    throw new TypeError(`Invalid V3 ${label}`);
+  return [...new Set(ids)].sort();
+}
+
+/**
+ * Project only visible presentation geometry. The supplied semantic variant
+ * and its playback remain immutable: no edge is synthesized or merged.
+ * Collapsed groups are cards for ELK/strict route validation, but remain
+ * original semantic groups when geometry is returned to the renderer.
+ */
+export function prepareV3LayoutInput(
+  readyVariant,
+  presentationState = {},
+  measuredCards = {},
+) {
+  if (readyVariant?.availability !== 'ready' || !readyVariant.graph)
+    throw new TypeError('V3 geometry requires a validated ready variant');
+  if (!presentationState || typeof presentationState !== 'object')
+    throw new TypeError('Invalid V3 presentation state');
+  const { nodes, edges, groups } = readyVariant.graph;
+  if (![nodes, edges, groups].every(Array.isArray))
+    throw new TypeError('Invalid validated V3 graph');
+  const orientation = presentationState.orientation ?? 'horizontal';
+  if (!['horizontal', 'vertical'].includes(orientation))
+    throw new TypeError('Invalid V3 orientation');
+  const viewport = {
+    width: finitePositive(presentationState.viewport?.width, 'viewport width'),
+    height: finitePositive(
+      presentationState.viewport?.height,
+      'viewport height',
+    ),
+  };
+  const groupsById = new Map(groups.map((group) => [group.id, group]));
+  const knownCardIds = new Set([
+    ...nodes.map(({ id }) => id),
+    ...groupsById.keys(),
+  ]);
+  const collapsedGroupIds = canonicalIds(
+    presentationState.collapsedGroupIds,
+    'collapsed group IDs',
+  );
+  for (const id of collapsedGroupIds)
+    if (!groupsById.has(id))
+      throw new Error(`Unknown collapsed V3 group ${id}`);
+  const collapsed = new Set(collapsedGroupIds);
+  const sizes = new Map();
+  for (const [id, size] of cardMeasurements(measuredCards)) {
+    if (!knownCardIds.has(id))
+      throw new Error(`Unknown measured V3 card ${id}`);
+    sizes.set(id, {
+      width: finitePositive(size?.width, `${id} width`),
+      height: finitePositive(size?.height, `${id} height`),
+    });
+  }
+  const firstCollapsedAncestor = (node) =>
+    node.groupPathIds.find((id) => collapsed.has(id)) ?? null;
+  const visibleNodes = nodes.filter((node) => !firstCollapsedAncestor(node));
+  const visibleGroups = groups.filter((group) => {
+    const seenAncestors = new Set();
+    for (
+      let parent = group.parentGroupId;
+      parent !== null && parent !== undefined;
+      parent = groupsById.get(parent)?.parentGroupId
+    ) {
+      if (collapsed.has(parent)) return false;
+      if (!groupsById.has(parent) || seenAncestors.has(parent))
+        throw new Error(`Invalid V3 parent group for ${group.id}`);
+      seenAncestors.add(parent);
+    }
+    return true;
+  });
+  const cards = visibleNodes.map((node) => ({
+    id: node.id,
+    kind: 'node',
+    parentRegionId: node.groupPathIds.at(-1) ?? null,
+    ...sizes.get(node.id),
+  }));
+  const regions = [];
+  for (const group of visibleGroups) {
+    if (collapsed.has(group.id)) {
+      cards.push({
+        id: group.id,
+        kind: 'collapsed-group',
+        parentRegionId: group.parentGroupId,
+        ...(sizes.get(group.id) ?? DEFAULT_COLLAPSED_SIZE),
+      });
+    } else {
+      regions.push({
+        id: group.id,
+        parentRegionId: group.parentGroupId,
+      });
+    }
+  }
+  const anchors = new Map(
+    nodes.map((node) => [node.id, firstCollapsedAncestor(node) ?? node.id]),
+  );
+  const projectedEdges = [];
+  const hiddenEdgeIds = [];
+  for (const edge of edges) {
+    const source = anchors.get(edge.fromNodeId);
+    const target = anchors.get(edge.toNodeId);
+    if (!source || !target)
+      throw new Error(`Unknown V3 edge endpoint for ${edge.id}`);
+    if (source === target && collapsed.has(source)) {
+      hiddenEdgeIds.push(edge.id);
+      continue;
+    }
+    projectedEdges.push({
+      ...edge,
+      source,
+      target,
+      originalSourceId: edge.fromNodeId,
+      originalTargetId: edge.toNodeId,
+      layoutSourceId: source,
+      layoutTargetId: target,
+      underlyingEdgeIds: [edge.id],
+    });
+  }
+  const expandedValueIds = canonicalIds(
+    presentationState.expandedValueIds ?? presentationState.expandedValuesIds,
+    'expanded value IDs',
+  );
+  // Only geometry-affecting state belongs here. In particular, playback
+  // cursor, frames, active IDs, selection and highlight do not relayout.
+  const topologyKey = JSON.stringify([
+    'v3-layout-projection-1',
+    presentationState.variantId ?? readyVariant.variantId ?? null,
+    readyVariant.artifact?.id ?? null,
+    readyVariant.artifact?.revision ?? null,
+    readyVariant.artifact?.sourceHash ?? null,
+    orientation,
+    viewport.width,
+    viewport.height,
+    collapsedGroupIds,
+    expandedValueIds,
+    presentationState.valuesExpansionKey ?? null,
+    presentationState.fontRevision ?? null,
+    presentationState.renderRevision ?? null,
+    finitePositive(
+      presentationState.groupHeaderHeight ?? 42,
+      'group header height',
+    ),
+    [...sizes].sort(([a], [b]) => a.localeCompare(b)),
+  ]);
+  return {
+    cards,
+    regions,
+    edges: projectedEdges,
+    hiddenEdgeIds,
+    topologyKey,
+  };
+}
+
+function resolvedPresentation(settings) {
+  return {
+    ...settings.presentationState,
+    orientation:
+      settings.orientation ??
+      settings.presentationState?.orientation ??
+      'horizontal',
+    viewport: settings.viewport ?? settings.presentationState?.viewport,
+    groupHeaderHeight:
+      settings.groupHeaderHeight ??
+      settings.presentationState?.groupHeaderHeight ??
+      42,
+  };
+}
+
+function verifyV3Projection(variant, projection) {
+  const collapsedGroupIds = projection.cards
+    .filter(({ kind }) => kind === 'collapsed-group')
+    .map(({ id }) => id);
+  const expected = prepareV3LayoutInput(variant, {
+    collapsedGroupIds,
+    viewport: { width: 1, height: 1 },
+  });
+  const ownership = (items) =>
+    items.map(({ id, kind, parentRegionId }) => [
+      id,
+      kind ?? null,
+      parentRegionId ?? null,
+    ]);
+  if (
+    JSON.stringify(ownership(projection.cards)) !==
+      JSON.stringify(ownership(expected.cards)) ||
+    JSON.stringify(ownership(projection.regions)) !==
+      JSON.stringify(ownership(expected.regions))
+  )
+    throw new Error('Invalid V3 projection visible entity subset');
+  const identifiers = (items) =>
+    items.map(({ id, source, target }) => [id, source, target]);
+  if (
+    JSON.stringify(identifiers(projection.edges)) !==
+      JSON.stringify(identifiers(expected.edges)) ||
+    JSON.stringify(projection.hiddenEdgeIds) !==
+      JSON.stringify(expected.hiddenEdgeIds)
+  )
+    throw new Error('Invalid V3 projection edge subset');
+  const originals = new Map(variant.graph.edges.map((edge) => [edge.id, edge]));
+  for (const edge of projection.edges) {
+    const original = originals.get(edge.id);
+    if (
+      !original ||
+      Object.entries(original).some(
+        ([key, value]) => JSON.stringify(edge[key]) !== JSON.stringify(value),
+      ) ||
+      edge.originalSourceId !== original.fromNodeId ||
+      edge.originalTargetId !== original.toNodeId ||
+      edge.layoutSourceId !== edge.source ||
+      edge.layoutTargetId !== edge.target ||
+      JSON.stringify(edge.underlyingEdgeIds) !== JSON.stringify([edge.id])
+    )
+      throw new Error(`Invalid V3 projection edge provenance for ${edge.id}`);
+  }
+}
+
 export function buildV3ElkGraph(
   variant,
   {
-    orientation = 'horizontal',
+    orientation,
     viewport,
     nodeSizes = {},
-    groupHeaderHeight = 42,
+    presentationState,
+    measuredCards,
+    groupHeaderHeight,
   } = {},
 ) {
-  if (variant?.availability !== 'ready' || !variant.graph)
-    throw new TypeError('V3 geometry requires a validated ready variant');
+  // Explicit layout options take precedence over presentation defaults.
+  const state = resolvedPresentation({
+    orientation,
+    viewport,
+    presentationState,
+    groupHeaderHeight,
+  });
+  const prepared = prepareV3LayoutInput(
+    variant,
+    state,
+    measuredCards ?? nodeSizes,
+  );
+  return buildV3ElkGraphFromPrepared(
+    prepared,
+    {
+      orientation: state.orientation,
+      viewport: state.viewport,
+      groupHeaderHeight: state.groupHeaderHeight,
+    },
+    variant,
+  );
+}
+
+function buildV3ElkGraphFromPrepared(
+  prepared,
+  { orientation, viewport, groupHeaderHeight = 42 },
+  variant,
+) {
   if (!['horizontal', 'vertical'].includes(orientation))
     throw new TypeError('Invalid V3 orientation');
   const width = finitePositive(viewport?.width, 'viewport width');
   const height = finitePositive(viewport?.height, 'viewport height');
   finitePositive(groupHeaderHeight, 'group header height');
-  const { nodes, edges, groups } = variant.graph;
-  if (![nodes, edges, groups].every(Array.isArray))
-    throw new TypeError('Invalid validated V3 graph');
+  const { cards, edges, regions } = prepared;
 
   const direction = orientation === 'horizontal' ? 'RIGHT' : 'DOWN';
   const aspect = Math.max(0.5, Math.min(3, width / height));
@@ -101,7 +363,11 @@ export function buildV3ElkGraph(
     'elk.padding': '[top=20,left=20,bottom=20,right=20]',
   };
   const occupiedIds = new Set(
-    [...nodes, ...groups, ...edges].map((record) => record.id),
+    [
+      ...variant.graph.nodes,
+      ...variant.graph.groups,
+      ...variant.graph.edges,
+    ].map((record) => record.id),
   );
   let rootId = 'v3-scene-root';
   for (let suffix = 1; occupiedIds.has(rootId); suffix++)
@@ -113,7 +379,7 @@ export function buildV3ElkGraph(
     edges: [],
   };
   const containers = new Map([[null, root]]);
-  for (const group of groups) {
+  for (const group of regions) {
     if (containers.has(group.id))
       throw new Error(`Duplicate group ${group.id}`);
     containers.set(group.id, {
@@ -125,28 +391,31 @@ export function buildV3ElkGraph(
       children: [],
     });
   }
-  for (const group of groups) {
-    const parent = containers.get(group.parentGroupId ?? null);
+  for (const group of regions) {
+    const parent = containers.get(group.parentRegionId ?? null);
     if (!parent) throw new Error(`Unknown parent for ${group.id}`);
     parent.children.push(containers.get(group.id));
   }
-  for (const node of nodes) {
-    const parentId = node.groupPathIds.at(-1) ?? null;
-    const parent = containers.get(parentId);
-    if (!parent) throw new Error(`Unknown group for ${node.id}`);
-    const size = Object.hasOwn(nodeSizes, node.id)
-      ? nodeSizes[node.id]
-      : { width: 260, height: 124 };
+  for (const card of cards) {
+    const parent = containers.get(card.parentRegionId ?? null);
+    if (!parent) throw new Error(`Unknown group for ${card.id}`);
+    const fallback =
+      card.kind === 'collapsed-group'
+        ? DEFAULT_COLLAPSED_SIZE
+        : DEFAULT_NODE_SIZE;
     parent.children.push({
-      id: node.id,
-      width: finitePositive(size?.width, `${node.id} width`),
-      height: finitePositive(size?.height, `${node.id} height`),
+      id: card.id,
+      width: finitePositive(card.width ?? fallback.width, `${card.id} width`),
+      height: finitePositive(
+        card.height ?? fallback.height,
+        `${card.id} height`,
+      ),
     });
   }
   root.edges = edges.map((edge) => ({
     id: edge.id,
-    sources: [edge.fromNodeId],
-    targets: [edge.toNodeId],
+    sources: [edge.source],
+    targets: [edge.target],
   }));
   for (const container of containers.values())
     container.layoutOptions['elk.layered.wrapping.strategy'] = wrappingFor(
@@ -158,11 +427,11 @@ export function buildV3ElkGraph(
 }
 
 /** Validate and flatten ELK output while restoring the exact supplied V3 records. */
-export function flattenV3ElkGraph(elk, variant) {
+export function flattenV3ElkGraph(elk, variant, prepared) {
   if (variant?.availability !== 'ready' || !variant.graph)
     throw new TypeError('V3 geometry requires a validated ready variant');
   const { nodes, groups, edges } = variant.graph;
-  const prepared = {
+  const projection = prepared ?? {
     cards: nodes.map((node) => ({
       id: node.id,
       parentRegionId: node.groupPathIds.at(-1) ?? null,
@@ -172,12 +441,19 @@ export function flattenV3ElkGraph(elk, variant) {
       parentRegionId: group.parentGroupId,
     })),
     edges: edges.map((edge) => ({
+      ...edge,
       id: edge.id,
       source: edge.fromNodeId,
       target: edge.toNodeId,
+      originalSourceId: edge.fromNodeId,
+      originalTargetId: edge.toNodeId,
+      layoutSourceId: edge.fromNodeId,
+      layoutTargetId: edge.toNodeId,
+      underlyingEdgeIds: [edge.id],
     })),
   };
-  const layout = flattenElkLayout(normalizeV3EdgeContainers(elk), prepared);
+  if (prepared) verifyV3Projection(variant, projection);
+  const layout = flattenElkLayout(normalizeV3EdgeContainers(elk), projection);
   const nodeGeometry = new Map(
     layout.cards.map(({ id, x, y, width, height }) => [
       id,
@@ -185,15 +461,38 @@ export function flattenV3ElkGraph(elk, variant) {
     ]),
   );
   const groupGeometry = new Map(
-    layout.regions.map(({ id, x, y, width, height }) => [
-      id,
-      { x, y, width, height },
-    ]),
+    [
+      ...layout.regions,
+      ...layout.cards.filter(({ kind }) => kind === 'collapsed-group'),
+    ].map(({ id, x, y, width, height }) => [id, { x, y, width, height }]),
   );
   const edgeGeometry = new Map(
     layout.edges.map(({ id, sections, points }) => [id, { sections, points }]),
   );
+  const cardsById = new Map(layout.cards.map((card) => [card.id, card]));
+  const boundary = (point, card) => {
+    if (!card) return false;
+    const withinX =
+      point.x >= card.x - 1e-6 && point.x <= card.x + card.width + 1e-6;
+    const withinY =
+      point.y >= card.y - 1e-6 && point.y <= card.y + card.height + 1e-6;
+    return (
+      withinX &&
+      withinY &&
+      (Math.abs(point.x - card.x) < 1e-6 ||
+        Math.abs(point.x - card.x - card.width) < 1e-6 ||
+        Math.abs(point.y - card.y) < 1e-6 ||
+        Math.abs(point.y - card.y - card.height) < 1e-6)
+    );
+  };
   for (const edge of layout.edges) {
+    const source = cardsById.get(edge.source);
+    const target = cardsById.get(edge.target);
+    if (
+      !boundary(edge.points[0], source) ||
+      !boundary(edge.points.at(-1), target)
+    )
+      throw new Error(`Invalid V3 ELK endpoint port for ${edge.id}`);
     for (const section of edge.sections) {
       for (let i = 1; i < section.length; i++) {
         const a = section[i - 1];
@@ -228,12 +527,21 @@ export function flattenV3ElkGraph(elk, variant) {
   return {
     width: layout.width,
     height: layout.height,
-    nodes: nodes.map((node) => ({ ...node, ...nodeGeometry.get(node.id) })),
-    groups: groups.map((group) => ({
-      ...group,
-      ...groupGeometry.get(group.id),
+    nodes: nodes
+      .filter((node) => nodeGeometry.has(node.id))
+      .map((node) => ({ ...node, ...nodeGeometry.get(node.id) })),
+    groups: groups
+      .filter((group) => groupGeometry.has(group.id))
+      .map((group) => ({
+        ...group,
+        ...groupGeometry.get(group.id),
+      })),
+    edges: projection.edges.map((edge) => ({
+      ...edge,
+      ...edgeGeometry.get(edge.id),
     })),
-    edges: edges.map((edge) => ({ ...edge, ...edgeGeometry.get(edge.id) })),
+    hiddenEdgeIds: projection.hiddenEdgeIds ?? [],
+    topologyKey: projection.topologyKey,
   };
 }
 
@@ -255,6 +563,7 @@ export function createV3SceneLayout({
   let active;
   let disposed = false;
   let serial = 0;
+  let cached;
 
   function cancelActive(reason) {
     if (!active) return;
@@ -268,13 +577,21 @@ export function createV3SceneLayout({
 
   function layout(variant, settings = {}) {
     if (disposed) return Promise.reject(new Error('V3 layout disposed'));
-    // Even a rejected new geometry request supersedes an older viewport epoch.
-    cancelActive('Stale V3 layout request');
-    if (settings.signal?.aborted)
-      return Promise.reject(new Error('V3 layout aborted'));
     let graph;
+    let projection;
     try {
-      graph = buildV3ElkGraph(variant, settings);
+      if (settings.signal?.aborted) throw new Error('V3 layout aborted');
+      if (settings.presentationState !== undefined) {
+        const state = resolvedPresentation(settings);
+        projection = prepareV3LayoutInput(
+          variant,
+          state,
+          settings.measuredCards ?? settings.nodeSizes ?? {},
+        );
+        graph = buildV3ElkGraphFromPrepared(projection, state, variant);
+      } else {
+        graph = buildV3ElkGraph(variant, settings);
+      }
       if (
         !Number.isFinite(settings.timeoutMs ?? 30000) ||
         (settings.timeoutMs ?? 30000) <= 0
@@ -283,9 +600,16 @@ export function createV3SceneLayout({
       if (typeof WorkerClass !== 'function')
         throw new Error('ELK Worker unavailable');
     } catch (error) {
+      // Even invalid new viewports supersede an earlier Worker epoch.
+      cancelActive('Stale V3 layout request');
       return Promise.reject(error);
     }
-    return new Promise((resolve, reject) => {
+    const key = projection?.topologyKey;
+    if (key && active?.key === key && active.signal === settings.signal)
+      return active.promise;
+    cancelActive('Stale V3 layout request');
+    if (key && cached?.key === key) return Promise.resolve(cached.result);
+    const promise = new Promise((resolve, reject) => {
       let worker;
       try {
         worker = new WorkerClass(workerUrl);
@@ -294,7 +618,7 @@ export function createV3SceneLayout({
         return;
       }
       const id = ++serial;
-      const pending = { worker, reject, signal: settings.signal };
+      const pending = { worker, reject, signal: settings.signal, key };
       active = pending;
       const settle = (error, value) => {
         if (active !== pending) return;
@@ -303,7 +627,10 @@ export function createV3SceneLayout({
         pending.signal?.removeEventListener('abort', pending.abort);
         worker.terminate();
         if (error) reject(error);
-        else resolve(value);
+        else {
+          if (key) cached = { key, result: value };
+          resolve(value);
+        }
       };
       pending.abort = () => settle(new Error('V3 layout aborted'));
       pending.signal?.addEventListener('abort', pending.abort, { once: true });
@@ -364,7 +691,7 @@ export function createV3SceneLayout({
             ),
           );
         try {
-          settle(null, flattenV3ElkGraph(reply.data, variant));
+          settle(null, flattenV3ElkGraph(reply.data, variant, projection));
         } catch (error) {
           settle(error);
         }
@@ -375,6 +702,8 @@ export function createV3SceneLayout({
         settle(error);
       }
     });
+    if (active) active.promise = promise;
+    return promise;
   }
 
   return {

@@ -6,6 +6,7 @@ import {
   buildV3ElkGraph,
   flattenV3ElkGraph,
   createV3SceneLayout,
+  prepareV3LayoutInput,
 } from '../public/v3-scene-geometry.js';
 
 const fixture = JSON.parse(
@@ -576,4 +577,461 @@ test('identical immutable inputs produce deterministic geometry; viewport change
     buildV3ElkGraph(scene, narrowSettings).layoutOptions['elk.aspectRatio'],
     buildV3ElkGraph(scene, wideSettings).layoutOptions['elk.aspectRatio'],
   );
+});
+
+const collapseScene = (() => {
+  const variant = structuredClone(simpleScene);
+  const node = variant.graph.nodes[0];
+  const edge = variant.graph.edges[0];
+  const group = scene.graph.groups[0];
+  variant.graph.groups = [
+    { ...group, id: 'outer', parentGroupId: null, memberNodeIds: ['W'] },
+    {
+      ...group,
+      id: 'inner',
+      parentGroupId: 'outer',
+      memberNodeIds: ['X', 'Y'],
+    },
+  ];
+  variant.graph.nodes = [
+    { ...node, id: 'X', groupPathIds: ['outer', 'inner'], order: 0 },
+    { ...node, id: 'Y', groupPathIds: ['outer', 'inner'], order: 1 },
+    { ...node, id: 'W', groupPathIds: ['outer'], order: 2 },
+    { ...node, id: 'Z', groupPathIds: [], order: 3 },
+  ];
+  variant.graph.edges = [
+    ['e:xy', 'X', 'Y', 'inner-only'],
+    ['e:xz:a', 'X', 'Z', 'parallel A'],
+    ['e:xz:b', 'X', 'Z', 'parallel B'],
+    ['e:wx', 'W', 'X', 'sibling-to-inner'],
+    ['e:yw', 'Y', 'W', 'return-to-sibling'],
+    ['e:zw', 'Z', 'W', 'external-to-sibling'],
+  ].map(([id, fromNodeId, toNodeId, label], index) => ({
+    ...edge,
+    id,
+    fromNodeId,
+    toNodeId,
+    label,
+    certainty: index % 2 ? 'unresolved' : 'mock',
+  }));
+  variant.artifact.revision = 'revision:collapse';
+  return variant;
+})();
+
+const collapsePresentation = {
+  variantId: 'proposed',
+  orientation: 'horizontal',
+  viewport: { width: 800, height: 600 },
+  collapsedGroupIds: ['inner'],
+};
+
+test('RED CA055: nested projection preserves semantic records, parallel identities and hidden edges', () => {
+  const before = structuredClone(collapseScene);
+  const prepared = prepareV3LayoutInput(collapseScene, collapsePresentation, {
+    inner: { width: 175, height: 70 },
+  });
+  assert.deepEqual(
+    prepared.cards.map(({ id, parentRegionId }) => [id, parentRegionId]),
+    [
+      ['W', 'outer'],
+      ['Z', null],
+      ['inner', 'outer'],
+    ],
+  );
+  assert.deepEqual(
+    prepared.regions.map(({ id }) => id),
+    ['outer'],
+  );
+  assert.deepEqual(
+    prepared.edges.map(({ id }) => id),
+    ['e:xz:a', 'e:xz:b', 'e:wx', 'e:yw', 'e:zw'],
+  );
+  assert.deepEqual(prepared.hiddenEdgeIds, ['e:xy']);
+  for (const edge of prepared.edges) {
+    const semantic = collapseScene.graph.edges.find(({ id }) => id === edge.id);
+    assert.equal(edge.fromNodeId, semantic.fromNodeId);
+    assert.equal(edge.toNodeId, semantic.toNodeId);
+    assert.equal(edge.label, semantic.label);
+    assert.equal(edge.certainty, semantic.certainty);
+    assert.deepEqual(edge.underlyingEdgeIds, [edge.id]);
+    assert.equal(edge.layoutSourceId, edge.source);
+    assert.equal(edge.layoutTargetId, edge.target);
+  }
+  assert.deepEqual(
+    prepared.edges
+      .filter(({ id }) => id.startsWith('e:xz'))
+      .map((edge) => [edge.source, edge.target]),
+    [
+      ['inner', 'Z'],
+      ['inner', 'Z'],
+    ],
+  );
+  assert.deepEqual(collapseScene, before);
+  assert.throws(
+    () =>
+      prepareV3LayoutInput(collapseScene, {
+        ...collapsePresentation,
+        collapsedGroupIds: ['phantom'],
+      }),
+    /Unknown collapsed V3 group/,
+  );
+});
+
+test('RED CA055: outermost visible collapsed ancestor hides internal edge and restores on expand', () => {
+  const outer = prepareV3LayoutInput(collapseScene, {
+    ...collapsePresentation,
+    collapsedGroupIds: ['inner', 'outer'],
+  });
+  assert.deepEqual(
+    outer.cards.map(({ id }) => id),
+    ['Z', 'outer'],
+  );
+  assert.deepEqual(outer.regions, []);
+  assert.deepEqual(
+    outer.edges.map(({ id }) => id),
+    ['e:xz:a', 'e:xz:b', 'e:zw'],
+  );
+  assert.deepEqual(outer.hiddenEdgeIds, ['e:xy', 'e:wx', 'e:yw']);
+  assert(outer.edges.every(({ source, target }) => source !== target));
+  assert.deepEqual(
+    outer.edges.map(({ source, target }) => [source, target]),
+    [
+      ['outer', 'Z'],
+      ['outer', 'Z'],
+      ['Z', 'outer'],
+    ],
+  );
+  const expanded = prepareV3LayoutInput(collapseScene, {
+    ...collapsePresentation,
+    collapsedGroupIds: [],
+  });
+  assert.deepEqual(
+    new Set(expanded.cards.map(({ id }) => id)),
+    new Set(collapseScene.graph.nodes.map(({ id }) => id)),
+  );
+  assert.deepEqual(
+    expanded.regions.map(({ id }) => id),
+    ['outer', 'inner'],
+  );
+  assert.deepEqual(
+    expanded.edges.map(({ id }) => id),
+    collapseScene.graph.edges.map(({ id }) => id),
+  );
+  assert.deepEqual(expanded.hiddenEdgeIds, []);
+});
+
+test('RED CA055: distinct collapsed sibling anchors and a visible self-loop remain real edges', () => {
+  const variant = structuredClone(collapseScene);
+  const inner = variant.graph.groups.find(({ id }) => id === 'inner');
+  variant.graph.groups.push({
+    ...inner,
+    id: 'sibling',
+    parentGroupId: 'outer',
+    memberNodeIds: ['V'],
+  });
+  variant.graph.nodes.push({
+    ...variant.graph.nodes[0],
+    id: 'V',
+    groupPathIds: ['outer', 'sibling'],
+  });
+  variant.graph.edges.push({
+    ...variant.graph.edges[0],
+    id: 'e:siblings',
+    fromNodeId: 'X',
+    toNodeId: 'V',
+  });
+  variant.graph.edges.push({
+    ...variant.graph.edges[0],
+    id: 'e:loop',
+    fromNodeId: 'Z',
+    toNodeId: 'Z',
+  });
+  const prepared = prepareV3LayoutInput(variant, {
+    ...collapsePresentation,
+    collapsedGroupIds: ['inner', 'sibling'],
+  });
+  assert.deepEqual(
+    prepared.edges
+      .filter(({ id }) => id === 'e:siblings' || id === 'e:loop')
+      .map(({ id, source, target }) => [id, source, target]),
+    [
+      ['e:siblings', 'inner', 'sibling'],
+      ['e:loop', 'Z', 'Z'],
+    ],
+  );
+  assert(!prepared.hiddenEdgeIds.includes('e:siblings'));
+  assert(!prepared.hiddenEdgeIds.includes('e:loop'));
+});
+
+test('RED CA055: private ELK root never collides with hidden semantic IDs', () => {
+  const variant = structuredClone(collapseScene);
+  variant.graph.nodes.find(({ id }) => id === 'X').id = 'v3-scene-root';
+  for (const edge of variant.graph.edges) {
+    if (edge.fromNodeId === 'X') edge.fromNodeId = 'v3-scene-root';
+    if (edge.toNodeId === 'X') edge.toNodeId = 'v3-scene-root';
+  }
+  const graph = buildV3ElkGraph(variant, {
+    presentationState: collapsePresentation,
+  });
+  assert.equal(graph.id, 'v3-scene-root#1');
+  assert(graph.children.some(({ id }) => id === 'outer'));
+  assert(!allChildren(graph).some(({ id }) => id === 'v3-scene-root'));
+});
+
+test('RED CA055: topology cache key tracks geometry, not playback state', () => {
+  const base = prepareV3LayoutInput(collapseScene, collapsePresentation);
+  function key(presentation, measurements = {}) {
+    return prepareV3LayoutInput(collapseScene, presentation, measurements)
+      .topologyKey;
+  }
+  assert.equal(
+    base.topologyKey,
+    key({
+      ...collapsePresentation,
+      cursor: 5,
+      activeEdgeIds: ['e:xy'],
+      frameId: 'frame:5',
+    }),
+  );
+  assert.notEqual(
+    base.topologyKey,
+    key({ ...collapsePresentation, orientation: 'vertical' }),
+  );
+  assert.notEqual(
+    base.topologyKey,
+    key({ ...collapsePresentation, viewport: { width: 801, height: 600 } }),
+  );
+  assert.notEqual(
+    base.topologyKey,
+    key({ ...collapsePresentation, viewport: { width: 800, height: 601 } }),
+  );
+  assert.notEqual(
+    base.topologyKey,
+    key({ ...collapsePresentation, collapsedGroupIds: ['outer'] }),
+  );
+  assert.notEqual(
+    base.topologyKey,
+    key({ ...collapsePresentation, variantId: 'baseline' }),
+  );
+  assert.notEqual(
+    base.topologyKey,
+    key({ ...collapsePresentation, expandedValueIds: ['object:1'] }),
+  );
+  assert.notEqual(
+    base.topologyKey,
+    key({ ...collapsePresentation, fontRevision: 'font:2' }),
+  );
+  assert.notEqual(
+    base.topologyKey,
+    key({ ...collapsePresentation, groupHeaderHeight: 48 }),
+  );
+  assert.notEqual(
+    base.topologyKey,
+    key(collapsePresentation, { inner: { width: 180, height: 75 } }),
+  );
+  assert.equal(
+    key(
+      collapsePresentation,
+      new Map([
+        ['inner', { width: 180, height: 75 }],
+        ['X', { width: 260, height: 124 }],
+      ]),
+    ),
+    key(
+      collapsePresentation,
+      new Map([
+        ['X', { width: 260, height: 124 }],
+        ['inner', { width: 180, height: 75 }],
+      ]),
+    ),
+  );
+  const revision = structuredClone(collapseScene);
+  revision.artifact.revision = 'revision:later';
+  assert.notEqual(
+    base.topologyKey,
+    prepareV3LayoutInput(revision, collapsePresentation).topologyKey,
+  );
+  assert.equal(
+    key({ ...collapsePresentation, collapsedGroupIds: ['inner', 'outer'] }),
+    key({ ...collapsePresentation, collapsedGroupIds: ['outer', 'inner'] }),
+  );
+});
+
+function onBoundary(point, rect) {
+  const x = point.x >= rect.x - 1e-6 && point.x <= rect.x + rect.width + 1e-6;
+  const y = point.y >= rect.y - 1e-6 && point.y <= rect.y + rect.height + 1e-6;
+  return (
+    x &&
+    y &&
+    (Math.abs(point.x - rect.x) < 1e-6 ||
+      Math.abs(point.x - rect.x - rect.width) < 1e-6 ||
+      Math.abs(point.y - rect.y) < 1e-6 ||
+      Math.abs(point.y - rect.y - rect.height) < 1e-6)
+  );
+}
+
+test('RED CA055: real bundled ELK nested group leaf routes in both directions and viewports', async () => {
+  const elk = new ELK();
+  const semantic = structuredClone(collapseScene);
+  for (const orientation of ['horizontal', 'vertical']) {
+    for (const viewport of [
+      { width: 800, height: 600 },
+      { width: 1920, height: 1080 },
+    ]) {
+      const settings = { orientation, viewport };
+      const layouts = [];
+      for (const collapsedGroupIds of [
+        [],
+        ['inner'],
+        ['outer'],
+        ['outer', 'inner'],
+      ]) {
+        const presentationState = { ...settings, collapsedGroupIds };
+        const prepared = prepareV3LayoutInput(
+          collapseScene,
+          presentationState,
+          {
+            inner: { width: 175, height: 70 },
+            outer: { width: 190, height: 80 },
+          },
+        );
+        const input = buildV3ElkGraph(collapseScene, {
+          ...settings,
+          presentationState,
+          measuredCards: {
+            inner: { width: 175, height: 70 },
+            outer: { width: 190, height: 80 },
+          },
+        });
+        const output = await elk.layout(input);
+        const layout = flattenV3ElkGraph(output, collapseScene, prepared);
+        assert.deepEqual(
+          layout.edges.map(({ id }) => id),
+          prepared.edges.map(({ id }) => id),
+        );
+        assert.deepEqual(
+          new Set([...layout.nodes, ...layout.groups].map(({ id }) => id)),
+          new Set([...prepared.cards, ...prepared.regions].map(({ id }) => id)),
+        );
+        const positions = new Map(
+          [...layout.nodes, ...layout.groups].map((record) => [
+            record.id,
+            record,
+          ]),
+        );
+        for (const edge of layout.edges) {
+          assert(
+            onBoundary(edge.points[0], positions.get(edge.layoutSourceId)),
+            `${orientation}: ${edge.id} source`,
+          );
+          assert(
+            onBoundary(edge.points.at(-1), positions.get(edge.layoutTargetId)),
+            `${orientation}: ${edge.id} target`,
+          );
+          assert.deepEqual(edge.underlyingEdgeIds, [edge.id]);
+        }
+        const parallelA = layout.edges.find(({ id }) => id === 'e:xz:a');
+        const parallelB = layout.edges.find(({ id }) => id === 'e:xz:b');
+        assert.notDeepEqual(
+          parallelA.points,
+          parallelB.points,
+          `${orientation}: distinct parallel ELK routes`,
+        );
+        assert.equal(parallelA.label, 'parallel A');
+        assert.equal(parallelB.label, 'parallel B');
+        layouts.push(layout);
+      }
+      assert(
+        layouts[2].width * layouts[2].height <
+          layouts[0].width * layouts[0].height,
+        `${orientation} outer collapse compacts bounding box`,
+      );
+      assert.deepEqual(collapseScene, semantic);
+    }
+  }
+});
+
+test('RED CA055: native nested edge.container is normalized exactly once', async () => {
+  const presentationState = collapsePresentation;
+  const prepared = prepareV3LayoutInput(collapseScene, presentationState);
+  const raw = await new ELK().layout(
+    buildV3ElkGraph(collapseScene, { ...options, presentationState }),
+  );
+  const local = raw.edges.find(({ id }) => id === 'e:wx');
+  assert.equal(local.container, 'outer');
+  const outer = raw.children.find(({ id }) => id === 'outer');
+  assert(outer.x > 0 && outer.y > 0);
+  const flat = flattenV3ElkGraph(raw, collapseScene, prepared);
+  const edge = flat.edges.find(({ id }) => id === 'e:wx');
+  const start = local.sections[0].startPoint;
+  assert(Math.abs(edge.points[0].x - (start.x + outer.x)) < 1e-6);
+  assert(Math.abs(edge.points[0].y - (start.y + outer.y)) < 1e-6);
+  assert.notDeepEqual(edge.points[0], start);
+  assert.deepEqual(
+    raw.edges.find(({ id }) => id === 'e:wx'),
+    local,
+  );
+});
+
+test('RED CA055: projected flattener rejects an internally consistent but semantically incomplete visible edge subset', async () => {
+  const prepared = prepareV3LayoutInput(collapseScene, collapsePresentation);
+  const raw = await new ELK().layout(
+    buildV3ElkGraph(collapseScene, { presentationState: collapsePresentation }),
+  );
+  const omitted = structuredClone(prepared);
+  omitted.edges = omitted.edges.filter(({ id }) => id !== 'e:xz:b');
+  const omittedLayout = structuredClone(raw);
+  omittedLayout.edges = omittedLayout.edges.filter(({ id }) => id !== 'e:xz:b');
+  assert.throws(
+    () => flattenV3ElkGraph(omittedLayout, collapseScene, omitted),
+    /Invalid V3 projection edge subset/,
+  );
+});
+
+test('RED CA055: cursor-only changes reuse Worker pending and completed geometry', async () => {
+  class FakeWorker {
+    constructor() {
+      this.messages = [];
+      FakeWorker.instances.push(this);
+    }
+    postMessage(message) {
+      this.messages.push(message);
+    }
+    terminate() {
+      this.terminated = true;
+    }
+    reply(data) {
+      this.onmessage({ data });
+    }
+  }
+  FakeWorker.instances = [];
+  const engine = createV3SceneLayout({ WorkerClass: FakeWorker });
+  const presentationState = { ...options, collapsedGroupIds: [], cursor: 0 };
+  const first = engine.layout(simpleScene, { presentationState });
+  const pending = engine.layout(simpleScene, {
+    presentationState: {
+      ...presentationState,
+      cursor: 2,
+      activeEdgeIds: ['edge:1'],
+    },
+  });
+  assert.equal(pending, first);
+  assert.equal(FakeWorker.instances.length, 1);
+  const worker = FakeWorker.instances[0];
+  const id = worker.messages[0].id;
+  worker.reply({ id });
+  worker.reply({ id, data: simpleElk });
+  const geometry = await first;
+  assert.deepEqual(await pending, geometry);
+  const replay = await engine.layout(simpleScene, {
+    presentationState: { ...presentationState, cursor: 1 },
+  });
+  assert.equal(replay, geometry);
+  assert.equal(FakeWorker.instances.length, 1);
+  const newEpoch = engine.layout(simpleScene, {
+    presentationState: { ...presentationState, expandedValueIds: ['value:1'] },
+  });
+  assert.equal(FakeWorker.instances.length, 2);
+  engine.dispose();
+  await assert.rejects(newEpoch, /disposed/);
 });
