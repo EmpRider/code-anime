@@ -132,7 +132,12 @@ function classifyCsp(events: CspEvent[], styles: StyleInsertion[]) {
       matchingAssignments++;
       return;
     }
-    for (const styleIndex of matchingStyles[eventIndex]) {
+    const candidateStyleIndexes = matchingStyles[eventIndex];
+    if (candidateStyleIndexes === undefined) {
+      ambiguousOrOverLimit = true;
+      return;
+    }
+    for (const styleIndex of candidateStyleIndexes) {
       if (++searchAttempts > 20_000) {
         ambiguousOrOverLimit = true;
         return;
@@ -200,7 +205,98 @@ async function bundleSmoke() {
     "import { createV3SceneLayout } from " + JSON.stringify(geometryPath) + ";",
     'import { reserveRouteLabel } from "virtual:ca059-direct-helper";',
     "let layout,rendered;",
+    String.raw`
+function ca066TextMatches(expected, candidate) {
+  if (typeof expected !== "string" || typeof candidate !== "string") return false;
+  const model = Array.from(expected), dom = Array.from(candidate);
+  return model.length === dom.length && model.every((char, i) =>
+    char === dom[i] || (char === " " && dom[i] === "\u00a0"));
+}
+function ca066PaintColor(value) {
+  const color = String(value ?? "").trim().toLowerCase();
+  const colorCall = color.match(/^(rgb|rgba)\(([^()]*)\)$/);
+  if (!colorCall) return false;
+  const slashParts = colorCall[2].split("/");
+  if (slashParts.length > 2) return false;
+  const parts = slashParts[0].includes(",")
+    ? slashParts[0].split(",").map((part) => part.trim())
+    : slashParts[0].trim().split(/\s+/);
+  let alphaText;
+  if (slashParts.length === 2 && parts.length === 3) alphaText = slashParts[1].trim();
+  else if (colorCall[1] === "rgba" && parts.length === 4) alphaText = parts.pop();
+  else if (colorCall[1] !== "rgb" || parts.length !== 3) return false;
+  const numeric = /^(?:\d+(?:\.\d+)?|\.\d+)%?$/;
+  if (!parts.every((part) => numeric.test(part))) return false;
+  if (alphaText === undefined) return true;
+  if (!numeric.test(alphaText)) return false;
+  const alpha = Number.parseFloat(alphaText) / (alphaText.endsWith("%") ? 100 : 1);
+  return Number.isFinite(alpha) && alpha > 0 && alpha <= 1;
+}
+function ca066LocalPaint(element, root, kind) {
+  for (let current = element; current instanceof Element; current = current.parentElement) {
+    const style = getComputedStyle(current);
+    const opacity = Number(style.opacity);
+    if (style.display === "none" || style.visibility === "hidden" ||
+        style.visibility === "collapse" || !Number.isFinite(opacity) || opacity <= 0)
+      return false;
+    if (kind === "text" && !(Number.parseFloat(style.fontSize) > 0)) return false;
+  }
+  const style = getComputedStyle(element);
+  const stroke = ca066PaintColor(style.stroke) &&
+    Number(style.strokeOpacity) > 0 && Number.parseFloat(style.strokeWidth) > 0;
+  return kind === "path" ? stroke :
+    (ca066PaintColor(style.fill) && Number(style.fillOpacity) > 0) || stroke;
+}
+function ca066FiniteMatrix(element) {
+  const matrix = element.getScreenCTM?.();
+  return !!matrix && [matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f]
+    .every(Number.isFinite);
+}
+function ca066InspectEdge(edge, oldExact = false) {
+  const text = edge?.getLabels()?.[0]?.attrs?.label?.text;
+  const view = edge && rendered?.graph?.findViewByCell(edge);
+  const root = view?.container;
+  const owner = (element) => root?.isConnected && element?.isConnected &&
+    root.contains(element) && element.closest("[data-cell-id]")?.getAttribute("data-cell-id") === edge.id;
+  if (!edge || !owner(root)) return {text, hasSvgPath:false, hasDomGlyph:false};
+  // X6 edge markup maps selector "line" to its painted connector; "wrap" is transparent hit-target.
+  const line = view.findOne("line");
+  let routeLength = 0;
+  try { routeLength = line?.getTotalLength?.() ?? 0; } catch { /* fail closed */ }
+  const path = line?.tagName?.toLowerCase() === "path" && owner(line) &&
+    ca066FiniteMatrix(line) && ca066LocalPaint(line, root, "path") &&
+    Number.isFinite(routeLength) && routeLength > 0;
+  const matches = Array.from(root.querySelectorAll("text")).filter((item) =>
+    owner(item) && (oldExact ? item.textContent?.trim() === text : ca066TextMatches(text, item.textContent)));
+  const glyph = matches.length === 1 ? matches[0] : null;
+  let descendantsPaint = !!glyph;
+  if (glyph) {
+    const nodes = document.createTreeWalker(glyph, NodeFilter.SHOW_TEXT);
+    for (let node = nodes.nextNode(); node; node = nodes.nextNode()) {
+      const contributor = node.parentElement;
+      const childRect = contributor?.getBoundingClientRect?.();
+      if (node.textContent?.length &&
+          (!owner(contributor) || !ca066LocalPaint(contributor, root, "text") ||
+           !Number.isFinite(childRect?.width) || childRect.width <= 0 ||
+           !Number.isFinite(childRect?.height) || childRect.height <= 0)) {
+        descendantsPaint = false;
+        break;
+      }
+    }
+  }
+  const rect = glyph?.getBoundingClientRect();
+  return {text, hasSvgPath:!!path,
+    hasDomGlyph:!!path && !!glyph && descendantsPaint &&
+      ca066LocalPaint(glyph, root, "text") && ca066FiniteMatrix(glyph) &&
+      Number.isFinite(rect?.width) && rect.width > 0 &&
+      Number.isFinite(rect?.height) && rect.height > 0};
+}
+`,
     "window.__ca059Harness = {",
+    "  inspectEdge(id, oldExact=false) { return ca066InspectEdge(rendered?.graph?.getCellById(id), oldExact); },",
+    "  matchesText: ca066TextMatches,",
+    "  paintColor: ca066PaintColor,",
+    "  routeElement(id) { const edge=rendered?.graph?.getCellById(id); return edge && rendered.graph.findViewByCell(edge)?.findOne('line'); },",
     "  negative() {",
     '    try { reserveRouteLabel([{x:0,y:0},{x:1,y:1}],"__invalid_probe_label__",[],[]);',
     "      return {rejected:false};",
@@ -223,16 +319,7 @@ async function bundleSmoke() {
     "    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));",
     "    const seen=[];",
     "    for (const edge of rendered.graph.getEdges()) {",
-    "      const view=rendered.graph.findViewByCell(edge);",
-    "      const element=view?.container;",
-    "      const text=edge.getLabels()?.[0]?.attrs?.label?.text;",
-    '      const glyph=Array.from(element?.querySelectorAll("text")??[])',
-    "        .find(e=>e.textContent?.trim()===text);",
-    '      const path=Array.from(element?.querySelectorAll("path")??[])',
-    '        .find(p=>typeof p.getTotalLength==="function"&&p.getTotalLength()>0);',
-    "      seen.push({id:edge.id,hasSvgPath:Boolean(path?.getScreenCTM()),",
-    "        hasDomGlyph:Boolean(glyph&&glyph.getBoundingClientRect().width>0),",
-    '        text:String(text??"")});',
+    "      seen.push({id:edge.id,...ca066InspectEdge(edge)});",
     "    }",
     "    return {workerMs,x6Ms:performance.now()-x6Start,",
     "      scene:{width:geometry.width,height:geometry.height},",
@@ -477,6 +564,265 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
         (window as any).__ca059Harness.render(variant, state),
       { variant, state },
     );
+    // CA066: each negative mutates the real X6 SVG, then restores it.
+    // These controls must stay RED when a same-edge DOM glyph is not eligible.
+    const ca066 = await page.evaluate(() => {
+      const harness = (window as any).__ca059Harness;
+      const owner = document.querySelector('[data-cell-id="e:xz:a"]');
+      const foreign = document.querySelector('[data-cell-id="e:xz:b"]');
+      const glyph = owner?.querySelector("text");
+      if (!owner || !foreign || !glyph)
+        throw Error("CA066_UNRESOLVED: real X6 edge text owner missing");
+      const inspect = () => Boolean(harness.inspectEdge("e:xz:a").hasDomGlyph);
+      const temporarily = (change: () => () => void) => {
+        const undo = change();
+        try {
+          return inspect();
+        } finally {
+          undo();
+        }
+      };
+      const swapText = (value: string) => () => {
+        const nodes = Array.from(glyph.childNodes);
+        glyph.replaceChildren(document.createTextNode(value));
+        return () => glyph.replaceChildren(...nodes);
+      };
+      const originalCodePoints = Array.from(glyph.textContent ?? "", (char) =>
+        char.codePointAt(0),
+      );
+      const originalExactRed = glyph.textContent?.trim() !== "parallel A";
+      const oldComparatorNegative = !harness.inspectEdge("e:xz:a", true)
+        .hasDomGlyph;
+      const matcher = {
+        plain: harness.matchesText("parallel A", "parallel A"),
+        candidateNbsp: harness.matchesText("parallel A", "parallel\u00a0A"),
+        modelNbspReverse: harness.matchesText("parallel\u00a0A", "parallel A"),
+      };
+      const paintColors = {
+        opaqueBlackRgb: harness.paintColor("rgb(0, 0, 0)"),
+        opaqueRedRgb: harness.paintColor("rgb(255, 0, 0)"),
+        rgbaZeroAlpha: harness.paintColor("rgba(0, 0, 0, 0)"),
+        rgbSlashZeroAlpha: harness.paintColor("rgb(255 0 0 / 0)"),
+        none: harness.paintColor("none"),
+        transparent: harness.paintColor("transparent"),
+        unresolvedPaintServer: harness.paintColor("url(#missing)"),
+      };
+      const positive = inspect();
+      const wrongLabel = temporarily(swapText("parallel C"));
+      const doubledSpace = temporarily(swapText("parallel  A"));
+      const narrowNoBreak = temporarily(swapText("parallel\u202fA"));
+      const zeroWidthSpace = temporarily(swapText("parallel\u200bA"));
+      const bidiChanged = temporarily(swapText("parallel\u202eA"));
+      const duplicate = temporarily(() => {
+        const copy = glyph.cloneNode(true);
+        glyph.parentNode?.appendChild(copy);
+        return () => copy.parentNode?.removeChild(copy);
+      });
+      const foreignOwner = temporarily(() => {
+        const parent = glyph.parentNode;
+        const next = glyph.nextSibling;
+        foreign.appendChild(glyph);
+        return () => parent?.insertBefore(glyph, next);
+      });
+      const nestedOwner = temporarily(() => {
+        const parent = glyph.parentNode;
+        const next = glyph.nextSibling;
+        const wrapper = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "g",
+        );
+        wrapper.setAttribute("data-cell-id", "ca066-foreign-nested");
+        parent?.insertBefore(wrapper, glyph);
+        wrapper.appendChild(glyph);
+        return () => {
+          parent?.insertBefore(glyph, next);
+          wrapper.remove();
+        };
+      });
+      const hiddenChild = temporarily(() => {
+        const nodes = Array.from(glyph.childNodes);
+        const visible = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "tspan",
+        );
+        visible.textContent = "parallel";
+        const hidden = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "tspan",
+        );
+        hidden.textContent = "\u00a0A";
+        hidden.setAttribute("display", "none");
+        glyph.replaceChildren(visible, hidden);
+        return () => glyph.replaceChildren(...nodes);
+      });
+      const zeroFontChild = temporarily(() => {
+        const nodes = Array.from(glyph.childNodes);
+        const visible = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "tspan",
+        );
+        visible.textContent = "parallel";
+        const zeroFont = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "tspan",
+        );
+        zeroFont.textContent = "\u00a0A";
+        zeroFont.style.fontSize = "0px";
+        glyph.replaceChildren(visible, zeroFont);
+        return () => glyph.replaceChildren(...nodes);
+      });
+      const transparentChild = temporarily(() => {
+        const child = glyph.querySelector("tspan") ?? glyph;
+        const opacity = child.style.getPropertyValue("opacity");
+        const priority = child.style.getPropertyPriority("opacity");
+        child.style.setProperty("opacity", "0", "important");
+        return () =>
+          opacity
+            ? child.style.setProperty("opacity", opacity, priority)
+            : child.style.removeProperty("opacity");
+      });
+      const zeroWidth = temporarily(() => {
+        const previous = glyph.getAttribute("transform");
+        glyph.setAttribute("transform", "scale(0, 1)");
+        return () =>
+          previous === null
+            ? glyph.removeAttribute("transform")
+            : glyph.setAttribute("transform", previous);
+      });
+      const zeroHeight = temporarily(() => {
+        const previous = glyph.getAttribute("transform");
+        glyph.setAttribute("transform", "scale(1, 0)");
+        return () =>
+          previous === null
+            ? glyph.removeAttribute("transform")
+            : glyph.setAttribute("transform", previous);
+      });
+      const route = harness.routeElement("e:xz:a") as SVGPathElement | null;
+      const decoy = Array.from(owner.querySelectorAll("path")).find(
+        (path) => path !== route,
+      );
+      if (!route || !decoy)
+        throw Error(
+          "CA066_UNRESOLVED: exact X6 line/wrap route mapping missing",
+        );
+      const setRouteStyle = (property: string, value: string) => () => {
+        const previous = route.style.getPropertyValue(property);
+        const priority = route.style.getPropertyPriority(property);
+        route.style.setProperty(property, value, "important");
+        return () =>
+          previous
+            ? route.style.setProperty(property, previous, priority)
+            : route.style.removeProperty(property);
+      };
+      const transparentPath = temporarily(
+        setRouteStyle("stroke", "transparent"),
+      );
+      const zeroRouteStrokeWidth = temporarily(
+        setRouteStyle("stroke-width", "0"),
+      );
+      const zeroRouteStrokeOpacity = temporarily(
+        setRouteStyle("stroke-opacity", "0"),
+      );
+      const hiddenRouteWithPaintedDecoy = temporarily(() => {
+        const restoreRoute = setRouteStyle("display", "none")();
+        const previousStroke = decoy.style.getPropertyValue("stroke");
+        const previousPriority = decoy.style.getPropertyPriority("stroke");
+        decoy.style.setProperty("stroke", "rgb(255, 0, 0)", "important");
+        return () => {
+          restoreRoute();
+          if (previousStroke)
+            decoy.style.setProperty("stroke", previousStroke, previousPriority);
+          else decoy.style.removeProperty("stroke");
+        };
+      });
+      const degeneratePath = temporarily(() => {
+        const previous = route.getAttribute("d");
+        route.setAttribute("d", "M0 0");
+        return () =>
+          previous === null
+            ? route.removeAttribute("d")
+            : route.setAttribute("d", previous);
+      });
+      const repeatedOldComparatorNegative = !harness.inspectEdge("e:xz:a", true)
+        .hasDomGlyph;
+      const guardedAfterNegativeControls = inspect();
+      return {
+        originalCodePoints,
+        originalExactRed,
+        oldComparatorNegative,
+        matcher,
+        paintColors,
+        positive,
+        wrongLabel,
+        doubledSpace,
+        narrowNoBreak,
+        zeroWidthSpace,
+        bidiChanged,
+        duplicate,
+        foreignOwner,
+        nestedOwner,
+        hiddenChild,
+        zeroFontChild,
+        transparentChild,
+        zeroWidth,
+        zeroHeight,
+        transparentPath,
+        zeroRouteStrokeWidth,
+        zeroRouteStrokeOpacity,
+        hiddenRouteWithPaintedDecoy,
+        degeneratePath,
+        repeatedOldComparatorNegative,
+        guardedAfterNegativeControls,
+      };
+    });
+    expect(ca066.originalCodePoints).toEqual([
+      112, 97, 114, 97, 108, 108, 101, 108, 160, 65,
+    ]);
+    expect(
+      ca066.originalExactRed,
+      "old exact comparator must reject observed U+00A0",
+    ).toBe(true);
+    expect(
+      ca066.oldComparatorNegative,
+      "old exact-comparator diagnostic must reject candidate NBSP",
+    ).toBe(true);
+    expect(ca066.matcher).toEqual({
+      plain: true,
+      candidateNbsp: true,
+      modelNbspReverse: false,
+    });
+    expect(ca066.paintColors).toEqual({
+      opaqueBlackRgb: true,
+      opaqueRedRgb: true,
+      rgbaZeroAlpha: false,
+      rgbSlashZeroAlpha: false,
+      none: false,
+      transparent: false,
+      unresolvedPaintServer: false,
+    });
+    expect(ca066.positive, "guarded same-edge NBSP candidate").toBe(true);
+    expect(
+      ca066.repeatedOldComparatorNegative,
+      "repeated old-comparator diagnostic remains negative",
+    ).toBe(true);
+    expect(
+      ca066.guardedAfterNegativeControls,
+      "guarded inspector remains eligible after reversible negative controls",
+    ).toBe(true);
+    for (const [name, eligible] of Object.entries(ca066)) {
+      if (
+        name === "originalCodePoints" ||
+        name === "originalExactRed" ||
+        name === "matcher" ||
+        name === "paintColors" ||
+        name === "positive" ||
+        name === "oldComparatorNegative" ||
+        name === "repeatedOldComparatorNegative" ||
+        name === "guardedAfterNegativeControls"
+      )
+        continue;
+      expect(eligible, `CA066 negative ${name} must remain RED`).toBe(false);
+    }
     const recorder = await page.evaluate(
       () =>
         new Promise<{
