@@ -1,8 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
 import { createServer, type Server } from "node:http";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { build } from "vite";
+import { build, normalizePath } from "vite";
 import { createWebApp } from "../../src/web/app.js";
 import type { SessionStore } from "../../src/domain/flow.js";
 
@@ -174,6 +175,7 @@ async function bundleSmoke() {
   const entry = "virtual:ca059-harness-entry";
   const entryId = "\0" + entry;
   const helperId = "\0virtual:ca059-harness-helper";
+  let expectedRootId: string | undefined;
   const placements = Object.fromEntries(
     LABELS.map(([, text, x, y, width, height]) => [
       text,
@@ -248,7 +250,10 @@ async function bundleSmoke() {
       {
         name: "ca059-exact-renderer-import-smoke",
         enforce: "pre",
-        resolveId(id, importer) {
+        configResolved(config) {
+          expectedRootId = normalizePath(resolve(config.root, entry));
+        },
+        resolveId(id, importer, options) {
           if (id === entry) return entryId;
           if (id === "virtual:ca059-direct-helper") return helperId;
           if (
@@ -258,6 +263,13 @@ async function bundleSmoke() {
             aliasHits++;
             return helperId;
           }
+          if (
+            expectedRootId !== undefined &&
+            id === expectedRootId &&
+            importer == null &&
+            options?.isEntry === true
+          )
+            return entryId;
         },
         load(id) {
           if (id === entryId) return entrySource;
