@@ -1,10 +1,14 @@
 import { z } from 'zod';
-import { sourceSchema } from '../domain/trace.js';
-import type { SceneAppend } from '../domain/scene-input.js';
+import { eventSchema, sourceSchema, type TraceEvent } from '../domain/trace.js';
+import type {
+  SceneAppend,
+  SceneCompletion,
+  SceneIdentity,
+} from '../domain/scene-input.js';
 import { operationSchema } from './animation-builder.js';
 
 // Inspect descriptors before Zod reads values; never copy untrusted keys through setters.
-function detachSceneJson(
+export function detachSceneJson(
   value: unknown,
   ancestors = new WeakSet<object>(),
 ): unknown {
@@ -95,7 +99,78 @@ const origins = z.custom<Record<string, string>>(
     Object.values(value).every((item) => typeof item === 'string'),
   { message: 'origins must map own keys to strings' },
 );
+
+export function parseSceneEvent(raw: unknown): TraceEvent {
+  const detached = detachSceneJson(raw);
+  return eventSchema
+    .extend({
+      values: dictionary,
+      inputs: dictionary.optional(),
+      before: dictionary.optional(),
+      after: dictionary.optional(),
+      locals: dictionary.optional(),
+      origins: origins.optional(),
+    })
+    .parse(detached);
+}
+
 const key = z.string().min(1);
+const preparationIdentity = z
+  .object({
+    id: key,
+    sessionId: key,
+    revision: key,
+    projectRoot: key,
+    target: key,
+    createdAt: z
+      .string()
+      .refine(
+        (value) =>
+          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00)$/.test(
+            value,
+          ) &&
+          Number.isFinite(Date.parse(value)) &&
+          new Date(value).toISOString().slice(0, 19) === value.slice(0, 19),
+        { message: 'Expected UTC ISO-8601 timestamp' },
+      ),
+    producer: z.literal('code-anime-mcp'),
+  })
+  .strict();
+const preparationCompletion = z
+  .object({
+    complete: z.boolean(),
+    coverage: z
+      .object({
+        status: z.enum([
+          'unknown',
+          'partial',
+          'unresolved',
+          'provider-truncated',
+        ]),
+        reasons: z.array(z.string()),
+      })
+      .strict(),
+  })
+  .strict();
+
+export function parseScenePreparation(
+  identity: unknown,
+  completion: unknown,
+): {
+  identity: SceneIdentity;
+  completion: SceneCompletion;
+} {
+  // Both arguments are detached synchronously, before any preparation await.
+  const detached = detachSceneJson({ identity, completion }) as Record<
+    string,
+    unknown
+  >;
+  return {
+    identity: preparationIdentity.parse(detached.identity),
+    completion: preparationCompletion.parse(detached.completion),
+  };
+}
+
 const keys = z.array(key);
 const order = z.number().int().safe().nonnegative();
 const certainty = z.enum([

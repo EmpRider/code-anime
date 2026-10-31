@@ -10,6 +10,23 @@ import {
 import type { SessionStore } from '../domain/flow.js';
 import { SimulationService } from './simulation-service.js';
 import { EventJournal } from '../storage/event-journal.js';
+import type {
+  AuthoredNode,
+  AuthoredEdge,
+  AuthoredGroup,
+  SceneBegin,
+  SceneIdentity,
+  SceneCompletion,
+  PreparedScene,
+  AcceptedSceneInput,
+  SourceLocation,
+} from '../domain/scene-input.js';
+import {
+  detachSceneJson,
+  parseSceneAppend,
+  parseSceneEvent,
+  parseScenePreparation,
+} from './scene-ingress.js';
 
 const record = z.record(z.unknown());
 const groupFields = semanticGroupSchema.innerType().shape;
@@ -126,6 +143,35 @@ interface Build {
   result?: Record<string, unknown>;
   finishHash?: string;
 }
+interface SceneGraphState {
+  nodes: Map<string, AuthoredNode>;
+  edges: Map<string, AuthoredEdge>;
+  groups: Map<string, AuthoredGroup>;
+  nodeIds: Map<string, string>;
+  edgeIds: Map<string, string>;
+  groupIds: Map<string, string>;
+  callIds: Map<string, { id: string; taskId: string }>;
+  enteredCalls: Set<string>;
+  eventKeys: Set<string>;
+  nodeEvents: Map<string, string[]>;
+  activeEdges: Map<string, readonly string[]>;
+}
+interface SceneBuild {
+  id: string;
+  input: SceneBegin;
+  createdAt: number;
+  events: EventJournal;
+  batches: Map<string, { hash: string; count: number }>;
+  graph: SceneGraphState;
+  state: {
+    frames: Frame[];
+    taskFrames: Map<string, Frame[]>;
+    objects: Record<string, Record<string, unknown>>;
+    calls: number;
+  };
+  busy: boolean;
+  prepared?: { completionKey: string; envelope: PreparedScene };
+}
 const clone = <T>(value: T): T => structuredClone(value);
 const hash = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -150,10 +196,493 @@ const patch = (
 // or per-project generators. AI supplies semantic values as MCP data.
 export class AnimationBuilder {
   private readonly builds = new Map<string, Build>();
+  private readonly sceneBuilds = new Map<string, SceneBuild>();
   constructor(
     private readonly simulation: SimulationService,
     private readonly store: SessionStore,
   ) {}
+  async beginScene(input: SceneBegin): Promise<{ buildId: string }> {
+    const parsed = beginSchema
+      .omit({ action: true })
+      .extend({
+        // Detachment validates all metadata; a custom predicate preserves own special keys.
+        scenario: z.custom<SceneBegin['scenario']>(
+          (value) =>
+            value !== null &&
+            typeof value === 'object' &&
+            !Array.isArray(value) &&
+            ['entrypoint', 'description', 'mockInputLabel'].every(
+              (key) =>
+                Object.hasOwn(value, key) &&
+                typeof (value as Record<string, unknown>)[key] === 'string',
+            ),
+          {
+            message:
+              'scenario requires own string entrypoint, description, and mockInputLabel',
+          },
+        ),
+      })
+      .parse(detachSceneJson(input));
+    const { root } = await this.simulation.checkEvidence(
+      parsed.projectRoot,
+      parsed.evidenceIds,
+    );
+    for (const [id, build] of this.sceneBuilds) {
+      if (!build.busy && Date.now() - build.createdAt > 3600000) {
+        build.events.close();
+        this.sceneBuilds.delete(id);
+      }
+    }
+    if (this.sceneBuilds.size >= 10)
+      throw new Error('Build limit reached; close existing candidate builds');
+    const { baselineSessionId, ...rest } = parsed;
+    const build: SceneBuild = {
+      id: randomUUID(),
+      createdAt: Date.now(),
+      input: clone({
+        ...rest,
+        projectRoot: root,
+        ...(baselineSessionId === undefined ? {} : { baselineSessionId }),
+      }),
+      events: new EventJournal(),
+      batches: new Map(),
+      busy: false,
+      state: {
+        frames: [],
+        taskFrames: new Map(),
+        objects: Object.create(null),
+        calls: 0,
+      },
+      graph: {
+        nodes: new Map(),
+        edges: new Map(),
+        groups: new Map(),
+        nodeIds: new Map(),
+        edgeIds: new Map(),
+        groupIds: new Map(),
+        callIds: new Map(),
+        enteredCalls: new Set(),
+        eventKeys: new Set(),
+        nodeEvents: new Map(),
+        activeEdges: new Map(),
+      },
+    };
+    this.sceneBuilds.set(build.id, build);
+    return { buildId: build.id };
+  }
+  private getScene(buildId: string): SceneBuild {
+    const build = this.sceneBuilds.get(buildId);
+    if (!build || (!build.busy && Date.now() - build.createdAt > 3600000)) {
+      build?.events.close();
+      this.sceneBuilds.delete(buildId);
+      throw new Error('Candidate build expired or not found');
+    }
+    return build;
+  }
+  async appendScene(raw: unknown): Promise<{
+    buildId: string;
+    acceptedEventCount: number;
+    replayedBatch: boolean;
+  }> {
+    const detached = detachSceneJson(raw);
+    if (Buffer.byteLength(JSON.stringify(detached)) > 1024 * 1024)
+      throw new Error('Batch exceeds 1 MiB');
+    const p = parseSceneAppend(detached);
+    const build = this.getScene(p.buildId);
+    if (build.busy) throw new Error('Candidate build is processing a request');
+    if (build.prepared)
+      throw new Error('Candidate build is finalized; append is prohibited');
+    const digest = hash(p);
+    const prior = build.batches.get(p.batchId);
+    if (prior) {
+      if (prior.hash !== digest)
+        throw new Error('batchId was already used with different operations');
+      return {
+        buildId: build.id,
+        acceptedEventCount: prior.count,
+        replayedBatch: true,
+      };
+    }
+    if (p.expectedEventCount !== build.events.count)
+      throw new Error(
+        `Event count changed; expectedEventCount must be ${build.events.count}`,
+      );
+    build.busy = true;
+    try {
+      const graph = clone(build.graph);
+      const state = clone(build.state);
+      const declare = <T extends { key: string }>(
+        declarations: readonly T[],
+        records: Map<string, T>,
+        ids: Map<string, string>,
+        kind: string,
+      ) => {
+        const seen = new Set<string>();
+        for (const declaration of declarations) {
+          if (seen.has(declaration.key))
+            throw new Error(`Duplicate ${kind} key: ${declaration.key}`);
+          seen.add(declaration.key);
+          const previous = records.get(declaration.key);
+          if (previous) {
+            if (hash(previous) !== hash(declaration))
+              throw new Error(
+                `Conflicting ${kind} definition: ${declaration.key}`,
+              );
+          } else {
+            records.set(declaration.key, clone(declaration));
+            ids.set(declaration.key, `${kind}:${build.id}:${ids.size + 1}`);
+          }
+        }
+      };
+      declare(p.nodes, graph.nodes, graph.nodeIds, 'node');
+      declare(p.edges, graph.edges, graph.edgeIds, 'edge');
+      declare(p.groups, graph.groups, graph.groupIds, 'group');
+      for (const record of [
+        ...graph.nodes.values(),
+        ...graph.groups.values(),
+      ]) {
+        const owner = graph.callIds.get(record.callKey);
+        if (owner && owner.taskId !== record.taskId)
+          throw new Error(
+            `Conflicting task ownership for call ${record.callKey}`,
+          );
+        if (!owner)
+          graph.callIds.set(record.callKey, {
+            id: `call:${build.id}:${graph.callIds.size + 1}`,
+            taskId: record.taskId,
+          });
+      }
+      this.validateSceneGraph(graph);
+      const evidenceIds = [
+        ...new Set([
+          ...build.input.evidenceIds,
+          ...p.operations.flatMap((operation) => operation.evidenceIds ?? []),
+          ...[
+            ...graph.nodes.values(),
+            ...graph.edges.values(),
+            ...graph.groups.values(),
+          ].flatMap((record) => record.evidenceIds),
+        ]),
+      ];
+      if (evidenceIds.length > 200)
+        throw new Error('Build exceeds evidence receipt limit');
+      await this.simulation.validateSceneEvidence(
+        build.input.projectRoot,
+        evidenceIds,
+        [...graph.nodes.values(), ...graph.groups.values()],
+      );
+      const events: TraceEvent[] = [];
+      for (const authored of p.operations) {
+        const {
+          key,
+          nodeKey,
+          callKey,
+          parentCallKey,
+          activeEdgeKeys,
+          ...operation
+        } = authored;
+        if (graph.eventKeys.has(key))
+          throw new Error(`Duplicate operation key: ${key}`);
+        const node = graph.nodes.get(nodeKey);
+        if (!node) throw new Error(`Unknown node key: ${nodeKey}`);
+        const owner = graph.callIds.get(callKey);
+        if (
+          !owner ||
+          node.callKey !== callKey ||
+          node.taskId !== (operation.taskId ?? 'main')
+        )
+          throw new Error(
+            `Operation ${key} conflicts with node call/task ownership`,
+          );
+        const active = activeEdgeKeys.map((edgeKey) => {
+          const edge = graph.edges.get(edgeKey);
+          if (!edge) throw new Error(`Unknown active edge key: ${edgeKey}`);
+          if (edge.executionStatus !== 'simulated-taken')
+            throw new Error(
+              `Alternative or unresolved edge cannot be active: ${edgeKey}`,
+            );
+          return graph.edgeIds.get(edgeKey)!;
+        });
+        if (new Set(active).size !== active.length)
+          throw new Error('Duplicate active edge key');
+        if (operation.kind === 'enter') {
+          if (graph.enteredCalls.has(callKey))
+            throw new Error(`Call key already entered: ${callKey}`);
+          graph.enteredCalls.add(callKey);
+        }
+        if (operation.unwindTo !== undefined && operation.unwindTo !== null) {
+          const unwind = graph.callIds.get(operation.unwindTo);
+          if (!unwind)
+            throw new Error(`Unknown unwind call key: ${operation.unwindTo}`);
+          operation.unwindTo = unwind.id;
+        }
+        const event = this.apply(
+          state,
+          operation,
+          build.events.count + events.length,
+          build.input.evidenceIds,
+          owner.id,
+        );
+        if (event.callId !== owner.id)
+          throw new Error(`Operation ${key} uses an inactive call key`);
+        if (
+          parentCallKey !== undefined &&
+          (!graph.callIds.has(parentCallKey) ||
+            event.parentCallId !== graph.callIds.get(parentCallKey)!.id)
+        )
+          throw new Error(
+            `Operation ${key} has conflicting parent call ownership`,
+          );
+        graph.eventKeys.add(key);
+        graph.nodeEvents.set(nodeKey, [
+          ...(graph.nodeEvents.get(nodeKey) ?? []),
+          event.id,
+        ]);
+        graph.activeEdges.set(event.id, active);
+        events.push(event);
+      }
+      await this.simulation.validateSceneEvidence(
+        build.input.projectRoot,
+        evidenceIds,
+        events,
+      );
+      await build.events.append(events);
+      // Only the journal's successful append makes cloned state and author mappings visible.
+      build.state = state;
+      build.graph = graph;
+      build.input.evidenceIds = evidenceIds;
+      build.batches.set(p.batchId, { hash: digest, count: events.length });
+      return {
+        buildId: build.id,
+        acceptedEventCount: events.length,
+        replayedBatch: false,
+      };
+    } finally {
+      build.busy = false;
+    }
+  }
+  async prepareScene(
+    buildId: string,
+    identity: SceneIdentity,
+    completion: SceneCompletion,
+    signal: AbortSignal,
+  ): Promise<PreparedScene> {
+    signal.throwIfAborted();
+    const parsed = parseScenePreparation(identity, completion);
+    const build = this.getScene(buildId);
+    if (build.busy) throw new Error('Candidate build is processing a request');
+    if (
+      parsed.identity.projectRoot !== build.input.projectRoot ||
+      parsed.identity.target !== build.input.endpoint
+    )
+      throw new Error(
+        'Preparation identity projectRoot/target conflicts with accepted build bindings',
+      );
+    const completionKey = hash(parsed.completion);
+    if (build.prepared) {
+      if (build.prepared.completionKey !== completionKey)
+        throw new Error(
+          'Candidate build was prepared with different completion data',
+        );
+      return clone(build.prepared.envelope);
+    }
+    build.busy = true;
+    try {
+      const begun = clone(build.input);
+      const graph = clone(build.graph);
+      this.validateSceneGraph(graph);
+      const events: TraceEvent[] = [];
+      for await (const chunk of build.events.chunks()) {
+        signal.throwIfAborted();
+        events.push(...chunk.map((event) => parseSceneEvent(event)));
+      }
+      if (!events.length)
+        throw new Error('Candidate preparation requires accepted mock events');
+      const captured = await this.simulation.prepareSceneEvidence(
+        begun.projectRoot,
+        begun.evidenceIds,
+        events,
+        [
+          ...graph.nodes.values(),
+          ...graph.edges.values(),
+          ...graph.groups.values(),
+        ],
+        parsed.completion,
+        signal,
+      );
+      signal.throwIfAborted();
+      const pairs = Object.entries(captured.files).sort(([left], [right]) =>
+        left < right ? -1 : left > right ? 1 : 0,
+      );
+      const sources: AcceptedSceneInput['sources'] = pairs.map(
+        ([path, text], index) => ({
+          id: `source:${build.id}:${index + 1}`,
+          path,
+          text,
+          languageHint: null,
+        }),
+      );
+      const fileIds = new Map(sources.map((file) => [file.path, file.id]));
+      const requireFile = (path: string) => {
+        const id = fileIds.get(path);
+        if (id === undefined)
+          throw new Error(
+            `Scene source cannot be represented without captured file: ${path}`,
+          );
+        return id;
+      };
+      const sourceRef = (location: SourceLocation | null) =>
+        location === null
+          ? null
+          : {
+              fileId: requireFile(location.file),
+              line: location.line,
+              endLine: location.endLine,
+              ...(location.generated
+                ? {
+                    generated: {
+                      fileId: requireFile(location.generated.file),
+                      line: location.generated.line,
+                    },
+                  }
+                : {}),
+            };
+      const input: AcceptedSceneInput = {
+        artifact: { ...parsed.identity, sourceHash: hash(pairs) },
+        scenario: {
+          entrypoint: begun.scenario.entrypoint,
+          description: begun.scenario.description,
+          mockInputLabel: begun.scenario.mockInputLabel,
+        },
+        provenance: captured.provenance,
+        status: captured.status,
+        graph: {
+          nodes: [...graph.nodes.values()].map(
+            ({ key, callKey, groupPathKeys, source, ...node }) => ({
+              ...node,
+              id: graph.nodeIds.get(key)!,
+              eventIds: [...(graph.nodeEvents.get(key) ?? [])],
+              callId: graph.callIds.get(callKey)!.id,
+              groupPathIds: groupPathKeys.map((groupKey) =>
+                graph.groupIds.get(groupKey)!,
+              ),
+              sourceRef: sourceRef(source),
+            }),
+          ),
+          edges: [...graph.edges.values()].map(
+            ({ key, fromNodeKey, toNodeKey, callTransition, ...edge }) => ({
+              ...edge,
+              id: graph.edgeIds.get(key)!,
+              fromNodeId: graph.nodeIds.get(fromNodeKey)!,
+              toNodeId: graph.nodeIds.get(toNodeKey)!,
+              callTransition:
+                callTransition === null
+                  ? null
+                  : {
+                      fromCallId: graph.callIds.get(callTransition.fromCallKey)!
+                        .id,
+                      toCallId: graph.callIds.get(callTransition.toCallKey)!.id,
+                    },
+            }),
+          ),
+          groups: [...graph.groups.values()].map(
+            ({
+              key,
+              parentGroupKey,
+              memberNodeKeys,
+              callKey,
+              source,
+              ...group
+            }) => ({
+              ...group,
+              id: graph.groupIds.get(key)!,
+              parentGroupId:
+                parentGroupKey === null
+                  ? null
+                  : graph.groupIds.get(parentGroupKey)!,
+              memberNodeIds: memberNodeKeys.map((nodeKey) =>
+                graph.nodeIds.get(nodeKey)!,
+              ),
+              callId: graph.callIds.get(callKey)!.id,
+              sourceRef: sourceRef(source),
+            }),
+          ),
+        },
+        sources,
+        events,
+        activeEdgeIdsByEventId: clone(graph.activeEdges),
+      };
+      const envelope: PreparedScene = {
+        input,
+        ...(begun.baselineSessionId === undefined
+          ? {}
+          : { baselineSessionId: begun.baselineSessionId }),
+      };
+      // Private ownership, not Object.freeze(Map), protects the first successful snapshot.
+      const retained = clone(envelope);
+      const returned = clone(retained);
+      signal.throwIfAborted();
+      build.prepared = { completionKey, envelope: retained };
+      return returned;
+    } finally {
+      build.busy = false;
+    }
+  }
+  private validateSceneGraph(graph: SceneGraphState) {
+    const directOwners = new Map<string, string>();
+    for (const group of graph.groups.values()) {
+      const ancestry = new Set<string>([group.key]);
+      let parentKey = group.parentGroupKey;
+      while (parentKey !== null) {
+        if (ancestry.has(parentKey)) throw new Error('Cyclic group ancestry');
+        ancestry.add(parentKey);
+        const parent = graph.groups.get(parentKey);
+        if (!parent) throw new Error(`Unknown parent group: ${parentKey}`);
+        if (parent.callKey !== group.callKey || parent.taskId !== group.taskId)
+          throw new Error('Group parent has conflicting call/task ownership');
+        parentKey = parent.parentGroupKey;
+      }
+      for (const member of group.memberNodeKeys) {
+        const node = graph.nodes.get(member);
+        if (!node) throw new Error(`Unknown group member node: ${member}`);
+        if (directOwners.has(member))
+          throw new Error(`Conflicting direct group membership: ${member}`);
+        if (node.callKey !== group.callKey || node.taskId !== group.taskId)
+          throw new Error('Group member has conflicting call/task ownership');
+        directOwners.set(member, group.key);
+      }
+    }
+    for (const node of graph.nodes.values()) {
+      if (directOwners.get(node.key) !== node.groupPathKeys.at(-1))
+        throw new Error(`Contradictory direct group membership: ${node.key}`);
+      const seen = new Set<string>();
+      for (const [index, groupKey] of node.groupPathKeys.entries()) {
+        const group = graph.groups.get(groupKey);
+        if (!group || seen.has(groupKey))
+          throw new Error(`Unknown or repeated group: ${groupKey}`);
+        if (group.parentGroupKey !== (node.groupPathKeys[index - 1] ?? null))
+          throw new Error(`Contradictory group ancestry: ${node.key}`);
+        seen.add(groupKey);
+      }
+    }
+    for (const edge of graph.edges.values()) {
+      const from = graph.nodes.get(edge.fromNodeKey);
+      const to = graph.nodes.get(edge.toNodeKey);
+      if (!from || !to) throw new Error(`Unknown edge endpoint: ${edge.key}`);
+      if (edge.callTransition !== null) {
+        if (
+          !['call', 'return'].includes(edge.kind) ||
+          edge.callTransition.fromCallKey !== from.callKey ||
+          edge.callTransition.toCallKey !== to.callKey
+        )
+          throw new Error(`Invalid call transition: ${edge.key}`);
+      } else if (from.callKey !== to.callKey) {
+        throw new Error(
+          `Cross-call edge requires an explicit call/return transition: ${edge.key}`,
+        );
+      }
+    }
+  }
   private get(id: string) {
     const build = this.builds.get(id);
     if (!build || (!build.busy && Date.now() - build.createdAt > 3600000)) {
@@ -510,6 +1039,7 @@ export class AnimationBuilder {
     op: Operation,
     index: number,
     defaultEvidence: string[],
+    sceneCallId?: string,
   ): TraceEvent {
     const task = op.taskId ?? 'main';
     let frames = task === 'main' ? state.frames : state.taskFrames.get(task);
@@ -522,8 +1052,9 @@ export class AnimationBuilder {
     const caller = frames.at(-1);
     if (op.kind === 'enter') {
       if (!op.symbol) throw new Error('Enter requires a symbol');
+      state.calls++;
       frames.push({
-        id: `call-${++state.calls}`,
+        id: sceneCallId ?? `call-${state.calls}`,
         symbol: op.symbol,
         source: op.source,
         evidenceIds: op.evidenceIds ?? defaultEvidence,
@@ -660,9 +1191,13 @@ export class AnimationBuilder {
       ...(op.snippet ? { snippet: op.snippet } : {}),
       ...(op.note ? { note: op.note } : {}),
     };
-    return eventSchema.parse(event);
+    return sceneCallId !== undefined
+      ? parseSceneEvent(event)
+      : eventSchema.parse(event);
   }
   close() {
+    for (const b of this.sceneBuilds.values()) b.events.close();
+    this.sceneBuilds.clear();
     for (const b of this.builds.values()) b.events.close();
     this.builds.clear();
   }

@@ -2,6 +2,7 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import type { TraceEvent } from '../domain/trace.js';
+import type { SourceLocation } from '../domain/scene-input.js';
 
 const excludedDirectories = new Set([
   '.git',
@@ -93,14 +94,24 @@ export async function collectSourceFiles(
   projectRoot: string,
   events: TraceEvent[],
 ) {
+  return collectSourceLocations(
+    projectRoot,
+    events.flatMap((event) => (event.source ? [event.source] : [])),
+  );
+}
+
+// Candidate graphs may reference source without an event; live callers retain
+// their existing event-only location set through the wrapper above.
+export async function collectSourceLocations(
+  projectRoot: string,
+  locations: readonly SourceLocation[],
+) {
   // Source paths are arbitrary project filenames, including Object.prototype
   // names such as "constructor" and "__proto__". Never inherit dictionary keys.
   const files: Record<string, string> = Object.create(null);
   const diagnostics: string[] = [];
   const root = await realpath(projectRoot);
-  const paths = [
-    ...new Set(events.flatMap((e) => (e.source ? [e.source.file] : []))),
-  ];
+  const paths = [...new Set(locations.map((location) => location.file))];
   let total = 0;
   for (const sourcePath of paths) {
     try {

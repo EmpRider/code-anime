@@ -48,7 +48,7 @@ export type SceneBegin = {
   projectRoot: string;
   endpoint: string;
   evidenceIds: string[];
-  scenario: Record<string, unknown>;
+  scenario: ReadyVariant['scenario'] & Record<string, unknown>;
   baselineSessionId?: string;
 };
 export type SceneAppend = {
@@ -68,4 +68,13 @@ export type AcceptedSceneInput = Pick<
   sources: Array<Omit<SourceFile, 'tokenSpans'>>;
   events: TraceEvent[];
   activeEdgeIdsByEventId: ReadonlyMap<string, readonly string[]>;
+};
+export type PreparedScene = {
+  input: AcceptedSceneInput;
+  baselineSessionId?: string;
+};
+export type SceneIdentity = Omit<ReadyVariant['artifact'], 'sourceHash'>;
+export type SceneCompletion = {
+  complete: boolean;
+  coverage: ReadyVariant['status']['coverage'];
 };

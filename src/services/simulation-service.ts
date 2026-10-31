@@ -13,8 +13,17 @@ import {
   type TraceEvent,
 } from '../domain/trace.js';
 import { flowSchema, type SessionStore } from '../domain/flow.js';
-import { collectSourceFiles, sourceBoundary } from './source-catalog.js';
+import {
+  collectSourceFiles,
+  collectSourceLocations,
+  sourceBoundary,
+} from './source-catalog.js';
 import { checkInvocationIntegrity } from './invocation-integrity.js';
+import type {
+  AcceptedSceneInput,
+  SceneCompletion,
+  SourceLocation,
+} from '../domain/scene-input.js';
 
 export const evidenceRequestSchema = z
   .object({
@@ -421,6 +430,180 @@ export class SimulationService {
         'Retrieve CodeGraph source evidence using node or explore before simulation.',
       );
     return { root, evidence };
+  }
+  async validateSceneEvidence(
+    projectRoot: string,
+    evidenceIds: string[],
+    records: readonly {
+      source?: TraceEvent['source'] | null;
+      evidenceIds?: readonly string[] | undefined;
+      certainty: TraceEvent['certainty'];
+    }[],
+  ) {
+    const { root, evidence } = await this.checkEvidence(
+      projectRoot,
+      evidenceIds,
+    );
+    const receipts = new Map(evidence.map((item) => [item.id, item]));
+    for (const record of records) {
+      const cited = (record.evidenceIds ?? []).map((id) => {
+        const receipt = receipts.get(id);
+        if (!receipt)
+          throw new Error(
+            `Scene uses an unsupplied CodeGraph evidence receipt: ${id}`,
+          );
+        return receipt;
+      });
+      if (!record.source) continue;
+      const boundary = sourceBoundary(root, record.source.file);
+      if (boundary)
+        throw new Error(`Scene source ${record.source.file}: ${boundary}`);
+      if (record.source.generated) {
+        const generatedBoundary = sourceBoundary(
+          root,
+          record.source.generated.file,
+        );
+        if (generatedBoundary)
+          throw new Error(`Generated scene source: ${generatedBoundary}`);
+      }
+      if (
+        record.certainty !== 'unresolved' &&
+        cited.length &&
+        cited.every(
+          (item) => item.tool === 'node' && item.nodeSourceFiles?.length,
+        ) &&
+        !cited.some((item) =>
+          item.nodeSourceFiles?.some(
+            (file) =>
+              sourceIdentity(root, file) ===
+              sourceIdentity(root, record.source!.file),
+          ),
+        )
+      )
+        throw new Error(
+          `Scene source cites CodeGraph node evidence for another file: ${record.source.file}`,
+        );
+    }
+  }
+  async prepareSceneEvidence(
+    projectRoot: string,
+    evidenceIds: string[],
+    events: TraceEvent[],
+    records: readonly {
+      source?: SourceLocation | null;
+      evidenceIds: readonly string[];
+      certainty: TraceEvent['certainty'];
+    }[],
+    completion: SceneCompletion,
+    signal: AbortSignal,
+  ): Promise<{
+    files: Record<string, string>;
+    provenance: AcceptedSceneInput['provenance'];
+    status: AcceptedSceneInput['status'];
+  }> {
+    signal.throwIfAborted();
+    const { root, evidence } = await this.checkEvidence(
+      projectRoot,
+      evidenceIds,
+    );
+    signal.throwIfAborted();
+    await this.validateSceneEvidence(root, evidenceIds, [
+      ...events,
+      ...records,
+    ]);
+    signal.throwIfAborted();
+    for (const event of events) {
+      if (!event.evidenceIds?.length)
+        throw new Error(
+          `Event ${event.id} must reference supplied CodeGraph evidenceIds`,
+        );
+    }
+    checkInvocationIntegrity([events], completion.complete);
+    const provenanceIssues = sourceProvenanceIssues(root, events, evidence);
+    const locations = [...events, ...records].flatMap((record) => {
+      if (!record.source) return [];
+      const generated = record.source.generated;
+      return [
+        record.source,
+        ...(generated
+          ? [
+              {
+                file: generated.file,
+                line: generated.line,
+                endLine: generated.line,
+              },
+            ]
+          : []),
+      ];
+    });
+    const captured = await collectSourceLocations(root, locations);
+    signal.throwIfAborted();
+    for (const location of locations) {
+      const text = captured.files[location.file];
+      if (text !== undefined && location.endLine > text.split(/\r?\n/).length)
+        throw new Error(
+          `Scene source range exceeds captured source lines: ${location.file}`,
+        );
+    }
+    const measured = assessCoverage(
+      completion.complete,
+      evidence,
+      events,
+      captured.diagnostics,
+      provenanceIssues,
+      false,
+      [],
+    );
+    const provider = evidence.some((item) => Boolean(item.providerBoundary));
+    const unread = evidence.some((item) => nextUnreadOffset(item) !== null);
+    if (completion.coverage.status === 'provider-truncated' && !provider)
+      throw new Error(
+        'Authored provider-truncated coverage has no observed provider boundary',
+      );
+    if (
+      completion.complete &&
+      (measured.status === 'provider-truncated' ||
+        measured.status === 'unresolved')
+    )
+      throw new Error(
+        `Cannot mark mock scene complete: ${measured.reasons.join('; ')}`,
+      );
+    const reasons = [...completion.coverage.reasons];
+    for (const reason of measured.reasons)
+      if (!reasons.includes(reason)) reasons.push(reason);
+    return {
+      files: captured.files,
+      provenance: {
+        provider: 'codegraph',
+        simulationMode: 'ai-mock',
+        receipts: evidence.map((item) => ({
+          id: item.id,
+          tool: item.tool,
+          queryDigest: item.hash,
+          ...(item.providerBoundary === undefined
+            ? {}
+            : { providerBoundary: item.providerBoundary }),
+        })),
+      },
+      status: {
+        complete: completion.complete,
+        truncated: provider || unread,
+        coverage: {
+          status:
+            measured.status === 'provider-truncated' ||
+            measured.status === 'unresolved'
+              ? measured.status
+              : completion.coverage.status,
+          reasons,
+        },
+        warnings: [...provenanceIssues],
+        diagnostics: [
+          'AI-simulated values from CodeGraph evidence; repository code and external effects were not executed.',
+          'Evidence receipts verify retrieval and project identity, not the semantic correctness of AI calculations.',
+          ...captured.diagnostics,
+        ],
+      },
+    };
   }
   async validateSemanticGroupEvidence(
     projectRoot: string,
