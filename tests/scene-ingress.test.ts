@@ -1613,9 +1613,30 @@ test('T03 prepared consumer Maps and nested JSON cannot mutate the private repla
   }
 });
 
-test('T03 capture reads each owned source once and detaches arguments before its await', async () => {
+test('T03 capture reads each owned source once and detaches arguments before its await', async (t) => {
   const c = await candidate();
   const originalRead = fsPromises.readFile;
+  let reads = 0;
+  const observed: {
+    lexicalPath?: string;
+    canonicalPath?: string;
+    firstSource: {
+      argumentType: string;
+      argumentValue: string;
+      lexicalMatch: boolean;
+      canonicalMatch: boolean;
+    } | null;
+    extraSourceCalls: number;
+    gateEntered: boolean;
+    gateObservedBeforeMutation: boolean;
+    gateResumed: boolean;
+  } = {
+    firstSource: null,
+    extraSourceCalls: 0,
+    gateEntered: false,
+    gateObservedBeforeMutation: false,
+    gateResumed: false,
+  };
   let release!: () => void;
   let started!: () => void;
   const captured = new Promise<void>((resolve) => {
@@ -1627,14 +1648,33 @@ test('T03 capture reads each owned source once and detaches arguments before its
   try {
     const { buildId } = await c.begin();
     await c.builder.appendScene(callBatch(buildId, c.evidence.evidenceId));
-    let reads = 0;
+    const lexicalPath = join(c.root, 'Workflow.any');
+    const canonicalPath = await fsPromises.realpath(lexicalPath);
+    observed.lexicalPath = lexicalPath;
+    observed.canonicalPath = canonicalPath;
     fsPromises.readFile = (async (...args: Parameters<typeof originalRead>) => {
       const result = await originalRead(...args);
-      if (args[0] === join(c.root, 'Workflow.any')) {
+      const lexicalMatch = args[0] === lexicalPath;
+      const canonicalMatch = args[0] === canonicalPath;
+      if (typeof args[0] === 'string' && (lexicalMatch || canonicalMatch)) {
+        if (observed.firstSource === null) {
+          observed.firstSource = {
+            argumentType: typeof args[0],
+            argumentValue: args[0],
+            lexicalMatch,
+            canonicalMatch,
+          };
+        } else {
+          observed.extraSourceCalls++;
+        }
+      }
+      if (canonicalMatch) {
         reads++;
         if (reads === 1) {
+          observed.gateEntered = true;
           started();
           await resume;
+          observed.gateResumed = true;
         }
       }
       return result;
@@ -1654,6 +1694,13 @@ test('T03 capture reads each owned source once and detaches arguments before its
         throw new Error('Capture spy was bypassed');
       }),
     ]);
+    assert.ok(observed.firstSource, 'Owned source read was not observed');
+    assert.equal(observed.firstSource.argumentType, 'string');
+    assert.equal(observed.firstSource.argumentValue, canonicalPath);
+    assert.equal(observed.firstSource.canonicalMatch, true);
+    assert.equal(observed.gateEntered, true);
+    assert.equal(observed.gateResumed, false);
+    observed.gateObservedBeforeMutation = true;
     identity.id = 'mutated while pending';
     identity.target = 'Other.run';
     completion.coverage.reasons[0] = 'mutated while pending';
@@ -1664,6 +1711,7 @@ test('T03 capture reads each owned source once and detaches arguments before its
     );
     release();
     const prepared = await pending;
+    assert.equal(observed.gateResumed, true);
     assert.equal(reads, 1);
     assert.equal(prepared.input.artifact.id, 'artifact:preparation');
     assert.equal(prepared.input.artifact.target, 'Workflow.run');
@@ -1680,44 +1728,118 @@ test('T03 capture reads each owned source once and detaches arguments before its
       new AbortController().signal,
     );
     assert.equal(reads, 1);
+    assert.equal(observed.extraSourceCalls, 0);
     assert.deepEqual(replay, prepared);
     assert.deepEqual(await c.store.list(), []);
   } finally {
-    release();
-    fsPromises.readFile = originalRead;
-    syncBuiltinESMExports();
-    await c.close();
+    try {
+      release();
+      fsPromises.readFile = originalRead;
+      syncBuiltinESMExports();
+      await c.close();
+    } finally {
+      t.diagnostic(
+        `T03 capture control ${JSON.stringify({ ...observed, reads })}`,
+      );
+    }
   }
 });
 
-test('T03 abort during source capture installs no prepared record and preserves append retry', async () => {
+test('T03 abort during source capture installs no prepared record and preserves append retry', async (t) => {
   const c = await candidate();
   const originalRead = fsPromises.readFile;
+  let reads = 0;
+  const observed: {
+    lexicalPath?: string;
+    canonicalPath?: string;
+    firstSource: {
+      argumentType: string;
+      argumentValue: string;
+      lexicalMatch: boolean;
+      canonicalMatch: boolean;
+    } | null;
+    extraSourceCalls: number;
+    signalAbortedBefore: boolean | null;
+    signalAbortedAfter: boolean | null;
+    signalReasonMatches: boolean | null;
+    preparationRejected: boolean;
+    rejectionMatchesReason: boolean | null;
+  } = {
+    firstSource: null,
+    extraSourceCalls: 0,
+    signalAbortedBefore: null,
+    signalAbortedAfter: null,
+    signalReasonMatches: null,
+    preparationRejected: false,
+    rejectionMatchesReason: null,
+  };
   try {
     const { buildId } = await c.begin();
     const batch = callBatch(buildId, c.evidence.evidenceId);
     await c.builder.appendScene(batch);
     const controller = new AbortController();
-    let reads = 0;
+    const signal = controller.signal;
+    const abortReason = new Error('abort after source read');
+    const lexicalPath = join(c.root, 'Workflow.any');
+    const canonicalPath = await fsPromises.realpath(lexicalPath);
+    observed.lexicalPath = lexicalPath;
+    observed.canonicalPath = canonicalPath;
     fsPromises.readFile = (async (...args: Parameters<typeof originalRead>) => {
       const result = await originalRead(...args);
-      if (args[0] === join(c.root, 'Workflow.any')) {
+      const lexicalMatch = args[0] === lexicalPath;
+      const canonicalMatch = args[0] === canonicalPath;
+      if (typeof args[0] === 'string' && (lexicalMatch || canonicalMatch)) {
+        if (observed.firstSource === null) {
+          observed.firstSource = {
+            argumentType: typeof args[0],
+            argumentValue: args[0],
+            lexicalMatch,
+            canonicalMatch,
+          };
+        } else {
+          observed.extraSourceCalls++;
+        }
+      }
+      if (canonicalMatch) {
         reads++;
-        controller.abort(new Error('abort after source read'));
+        if (reads === 1) observed.signalAbortedBefore = signal.aborted;
+        controller.abort(abortReason);
+        if (reads === 1) {
+          observed.signalAbortedAfter = signal.aborted;
+          observed.signalReasonMatches = signal.reason === abortReason;
+        }
       }
       return result;
     }) as typeof originalRead;
     syncBuiltinESMExports();
+    let rejection: unknown;
     await assert.rejects(
-      c.builder.prepareScene(
-        buildId,
-        preparationIdentity(c.root),
-        partialCompletion,
-        controller.signal,
-      ),
+      c.builder
+        .prepareScene(
+          buildId,
+          preparationIdentity(c.root),
+          partialCompletion,
+          signal,
+        )
+        .catch((error: unknown) => {
+          rejection = error;
+          observed.preparationRejected = true;
+          observed.rejectionMatchesReason = error === abortReason;
+          throw error;
+        }),
       /abort after source read/,
     );
     assert.equal(reads, 1);
+    assert.ok(observed.firstSource, 'Owned source read was not observed');
+    assert.equal(observed.firstSource.argumentType, 'string');
+    assert.equal(observed.firstSource.argumentValue, canonicalPath);
+    assert.equal(observed.firstSource.canonicalMatch, true);
+    assert.equal(observed.extraSourceCalls, 0);
+    assert.equal(observed.signalAbortedBefore, false);
+    assert.equal(observed.signalAbortedAfter, true);
+    assert.equal(observed.signalReasonMatches, true);
+    assert.equal(observed.preparationRejected, true);
+    assert.equal(rejection, abortReason);
     fsPromises.readFile = originalRead;
     syncBuiltinESMExports();
     assert.equal((await c.builder.appendScene(batch)).replayedBatch, true);
@@ -1731,9 +1853,15 @@ test('T03 abort during source capture installs no prepared record and preserves 
     assert.equal(candidateJournal(c.builder, buildId).count, 2);
     assert.deepEqual(await c.store.list(), []);
   } finally {
-    fsPromises.readFile = originalRead;
-    syncBuiltinESMExports();
-    await c.close();
+    try {
+      fsPromises.readFile = originalRead;
+      syncBuiltinESMExports();
+      await c.close();
+    } finally {
+      t.diagnostic(
+        `T03 abort control ${JSON.stringify({ ...observed, reads })}`,
+      );
+    }
   }
 });
 
