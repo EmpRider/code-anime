@@ -36,7 +36,7 @@ remain blocked by this obsolete runtime-only coverage. No release is claimed.
 
 **Authority:** `AGENTS.md` and the owner's 37 numbered requirements in the
 original `pasted-text-1.txt` specification. This ledger replaces the runtime
-assumptions in the historical matrix in `acceptance-audit.md`; it does not
+assumptions in the removed recorder-era acceptance matrix (available in Git history); it does not
 retroactively convert recorded-execution evidence into mock-flow acceptance.
 
 Code Anime **never executes the analyzed application**. CodeGraph supplies

@@ -1,6 +1,6 @@
 # Code Anime V3 — Frontend Graph and Geometry Design
 
-> **Status: proposed design, not implementation approval.** 2026-10-29. This document is part of the FE-first V3 design package. The user must approve the V3 design and then its separate implementation plan before product code changes. No frontend, backend, test, CSS, control, or package change is authorized by this document.
+> **Design approved / implementation incomplete (status corrected 2026-11-02).** The owner approved V3 design, plan and isolated FE Phase A on 2026-10-29. Later 2026-10-31 full-revamp and complete-flow PNG directions extend product intent; they do not prove the live player, MCP output, native browser visuals or release. Refer to [current status](README.md) and task ledgers before implementing; Council proposals are not owner visual sign-off.
 
 ## 1. Intent and non-negotiable boundaries
 

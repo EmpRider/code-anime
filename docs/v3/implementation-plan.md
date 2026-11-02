@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task by task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
-> **Status: PROPOSED PLAN — NOT APPROVED FOR CODE IMPLEMENTATION.** The owner authorized this document and the GitHub task ledger, **not** CA028–CA039 source, test, migration, or package changes. The owner must separately approve the V3 design, separately approve this plan, and explicitly authorize the relevant FE phase. MCP/backend work remains **FUTURE/DEFERRED** until separately authorized. No merge, publish, release, deployment, deletion, or cleanup is authorized.
+> **Historical plan status (superseded 2026-11-02):** The owner approved this V3 design/plan and START FE PHASE A (isolated CA028–CA030) on 2026-10-29. The 2026-10-31 full-revamp/no-legacy direction is later than this FE-first checklist; specific backend/cutover implementation gates still need reconciliation and actual verification. This file's original `DOCUMENTATION ONLY`/`NOT AUTHORIZED` phase descriptions are **historical**, not newer owner decisions. See [current V3 status](README.md); no merge, deployment, npm publication or release is implied.
 
 **Goal:** Display a CodeGraph-evidence-grounded, host-AI-mocked, multi-language flow from **one complete immutable semantic JSON document**, while the fixed-desktop frontend computes only adaptive graph presentation and preserves every new-flow source/Visits/Values/playback interaction.
 

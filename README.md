@@ -1,6 +1,6 @@
 # Code Anime
 
-> **Development handoff (2026-10-28):** See [current branch implementation status, verified CI, T1–T9 next steps, blockers and restart guide](docs/implementation-handoff-2026-10-28.md). This is a development snapshot, not a release announcement.
+> **Current design and status (2026-11-02):** Start with the [V3 design index](docs/v3/README.md) and its linked architecture/contract. Date-stamped Council records and task ledgers are historical evidence, not current implementation instructions. The V3 production cutover and release have not been verified.
 
 **Watch code execute with mock values, one step at a time.**
 

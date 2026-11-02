@@ -1,6 +1,6 @@
-# Code Anime V3 — proposed single-document semantic scene contract
+# Code Anime V3 — target single-document semantic scene contract
 
-> **CA023 design specification, not a shipped API.** V3 architecture: [architecture.md](architecture.md). Implementation requires separate design, plan, and coding approvals. The MCP producer/compiler is **FUTURE / DEFERRED**; synthetic FE fixtures are not CodeGraph-provider evidence.
+> **Approved design target, not a shipped API (2026-11-02).** The owner approved V3 design/plan and isolated FE Phase A on 2026-10-29, then requested a full revamp on 2026-10-31. The MCP producer and live V3 route remain **implementation/verification gates**, and synthetic FE fixtures are not native CodeGraph-provider evidence. See [current status](README.md) before using older approval wording.
 
 ## 1. Contract guarantee
 

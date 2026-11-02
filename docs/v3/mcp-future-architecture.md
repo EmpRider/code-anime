@@ -1,8 +1,6 @@
-# Code Anime V3 — Future MCP Semantic Bundle Architecture
+# Code Anime V3 — MCP semantic bundle target architecture
 
-> **Status: PROPOSED DESIGN ONLY · Backend implementation FUTURE / DEFERRED.**
->
-> This document defines the eventual backend responsibilities and their verification gates. It does **not** approve or implement new MCP behavior, migrate existing sessions, or certify native CodeGraph integration. The authorized near-term work is **frontend-first, fixture-driven design**. The user must separately approve the V3 design and implementation plan before production code changes.
+> **Target architecture / backend unverified (2026-11-02).** The V3 design and isolated FE Phase A were approved on 2026-10-29; the owner requested a full revamp with no legacy compatibility on 2026-10-31. This older backend plan records target responsibilities and verification gates, **not** a completed compiler, session migration, native CodeGraph integration or release. Its original `FUTURE/DEFERRED` wording describes the earlier FE-only approval period; consult [current design status](README.md) before scheduling backend/cutover work.
 
 ## 1. Contract and ownership
 

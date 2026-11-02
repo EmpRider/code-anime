@@ -24,6 +24,21 @@ observed runtime execution or actual program instrumentation.
 Code Anime must never execute, import, evaluate, compile-and-run, or instrument
 analyzed user project code to construct animations.
 
+## Current V3 design authority (2026-11-02)
+
+- The static CodeGraph-evidence and AI-mock-only product boundary above always takes precedence. Never execute or instrument the analyzed project.
+- For current design intent and approval chronology, start at `docs/v3/README.md`. The target technical contracts are `docs/v3/architecture.md`, `docs/v3/flow-scene-json-contract.md` and `docs/v3/frontend-graph-design.md`. Check actual source and the relevant `.agent-tasks/` ledger for implemented/verified status.
+- The owner approved V3 design, implementation plan and isolated FE Phase A (CA028–CA030) on 2026-10-29. On 2026-10-31 the owner requested a full V3 revamp without old-session/legacy-format support and complete selected-flow PNG captures. This later product direction does not itself prove backend implementation, live cutover, CI or release acceptance.
+- Dated Council verdicts, old ELK/React plans, handoffs and historical task status snapshots are evidence of decisions **at their recorded dates**, not instructions to restart superseded work. Never treat an older `PROPOSED`, `DOCS ONLY` or `NO CUTOVER` heading as a newer owner decision. Council advice is not a substitute for owner approval.
+- Keep current desktop new-flow source, highlighting, Visits, Values, playback and keyboard behavior intact through any future V3-only cutover. Record remaining CA059 label, CA060 CSP, CA061 readability and native MCP/browser gates honestly.
+
+## Design documentation changes: update existing files first
+
+- For every newly approved design change or decision, **find and update the existing authoritative design documents in place**. Use the current design index to locate the relevant architecture, contract, frontend design or implementation plan. Do not create another dated/versioned design, decision, Council, plan or handoff Markdown file for the same topic.
+- In the same scoped documentation change, reconcile affected sections, approval/status wording, cross-references and the current index so agents see **one consistent current design**. Mark replaced decisions as superseded in the existing document instead of keeping contradictory active instructions in separate files.
+- **Creating a new design document is an exception, not the default.** It requires evidence that no suitable existing document can hold the new subject, a short explanation of why an in-place update is insufficient, and the project owner's explicit approval **before** creating the file.
+- Preserve the factual history of existing Council and task records: append a clearly dated supersession or link to the updated canonical design when needed; do not silently rewrite past approvals, test evidence or task outcomes. A new design decision still needs its normal review and authorization gates.
+
 ## Reconciled implementation requirements
 
 The following goals from the original "Intelligent Code Execution Visualizer"
@@ -83,12 +98,10 @@ When scope is unclear, favor static source evidence plus explicitly labeled
 AI mock values. Reject any feature request to add runtime visualization until
 the project owner explicitly changes this repository rule.
 
-## Finish the existing MVP before adding features
+## Static/mock release quality and active V3 work
 
-- Treat `docs/static-mock-acceptance.md` and the owner's original requirements
-  as the acceptance checklist. Work on unresolved release blockers first.
-- Do not start optional features, redesigns, new architectural investigations,
-  or repeat previously passing checks while an actionable MVP blocker remains.
+- Treat `docs/static-mock-acceptance.md` as historical static/mock acceptance evidence, not an up-to-date V3 task or approval list. Use the current V3 index, applicable task ledgers, actual code and explicit latest owner decisions for the active scope.
+- Work on actionable release blockers before optional polish, without overriding a later owner-approved V3 scope change.
 - For every change, run the smallest meaningful regression check first. Run
   the full typecheck, unit tests, browser tests, package check, and CI gates
   once the corresponding blockers have been addressed; repeat only when a

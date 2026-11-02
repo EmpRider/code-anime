@@ -1,6 +1,6 @@
-# Code Anime V3 — proposed FE-first architecture
+# Code Anime V3 — approved target FE-first architecture
 
-> **Status: DESIGN PROPOSAL, NOT IMPLEMENTED OR APPROVED FOR CODING.** The owner authorized these design, architecture, implementation-plan, and GitHub-task documents only. Any FE or MCP source changes require separate V3 design approval, separate implementation-plan approval, and explicit implementation authorization. Backend implementation is **FUTURE / DEFERRED**. Do not merge, publish, tag, or deploy.
+> **Status supersession (2026-11-02):** V3 design/plan and isolated FE Phase A were approved on 2026-10-29. The owner later requested a full V3 revamp with no legacy format support on 2026-10-31. This is the approved target architecture, **not** proof that the MCP producer, live cutover, browser acceptance or release is implemented. Later sections describe the original phase plan; use [the current design index](README.md) for chronology and authority.
 >
 > **Task:** CA023. **Contract:** [flow-scene-json-contract.md](flow-scene-json-contract.md). **Backlog:** `.agent-tasks/code-anime-v3-design-20261029.md` (CA022–CA039).
 
