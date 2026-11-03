@@ -5,7 +5,7 @@
 - **Source evidence:** CA058 intermediate commit `faaad43eb2151667520bc7954a3d6347f50965a3`, GitHub Actions [run 41083389952](https://github.com/EmpRider/code-anime/actions/runs/41083389952); strict official ELK/X6 test fails `No collision-free V3 edge label position for e:yw` at `public/v3-scene-diagram.js:364`/test around line 1597.
 - **Engineering Decision Owner:** FE V3 Tech Lead (AI-proposed engineering recommendation, not a human design/security sign-off).
 - **Council execution:** Five genuine independent advisor agents (A1–A5), then five anonymized blind peers (R1–R5) in separate waves, followed by targeted EDO challenge/rebuttal with advisors A5 and A1. No advisor had the EDO provisional note or others' output while forming independent positions.
-- **Decision:** **Conditional GO to D0 only**: time-bounded, bounded-output, test-only real ELK/strict-X6 collision diagnostics and controlled *non-shipping* one-factor experiments. **NO GO to any permanent D1 padding, D2 renderer correction, or B callout yet.** Preserve existing strict renderer failure. This Council record must be independently committed/verified before the new CA059 test instrumentation commit. Do not mark CA059/CA058/CA030 `DONE`.
+- **Decision:** **Conditional GO to D0 only**: time-bounded, bounded-output, test-only real ELK/strict-X6 collision diagnostics and controlled _non-shipping_ one-factor experiments. **NO GO to any permanent D1 padding, D2 renderer correction, or B callout yet.** Preserve existing strict renderer failure. This Council record must be independently committed/verified before the new CA059 test instrumentation commit. Do not mark CA059/CA058/CA030 `DONE`.
 
 ## Evidence, root-cause confidence and blast radius
 
@@ -16,19 +16,19 @@
 
 ## Options considered
 
-| Option | Benefit | Risk and verdict |
-| --- | --- | --- |
-| **D0: bounded test-only diagnostic** | Distinguishes coordinate, obstacle, candidate and clearance causes without shipping behavior changes; preserves fail-closed RED. | Extra CI cycle and artifact size, mitigated by caps/time-box. **GO now.** |
-| **D1: finite native ELK padding/refinement** | Potentially smallest permanent source fix if lack of clearance is measured. | Unknown efficacy, canvas expansion, dense/parallel regressions. **NO GO until measured RED→GREEN.** |
-| **D2: renderer-local transform/classification/candidate correctness** | Narrow permanent fix if renderer falsely rejects legal route. | May affect all visible edge labels and strict safety. **New hypothesis only; no source authorization yet.** |
-| **B: bounded edge-tethered callout** | Contingency for proven valid impossible native placement. | New clipping, edge association, hit-target and accessibility UX; requires user design/plan approvals. **NO GO now.** |
-| **A/C global spacing or silent omission** | Simpler superficial workaround. | Previously falsified spacing or violates visible semantic truth; **rejected**. |
+| Option                                                                | Benefit                                                                                                                          | Risk and verdict                                                                                                     |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **D0: bounded test-only diagnostic**                                  | Distinguishes coordinate, obstacle, candidate and clearance causes without shipping behavior changes; preserves fail-closed RED. | Extra CI cycle and artifact size, mitigated by caps/time-box. **GO now.**                                            |
+| **D1: finite native ELK padding/refinement**                          | Potentially smallest permanent source fix if lack of clearance is measured.                                                      | Unknown efficacy, canvas expansion, dense/parallel regressions. **NO GO until measured RED→GREEN.**                  |
+| **D2: renderer-local transform/classification/candidate correctness** | Narrow permanent fix if renderer falsely rejects legal route.                                                                    | May affect all visible edge labels and strict safety. **New hypothesis only; no source authorization yet.**          |
+| **B: bounded edge-tethered callout**                                  | Contingency for proven valid impossible native placement.                                                                        | New clipping, edge association, hit-target and accessibility UX; requires user design/plan approvals. **NO GO now.** |
+| **A/C global spacing or silent omission**                             | Simpler superficial workaround.                                                                                                  | Previously falsified spacing or violates visible semantic truth; **rejected**.                                       |
 
 ## Five independent advisor positions
 
 1. **A1 Systems/Geometry Architect — D0:** Measure original sections, compound transforms, obstacle boxes, candidate rejection reasons; native box alone cannot guarantee off-route placement. D1 only with measured finite success; B later with human design approval.
 2. **A2 Implementation Lead — D0:** Smallest safe surface is focused test-only failure instrumentation; avoid broad source edits or invisible semantic changes; test all projected identities and preflight variants.
-3. **A3 Reliability/Security/Performance — D0:** Bounded deterministic logs, original semantic IDs, strict failures, no security/CSP/backend change; distinguish 10,000-edge ELK *input* time from full renderer performance. D1 blind padding could increase canvas/CPU without resolving route policy.
+3. **A3 Reliability/Security/Performance — D0:** Bounded deterministic logs, original semantic IDs, strict failures, no security/CSP/backend change; distinguish 10,000-edge ELK _input_ time from full renderer performance. D1 blind padding could increase canvas/CPU without resolving route policy.
 4. **A4 Quality/Verification Lead — D0:** Preserve exact RED, capture layout/collision state and run bounded discriminating experiments; acceptance needs full matrix, Unicode, parallel, browser pixel QA and 5/5 CI.
 5. **A5 Devil's Advocate — D0 plus controlled simultaneous experiments:** Urgency favors collecting causal evidence and tightly bounded one-factor test-only D1 probes in the same CI investigation, without promoting a one-case green to production. B's tether/accessibility risks remain high.
 

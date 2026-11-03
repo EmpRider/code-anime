@@ -32,15 +32,15 @@
 
 Exactly seven new files, 49,911 bytes total, all repository mode `100644`; no existing source/test/package/configuration is changed. Shared CA028 validator, display lexer and terminal helpers are reused read-only. Candidate source remains inactive until the separately approved activation task. Compiler preserves accepted identity/sourceHash, complete prepared snapshots, authored graph relationships and variant-local state; navigation covers cursor zero, interleaved calls, unwind and terminal N; source preparation preserves original text and UTF-16 spans. Invalid relationships fail closed rather than repairing semantics.
 
-| New repository path | SHA-256 |
-| --- | --- |
-| src/services/flow-scene-compiler.ts | 5d40143e423e67785c15fbab820ef3aba7b16c53d409343c6d894dc4eea467a6 |
+| New repository path                   | SHA-256                                                          |
+| ------------------------------------- | ---------------------------------------------------------------- |
+| src/services/flow-scene-compiler.ts   | 5d40143e423e67785c15fbab820ef3aba7b16c53d409343c6d894dc4eea467a6 |
 | src/services/flow-scene-navigation.ts | 7c928c3bca94b18c68c21f2e65754143e8f03f810f835635416ee1b2087db939 |
-| src/services/flow-scene-source.ts | b92ee77c70959c5815586194a15303549eb69b7d77ea3f7868daee0987243756 |
-| public/source-highlighter.d.ts | b0d74f94eab7614cf1f181812d553bc1b7b2cdc48b2f67e8cc00e248f2fb3283 |
-| tests/flow-scene-compiler.test.ts | 1bd3d3569f0d35081c8c23a2fcb748fbffe410995ddc036e1f8b9fc2c72573a6 |
-| tests/flow-scene-navigation.test.ts | 43b2944dbd82dae06a0d31f15c410fede66612afa0c792e25d5b75fb27306532 |
-| tests/flow-scene-source.test.ts | 6bc9bb287c737130e1a8095699be9a89d3822c4f52c6df02395b2f2655c913db |
+| src/services/flow-scene-source.ts     | b92ee77c70959c5815586194a15303549eb69b7d77ea3f7868daee0987243756 |
+| public/source-highlighter.d.ts        | b0d74f94eab7614cf1f181812d553bc1b7b2cdc48b2f67e8cc00e248f2fb3283 |
+| tests/flow-scene-compiler.test.ts     | 1bd3d3569f0d35081c8c23a2fcb748fbffe410995ddc036e1f8b9fc2c72573a6 |
+| tests/flow-scene-navigation.test.ts   | 43b2944dbd82dae06a0d31f15c410fede66612afa0c792e25d5b75fb27306532 |
+| tests/flow-scene-source.test.ts       | 6bc9bb287c737130e1a8095699be9a89d3822c4f52c6df02395b2f2655c913db |
 
 Final freeze record `tmp/ca070-t04-final-freeze-scope.json`, SHA-256 `34b751246d435f799e77f82937b885c31595b73621ca71fdbd88c668c14b95f5`, and fresh postproof independent audits establish exactly 231 candidate files: 224 baseline files with the authorized ledger overlay, plus these seven additions. No extra/missing source, new generated output, special entry or Git metadata was found; the one configured dependency link is read-only-use. Existing `bash.exe.stackdump` is baseline-identical, not a new proof artifact.
 
@@ -102,7 +102,6 @@ This section supersedes the historical prepublication status/budget wording reta
 - **STOP / disposition:** absent source observation, lexical equality on Windows, contradictory effects/order, missing native result, unexpected test/permission failure or ambiguous identity means STOP with I02/T03 BLOCKED. Green alone cannot close I02. No retry, second experiment, extra diagnostic/fix/cleanup push or production fallback. Further action needs fresh authority. Historical/full-CI causation remains explicitly limited; known unrelated failures are not erased.
 - **Delivery and rollback:** retain candidate/diff/receipts immutably, record exact remote implementation and separate status references after publication. A failed/inconclusive test-only experiment cannot activate V3 production; stop downstream and request direction. No revert push is preauthorized. T04/T05 resume only after actual admission, independent QA/review and verified status, not merely after a commit.
 
-
 ### Historical frozen I02 prepublication checkpoint
 
 - **Actual specialists and responsibility:** BE `/root/pm_i02_resume/tl_i02_resume/be_i02_experiment` is the sole test implementer; QA `/root/pm_i02_resume/tl_i02_resume/qa_i02_experiment` independently executed allowed checks; IR `/root/pm_i02_resume/tl_i02_resume/ir_i02_experiment` independently reviewed the frozen source. All requested `gpt-6-astra` / `ultra` in fresh contexts, effective settings `NOT_EXPOSED`, and self-read applicable pinned instructions. PM/TL retain scope checks; BA alone publishes.
@@ -115,8 +114,6 @@ This section supersedes the historical prepublication status/budget wording reta
 - **Administrative interruption only:** one read-only pre-copy command failed parsing before execution (`SyntaxError: Invalid or unexpected token`, chunk `23fd63`); no copy/edit/formatter/test ran. Work stopped. BA expressly allowed one corrected same-scope administrative verification, which exited 0 (`84a0b6`); isolated setup and integrity checks then passed. This was not a project-test, permission or CI failure and no test/CI retry occurred. Complete checkpoint remains in local BE/TL evidence.
 - **Gates at this historical prepublication checkpoint:** final packet review, remote publication and native admission were then pending. They subsequently passed for the exact correction commit, as recorded below. Only truthful separate status synchronization remains for this I02 sequence; no further experiment, diagnostic, cleanup or fallback is allocated. CA059 remains held, and T04/T05 need verified status plus exact work-package releases.
 
-
-
 ### Current I02 native admission and status synchronization
 
 - **Remote implementation identity:** BA's GitHub plugin verified correction commit `20f71fbd2f7967a0e625238551d3e9ee80a86528`, parent `09b3f48117d7aec2f7cfd315d0091510381aa0ee`, tree `e90a244b3bbe9f0717f6d3d449c7521b491ca6a5`. Exactly two `100644` entries changed: test blob `5e6ca845c93d659aa5a8351da97ac2282e90724d`, SHA-256 `c6bbc58a78dc320311bfb78922264a8f572eb1f8920fae858ea8a352facc75e4`; ledger blob `afb0ddc2b2227a030673e1a9e80337c777be7e69`, SHA-256 `68c313e567ba6dab80cef4fc4a3ac98c7db8c12c1853d1dc9e5570e23b3d530f`. Remote text bytes equal the frozen reviewed originals. This status candidate changes only the ledger.
@@ -125,17 +122,16 @@ This section supersedes the historical prepublication status/budget wording reta
 - **Final admission receipts:** QA `tmp/ca070-i02-native-evidence/qa-native-admission.md`, SHA-256 `fa1dec294b49cd50b14b3912ad47c1e3bdb0e9488ffc1b57ee6ce8a387abdfcc`; IR `tmp/ca070-i02-ir-native-review.md`, SHA-256 `254cc8b4ffc47206a22835da180e4537587aa8a13c44d4c57ad90c23d3c4f6a1`; TL `tmp/ca070-i02-tl-native-admission.md`, SHA-256 `ebad244cd60fcc7589c41096709cd799008d1e839e591951f1c8a48741bb657d`. PM fully read the three complete final receipts. They preserve the narrow-versus-whole-CI and local-versus-remote provenance distinctions.
 - **Provenance limit:** QA/IR directly verified ingress coverage and diagnostics from BA-supplied verbatim excerpts. Remote run/head/tree bindings and omitted broader failure lines/counts are BA-attested GitHub receipts/summary, not independently refetched by those reviewers. No local derivative is misrepresented as an additional remote test.
 
-| Native check job | Ingress | Same-source comparisons | Required control effects |
-| --- | --- | --- | --- |
+| Native check job               | Ingress    | Same-source comparisons                     | Required control effects                                                                                                               |
+| ------------------------------ | ---------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Windows Node22, `124720881740` | 42/42 PASS | Both controls canonical=true, lexical=false | One read, zero extra; capture gate before mutation then resumed; abort false-to-true with same signal reason and preparation rejection |
-| Windows Node24, `124720881901` | 42/42 PASS | Both controls canonical=true, lexical=false | Same full effects, independently observed on this runtime |
-| Ubuntu Node22, `124720881941` | 42/42 PASS | Both controls canonical=true, lexical=true | Same full effects; legitimate equal-path configuration remains valid |
-| Ubuntu Node24, `124720882024` | 42/42 PASS | Both controls canonical=true, lexical=true | Same full effects; no platform inequality assertion |
+| Windows Node24, `124720881901` | 42/42 PASS | Both controls canonical=true, lexical=false | Same full effects, independently observed on this runtime                                                                              |
+| Ubuntu Node22, `124720881941`  | 42/42 PASS | Both controls canonical=true, lexical=true  | Same full effects; legitimate equal-path configuration remains valid                                                                   |
+| Ubuntu Node24, `124720882024`  | 42/42 PASS | Both controls canonical=true, lexical=true  | Same full effects; no platform inequality assertion                                                                                    |
 
 - **Bounded causal finding:** on each Windows control's actual owned-source invocation, the recorded lexical fixture path uses `RUNNER~1` while the canonical path and actual read argument use `runneradmin`; the two strings differ in that same record. The original strict lexical predicate would not activate for those observed invocations; exact canonical matching did activate the gate/abort controls and all original assertions passed. This establishes the narrow current-run test-control correction, not every historical failure's cause and not a production capture/abort defect. Reporter escaping is preserved; no path normalization or broad matching was introduced.
 - **Unchanged broader blockers:** every native check job reports 408 tests / 405 pass / 1 fail / 2 skipped; the sole failure is known CA058, `No collision-free V3 edge label position for e:yw`. All 42 ingress results are explicit passes, so neither skip is counted as ingress success. Package checks were not reached after failed check steps. Browser job `124720881870` has 77 pass / 5 fail from known CA060 inline-style CSP and `virtual:ca060-x6-lifecycle` unresolved-entry failures. Whole run `41263329831` is FAILURE; no check is narrowed, waived, relabeled green or retried.
 - **Completion boundary:** I02's published correction and T03's scoped source/interface acceptance are complete; the single allocated status-only publication remains to be verified. Its actual remote SHA, tree, event and cumulative usage will be recorded after publication in the BA receipt rather than self-referenced here. T04/T05 are not released by writing this candidate; PM/TL may release bounded disjoint work only after BA verifies status and ownership/dependency gates. CA059, FE/CSP/CA060 and CA068 holds are unchanged. No merge, deployment, package release, default activation, cleanup or overall user-completion acceptance is claimed.
-
 
 ### Recovered source and bounded T03 progress
 
@@ -163,10 +159,10 @@ Viewport distinction remains explicit: production `e:yw` fails before Graph allo
 
 The user selected **Full end-to-end V3 (Recommended)** and separately approved the following exact artifacts through BA. Approval supersedes prior producer/live-cutover deferment only as specified. Approved artifact bytes remain immutable; proposal-era status wording inside them is historical, not a revocation of the approvals recorded here.
 
-| Artifact | Exact explicit owner response | SHA-256 |
-| --- | --- | --- |
-| CA069-D1 v1 | `Approve D1 v1 (Recommended)` | `1acb77d343f17255944abc863446d99e7359f957ac503861692b04954186226d` |
-| CA069-D1-A1 v1 | `Approve addendum (Recommended)` | `84588922da79fe8a703d1b14aecca2c1cc544f8f6706de1688345ad949569457` |
+| Artifact                       | Exact explicit owner response     | SHA-256                                                            |
+| ------------------------------ | --------------------------------- | ------------------------------------------------------------------ |
+| CA069-D1 v1                    | `Approve D1 v1 (Recommended)`     | `1acb77d343f17255944abc863446d99e7359f957ac503861692b04954186226d` |
+| CA069-D1-A1 v1                 | `Approve addendum (Recommended)`  | `84588922da79fe8a703d1b14aecca2c1cc544f8f6706de1688345ad949569457` |
 | CA069-P1 v1 and explicit START | `Approve and start (Recommended)` | `96572c6b47be0ce8ee065a5bee910bb45fb55130a97cd28c3ed4a08c6acf8545` |
 
 Approvals were relayed by BA in this 2026-10-31 task; no exact human click timestamp is invented. PM independently read and hashed all three files. Accessible task-working artifacts are `tmp/ca069-council/design-delta-v1.md`, `design-addendum-a1-v1.md` and `implementation-plan-v1.md` under `/workspace/scratch/7f30f1f647be/`; these are local paths, **not already-published repository links**. CA036 includes publishing their exact approved bytes as permanent repository documentation, within its existing task-specific commit. Do not delete permanent approved artifacts during later tracking cleanup.
@@ -188,14 +184,14 @@ Existing repository grounding: `docs/v3/architecture.md`, `docs/v3/flow-scene-js
 
 Historical kickoff instruction: attached `agent-team-skill(2).md` (297 lines) governed the original BA→PM→TL→specialists, real Council and ledger-first delivery. The original CA069 upstream snapshot was `ca069-task-skills/manifest.json`: 40 complete instruction resources; the original PM checked SHA-256 and Git blob digests with zero mismatches. These are preserved historical facts. The current resumed-task instruction and supervisors are recorded above; current workers read their newly pinned applicable full resources themselves.
 
-| Upstream | Pinned commit |
-| --- | --- |
-| obra/superpowers | `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b` |
+| Upstream                           | Pinned commit                              |
+| ---------------------------------- | ------------------------------------------ |
+| obra/superpowers                   | `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b` |
 | EmpRider/claude-skills-llm-council | `a7565e21d5ab03551fe66e36818e05af245467b8` |
-| JuliusBrussee/caveman | `9b68f7ed12b05e7efaff18e65c5a3fc2849fd0a4` |
-| DietrichGebert/ponytail | `96608e078b2d5ea607c5c3b8b5a54d1c1fba6846` |
-| ayghri/i-have-adhd | `1ecea1993b7fce257ffbd686c070948b5e07eda6` |
-| alexgreensh/attention-span | `39c6b46b24dddecc4cef4e3ab8dc36d3fbffeb42` |
+| JuliusBrussee/caveman              | `9b68f7ed12b05e7efaff18e65c5a3fc2849fd0a4` |
+| DietrichGebert/ponytail            | `96608e078b2d5ea607c5c3b8b5a54d1c1fba6846` |
+| ayghri/i-have-adhd                 | `1ecea1993b7fce257ffbd686c070948b5e07eda6` |
+| alexgreensh/attention-span         | `39c6b46b24dddecc4cef4e3ab8dc36d3fbffeb42` |
 
 Local preserved Council records: `tmp/ca069-council/edo-verdict.md`, `d1-council-verdict.md`, `p1-council-verdict.md`, proposals, anonymous-label reviews, actual objections/rebuttals and builder checks. P1 verdict SHA-256: `4ab214011bcc5089c901071721bcfe115fe493d757c79e532f81c7261c6389d5`. Five independent proposals and five real reviews preceded each material verdict; reused authors' self-recognition limits were disclosed. Final fresh P1 builder: `nothing important left`; that is plan review, not implementation verification.
 
@@ -207,13 +203,13 @@ Kickoff decisions: release CA029 and CA033 independently only after common gates
 
 All named specialists were requested with GPT-6 Astra, ultra reasoning. Existing agents retain their originally selected settings; no substitution or fictitious role is claimed.
 
-| Owner key | Actual specialist | Responsibility / exclusive task resources |
-| --- | --- | --- |
-| FE | `/root/pm_legacy/tl_legacy/fe_execution` | CA029/030 geometry/renderer, CA031 shell, later CA039 deletion. No backend or active-composition edits before assigned integration lock. |
-| BE | `/root/pm_legacy/tl_legacy/contract_pipeline` | CA033 shared ingress/types, CA034 compiler, CA035-B facade/handlers, CA036 contract docs, CA038 integration. Serialize overlapping builder/source-catalog edits. |
-| ST | `/root/pm_legacy/tl_legacy/risk_dependencies` | CA035-A isolated storage/probe and tests, after type contract; storage resource-policy review separately from code self-certification. |
-| QA | `/root/pm_legacy/tl_legacy/test_compatibility` | Independent acceptance/fault/browser/native checks; CA037 candidate proof; no implementation-source write without separately assigned lock. |
-| IR | `/root/pm_legacy/tl_legacy/p1_builder_check` | Independent spec/code review; never sole certification of its own changes. |
+| Owner key | Actual specialist                              | Responsibility / exclusive task resources                                                                                                                        |
+| --------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FE        | `/root/pm_legacy/tl_legacy/fe_execution`       | CA029/030 geometry/renderer, CA031 shell, later CA039 deletion. No backend or active-composition edits before assigned integration lock.                         |
+| BE        | `/root/pm_legacy/tl_legacy/contract_pipeline`  | CA033 shared ingress/types, CA034 compiler, CA035-B facade/handlers, CA036 contract docs, CA038 integration. Serialize overlapping builder/source-catalog edits. |
+| ST        | `/root/pm_legacy/tl_legacy/risk_dependencies`  | CA035-A isolated storage/probe and tests, after type contract; storage resource-policy review separately from code self-certification.                           |
+| QA        | `/root/pm_legacy/tl_legacy/test_compatibility` | Independent acceptance/fault/browser/native checks; CA037 candidate proof; no implementation-source write without separately assigned lock.                      |
+| IR        | `/root/pm_legacy/tl_legacy/p1_builder_check`   | Independent spec/code review; never sole certification of its own changes.                                                                                       |
 
 All five actual owners have acknowledged these sequential responsibilities and the no-edit gate; final kickoff Council accepted the roster and locks. FE and BE first-wave read-only preparation is disjoint. No owner may edit source before the remote gate. Generated build assets/dist, package checks, shared test environments and active composition have serialized TL locks. Every runtime fixture/store/profile uses a distinct owned `mkdtemp` root. The pristine capture remains read-only. QA exclusively prepares `/workspace/scratch/7f30f1f647be/tmp/ca069-execution/source-55468de` after remote-ledger release, then verifies source parity before any implementation edit.
 
@@ -227,20 +223,20 @@ The new `CA069-Txx` IDs below uniquely track delivery under P1 and explicitly ma
 
 Current full-task fields follow; `scope_status: IN_SCOPE` applies explicitly to every listed task. Owner labels are planned roles, not claims that every future worker is active. `status_sync: PENDING` describes this separate status-only publication until BA verifies it. T03/I02 scoped work is independently verified and published; overall CI remains failed for known FE blockers. DONE is not whole-project completion or downstream edit authority.
 
-| Unique delivery ID / mapped work | Owner; independent review | Dependencies / blocker | work_status | delivery_status | status_sync |
-| --- | --- | --- | --- | --- | --- |
-| CA069-T01 / CA029 | FE; QA+IR | G0; known CA059 label and CSP/harness gates | BLOCKED | NOT_PUBLISHED | PENDING |
-| CA069-T02 / CA030 | FE; QA+IR | T01 required geometry contract | WAITING_ON | NOT_PUBLISHED | PENDING |
-| CA069-T03 / CA033 | BE; QA+IR | Full implementation48dc913 + correction20f71fbd; scoped native admission PASS; status fb76ca4 verified | DONE | PUBLISHED_CI_FAILED | CONFIRMED |
-| CA069-I02 | BE; QA+IR | Correction20f71fbd remotely verified; strict native admission PASS; status fb76ca4 verified | DONE | PUBLISHED_CI_FAILED | CONFIRMED |
-| CA069-T04 / CA034 | BE; QA+IR | Implementation134233b remotely verified 8/8; CI41274944061 completed FAILURE, 5/5 jobs failed; separate status verification pending | DONE | PUBLISHED_CI_FAILED | PENDING |
-| CA069-T05 / CA035-A | ST; QA+IR | HOLD: Windows persistence, root ownership/takeover and surviving-witness proof unresolved; no implementation release | BLOCKED | NOT_PUBLISHED | PENDING |
-| CA069-T06 / CA035-B | BE; ST risk review+QA+IR | T04+T05 | WAITING_ON | NOT_PUBLISHED | PENDING |
-| CA069-T07 / CA031 | FE; QA+IR | T02; final acceptance consumes T06 | WAITING_ON | NOT_PUBLISHED | PENDING |
-| CA069-T08 / CA036 | BE; QA+IR | verified T03–T06 interfaces | WAITING_ON | NOT_PUBLISHED | PENDING |
-| CA069-T09 / CA037 | QA; IR plus FE/BE evidence | T06+T07+T08 | WAITING_ON | NOT_PUBLISHED | PENDING |
-| CA069-T10 / CA038 | BE integration; FE+ST+QA+IR | all required T01–T09 gates | WAITING_ON | NOT_PUBLISHED | PENDING |
-| CA069-T11 / CA039 | FE retirement; BE+QA+IR | T10 replacement proof | WAITING_ON | NOT_PUBLISHED | PENDING |
+| Unique delivery ID / mapped work | Owner; independent review   | Dependencies / blocker                                                                                                              | work_status | delivery_status     | status_sync |
+| -------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------- | ----------- |
+| CA069-T01 / CA029                | FE; QA+IR                   | G0; known CA059 label and CSP/harness gates                                                                                         | BLOCKED     | NOT_PUBLISHED       | PENDING     |
+| CA069-T02 / CA030                | FE; QA+IR                   | T01 required geometry contract                                                                                                      | WAITING_ON  | NOT_PUBLISHED       | PENDING     |
+| CA069-T03 / CA033                | BE; QA+IR                   | Full implementation48dc913 + correction20f71fbd; scoped native admission PASS; status fb76ca4 verified                              | DONE        | PUBLISHED_CI_FAILED | CONFIRMED   |
+| CA069-I02                        | BE; QA+IR                   | Correction20f71fbd remotely verified; strict native admission PASS; status fb76ca4 verified                                         | DONE        | PUBLISHED_CI_FAILED | CONFIRMED   |
+| CA069-T04 / CA034                | BE; QA+IR                   | Implementation134233b remotely verified 8/8; CI41274944061 completed FAILURE, 5/5 jobs failed; separate status verification pending | DONE        | PUBLISHED_CI_FAILED | PENDING     |
+| CA069-T05 / CA035-A              | ST; QA+IR                   | HOLD: Windows persistence, root ownership/takeover and surviving-witness proof unresolved; no implementation release                | BLOCKED     | NOT_PUBLISHED       | PENDING     |
+| CA069-T06 / CA035-B              | BE; ST risk review+QA+IR    | T04+T05                                                                                                                             | WAITING_ON  | NOT_PUBLISHED       | PENDING     |
+| CA069-T07 / CA031                | FE; QA+IR                   | T02; final acceptance consumes T06                                                                                                  | WAITING_ON  | NOT_PUBLISHED       | PENDING     |
+| CA069-T08 / CA036                | BE; QA+IR                   | verified T03–T06 interfaces                                                                                                         | WAITING_ON  | NOT_PUBLISHED       | PENDING     |
+| CA069-T09 / CA037                | QA; IR plus FE/BE evidence  | T06+T07+T08                                                                                                                         | WAITING_ON  | NOT_PUBLISHED       | PENDING     |
+| CA069-T10 / CA038                | BE integration; FE+ST+QA+IR | all required T01–T09 gates                                                                                                          | WAITING_ON  | NOT_PUBLISHED       | PENDING     |
+| CA069-T11 / CA039                | FE retirement; BE+QA+IR     | T10 replacement proof                                                                                                               | WAITING_ON  | NOT_PUBLISHED       | PENDING     |
 
 Initial concurrent work after G0: T01 and T03. T04 and T05 then run independently; T07 may run alongside backend once T02 is accepted. T09 tests explicit candidate composition and does **not** depend on T10. T10 alone activates defaults. T11 never precedes replacement proof. Completion commits follow dependencies, not an artificial global finish barrier.
 
@@ -333,13 +329,13 @@ Initial concurrent work after G0: T01 and T03. T04 and T05 then run independentl
 - **Explicit remaining scope:** candidate begin/append/prepare integration, transactional references/evidence/coverage/retry behavior, preparation source-hash/scenario/V3-baseline handoff, and downstream journal/event preservation. The later ordinary event-schema loss point remains a separately required proof/correction gate. Full I01 and T03 stay IN_PROGRESS; T04/T05 consumers are not released by an intermediate.
 - **Historical prepublication instruction, already consumed and not current authority:** exact pure-package proof and independent review permitted BA to publish the five source files plus the then-current ledger against base `81ed77aced26d35ac00e4e38dd7f6fdbe53c2cb3`. At that checkpoint push 3/23 had not yet executed. It subsequently became verified commit `09cb92ad162c23b29e27cda03f04ec3cba02ccda`, as recorded in the current section. No parent-task DONE transition followed, and this historical instruction does not authorize replaying that publication.
 
-| Exact new file | SHA-256 | Git blob SHA |
-| --- | --- | --- |
-| `src/domain/flow-scene.ts` | `799beeb98ab158f7d6b3f1fc7efbe919a983854d4e3d538d6c1b2e3183917cc4` | `30b8a198b06697a85beead3bdde579fd36aa1539` |
-| `src/domain/scene-input.ts` | `f1f0f149f52a131f5e6e2fc390b46be9e864c834fa16292b0e6c261dae4c4067` | `680b6f397a35df1ee540c1818327a7675759da99` |
+| Exact new file                  | SHA-256                                                            | Git blob SHA                               |
+| ------------------------------- | ------------------------------------------------------------------ | ------------------------------------------ |
+| `src/domain/flow-scene.ts`      | `799beeb98ab158f7d6b3f1fc7efbe919a983854d4e3d538d6c1b2e3183917cc4` | `30b8a198b06697a85beead3bdde579fd36aa1539` |
+| `src/domain/scene-input.ts`     | `f1f0f149f52a131f5e6e2fc390b46be9e864c834fa16292b0e6c261dae4c4067` | `680b6f397a35df1ee540c1818327a7675759da99` |
 | `src/services/scene-ingress.ts` | `8d91ba6ced0dae8ca39642618ccd52b1a0893b79ebaf9b51e907736b1d61d35f` | `5a7ba37e86025ca093c4445549562ad5a91450c0` |
-| `public/v3-scene-adapter.d.ts` | `0fbe97a463a8d44fbe96fb77184eda7934f64bd6afa832fb3f6d65005a50e3fa` | `0297a47980f8f487702eeedaa0097c43bf52435d` |
-| `tests/scene-ingress.test.ts` | `e25f358fa35d6f85ad866f0635dec3b19149b303700153d940ba5e7fbb9c39fd` | `a417a8ece3a6a7056527af91e870060fae286a9f` |
+| `public/v3-scene-adapter.d.ts`  | `0fbe97a463a8d44fbe96fb77184eda7934f64bd6afa832fb3f6d65005a50e3fa` | `0297a47980f8f487702eeedaa0097c43bf52435d` |
+| `tests/scene-ingress.test.ts`   | `e25f358fa35d6f85ad866f0635dec3b19149b303700153d940ba5e7fbb9c39fd` | `a417a8ece3a6a7056527af91e870060fae286a9f` |
 
 ### CA069-I01 — preserve legitimate own mock-data keys in V3 candidate ingress (HISTORICAL DEVELOPMENT RECORD)
 
@@ -386,5 +382,3 @@ New discovered defects require separate unique `CA069-Ixx` records with observed
 - CA068 PNG/CSP work: still separately paused, not included.
 
 Final completion requires independent Council/agent review, all required verified remote tasks and honest limitations, then BA asks the user to accept completion. Completion acceptance does NOT authorize deletion. Any later cleanup requires a separate explicit approval listing the exact temporary paths and authorizing delete-and-publish. Preserve approved permanent docs and Git history; no cleanup authority has been granted.
-
-

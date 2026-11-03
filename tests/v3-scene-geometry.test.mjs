@@ -1555,13 +1555,31 @@ const ca059Collides = (a, b) =>
 test('CA059 D0: exact 6px clearance accepts contact and rejects 1px intrusion', () => {
   const box = { x: 0, y: 0, width: 10, height: 10 };
   for (const [clear, intruding] of [
-    [{ x: 16, y: 0 }, { x: 15, y: 0 }],
-    [{ x: -16, y: 0 }, { x: -15, y: 0 }],
-    [{ x: 0, y: 16 }, { x: 0, y: 15 }],
-    [{ x: 0, y: -16 }, { x: 0, y: -15 }],
+    [
+      { x: 16, y: 0 },
+      { x: 15, y: 0 },
+    ],
+    [
+      { x: -16, y: 0 },
+      { x: -15, y: 0 },
+    ],
+    [
+      { x: 0, y: 16 },
+      { x: 0, y: 15 },
+    ],
+    [
+      { x: 0, y: -16 },
+      { x: 0, y: -15 },
+    ],
   ]) {
-    assert.equal(ca059Collides(box, { ...clear, width: 10, height: 10 }), false);
-    assert.equal(ca059Collides(box, { ...intruding, width: 10, height: 10 }), true);
+    assert.equal(
+      ca059Collides(box, { ...clear, width: 10, height: 10 }),
+      false,
+    );
+    assert.equal(
+      ca059Collides(box, { ...intruding, width: 10, height: 10 }),
+      true,
+    );
   }
 });
 
@@ -1574,7 +1592,9 @@ function ca059FiniteJointPlacement(variant, state, raw, geometry) {
   const deadline = performance.now() + 2_500;
   const normalGaps = [10, 6, 16];
   const originals = new Map(variant.graph.edges.map((edge) => [edge.id, edge]));
-  const visible = geometry.edges.filter((edge) => originals.get(edge.id)?.label);
+  const visible = geometry.edges.filter(
+    (edge) => originals.get(edge.id)?.label,
+  );
   const obstacleBoxes = [
     ...geometry.nodes,
     ...geometry.groups.map((group) => ({
@@ -1590,13 +1610,14 @@ function ca059FiniteJointPlacement(variant, state, raw, geometry) {
     };
   };
   // Remove an OPEN forbidden interval; equality at the 6px boundary is legal.
-  const subtract = (ranges, low, high) => ranges.flatMap(([left, right]) => {
-    if (high <= left || low >= right) return [[left, right]];
-    const remaining = [];
-    if (low >= left) remaining.push([left, Math.min(low, right)]);
-    if (high <= right) remaining.push([Math.max(high, left), right]);
-    return remaining;
-  });
+  const subtract = (ranges, low, high) =>
+    ranges.flatMap(([left, right]) => {
+      if (high <= left || low >= right) return [[left, right]];
+      const remaining = [];
+      if (low >= left) remaining.push([left, Math.min(low, right)]);
+      if (high <= right) remaining.push([Math.max(high, left), right]);
+      return remaining;
+    });
   let truncatedIntervals = false;
   const domains = visible.map((edge) => {
     const original = originals.get(edge.id);
@@ -1627,28 +1648,52 @@ function ca059FiniteJointPlacement(variant, state, raw, geometry) {
           const points = segment.horizontal
             ? [segment.a.x, segment.b.x]
             : [segment.a.y, segment.b.y];
-          const sceneLimit = segment.horizontal ? geometry.width : geometry.height;
-          const fixedLimit = segment.horizontal ? geometry.height : geometry.width;
+          const sceneLimit = segment.horizontal
+            ? geometry.width
+            : geometry.height;
+          const fixedLimit = segment.horizontal
+            ? geometry.height
+            : geometry.width;
           if (fixed < 0 || fixed + fixedSize > fixedLimit) continue;
           const left = Math.max(0, Math.min(...points) - varyingSize / 2);
-          const right = Math.min(sceneLimit - varyingSize, Math.max(...points) - varyingSize / 2);
+          const right = Math.min(
+            sceneLimit - varyingSize,
+            Math.max(...points) - varyingSize / 2,
+          );
           if (left > right) continue;
           let free = [[left, right]];
           for (const obstacle of obstacleBoxes) {
             const obstacleFixed = obstacle[axis === 'x' ? 'y' : 'x'];
-            const obstacleFixedSize = obstacle[axis === 'x' ? 'height' : 'width'];
-            if (fixed >= obstacleFixed + obstacleFixedSize + 6 ||
-                fixed + fixedSize + 6 <= obstacleFixed) continue;
+            const obstacleFixedSize =
+              obstacle[axis === 'x' ? 'height' : 'width'];
+            if (
+              fixed >= obstacleFixed + obstacleFixedSize + 6 ||
+              fixed + fixedSize + 6 <= obstacleFixed
+            )
+              continue;
             const obstacleAxis = obstacle[axis];
             const obstacleSize = obstacle[axis === 'x' ? 'width' : 'height'];
-            free = subtract(free, obstacleAxis - varyingSize - 6, obstacleAxis + obstacleSize + 6);
+            free = subtract(
+              free,
+              obstacleAxis - varyingSize - 6,
+              obstacleAxis + obstacleSize + 6,
+            );
           }
           for (const [low, high] of free) {
             if (intervals.length === maxIntervals) {
               clipped = true;
               break;
             }
-            intervals.push({ axis, fixed, low, high, size, segment: segment.index, gap, side });
+            intervals.push({
+              axis,
+              fixed,
+              low,
+              high,
+              size,
+              segment: segment.index,
+              gap,
+              side,
+            });
           }
           if (clipped) break;
         }
@@ -1660,21 +1705,35 @@ function ca059FiniteJointPlacement(variant, state, raw, geometry) {
     return { id: edge.id, original, intervals };
   });
   const exactFour = ['e:xz:a', 'e:xz:b', 'e:wx', 'e:yw'];
-  if (visible.length > maxLabels || exactFour.some((id) => !domains.some((entry) => entry.id === id)))
-    return { status: 'UNRESOLVED', reason: 'projection/label cap', visible: visible.map(({ id }) => id) };
+  if (
+    visible.length > maxLabels ||
+    exactFour.some((id) => !domains.some((entry) => entry.id === id))
+  )
+    return {
+      status: 'UNRESOLVED',
+      reason: 'projection/label cap',
+      visible: visible.map(({ id }) => id),
+    };
 
-  const boxAt = (domain, coordinate) => domain.axis === 'x'
-    ? { x: coordinate, y: domain.fixed, ...domain.size }
-    : { x: domain.fixed, y: coordinate, ...domain.size };
-  const choices = [...domains].sort((a, b) =>
-    a.intervals.length - b.intervals.length || a.id.localeCompare(b.id));
+  const boxAt = (domain, coordinate) =>
+    domain.axis === 'x'
+      ? { x: coordinate, y: domain.fixed, ...domain.size }
+      : { x: domain.fixed, y: coordinate, ...domain.size };
+  const choices = [...domains].sort(
+    (a, b) =>
+      a.intervals.length - b.intervals.length || a.id.localeCompare(b.id),
+  );
   const occupied = [];
   let attempts = 0;
   let timedOut = false;
   let solution = null;
   function search(index) {
     if (index === choices.length) {
-      solution = occupied.map(({ id, box, interval }) => ({ id, box, interval }));
+      solution = occupied.map(({ id, box, interval }) => ({
+        id,
+        box,
+        interval,
+      }));
       return true;
     }
     if (attempts >= maxAssignments || performance.now() > deadline) {
@@ -1687,12 +1746,24 @@ function ca059FiniteJointPlacement(variant, state, raw, geometry) {
       for (const { box } of occupied) {
         const otherFixed = box[interval.axis === 'x' ? 'y' : 'x'];
         const otherFixedSize = box[interval.axis === 'x' ? 'height' : 'width'];
-        const fixedSize = interval.axis === 'x' ? interval.size.height : interval.size.width;
-        if (interval.fixed >= otherFixed + otherFixedSize + 6 ||
-            interval.fixed + fixedSize + 6 <= otherFixed) continue;
-        free = subtract(free,
-          box[interval.axis] - (interval.axis === 'x' ? interval.size.width : interval.size.height) - 6,
-          box[interval.axis] + box[interval.axis === 'x' ? 'width' : 'height'] + 6);
+        const fixedSize =
+          interval.axis === 'x' ? interval.size.height : interval.size.width;
+        if (
+          interval.fixed >= otherFixed + otherFixedSize + 6 ||
+          interval.fixed + fixedSize + 6 <= otherFixed
+        )
+          continue;
+        free = subtract(
+          free,
+          box[interval.axis] -
+            (interval.axis === 'x'
+              ? interval.size.width
+              : interval.size.height) -
+            6,
+          box[interval.axis] +
+            box[interval.axis === 'x' ? 'width' : 'height'] +
+            6,
+        );
       }
       for (const [low, high] of free) {
         // Endpoints and midpoint expose exact-contact and interior choices.
@@ -1703,12 +1774,24 @@ function ca059FiniteJointPlacement(variant, state, raw, geometry) {
           }
           attempts++;
           const box = boxAt(interval, coordinate);
-          if ([...obstacleBoxes, ...occupied.map((item) => item.box)]
-            .some((obstacle) => ca059Collides(box, obstacle))) continue;
-          occupied.push({ id: entry.id, box, interval: {
-            axis: interval.axis, segment: interval.segment,
-            gap: interval.gap, side: interval.side, low, high,
-          } });
+          if (
+            [...obstacleBoxes, ...occupied.map((item) => item.box)].some(
+              (obstacle) => ca059Collides(box, obstacle),
+            )
+          )
+            continue;
+          occupied.push({
+            id: entry.id,
+            box,
+            interval: {
+              axis: interval.axis,
+              segment: interval.segment,
+              gap: interval.gap,
+              side: interval.side,
+              low,
+              high,
+            },
+          });
           if (search(index + 1)) return true;
           occupied.pop();
           if (timedOut) return false;
@@ -1725,87 +1808,175 @@ function ca059FiniteJointPlacement(variant, state, raw, geometry) {
     const parent = queue[i];
     for (const child of parent.children ?? []) {
       const origin = rawOrigins.get(parent.id);
-      rawOrigins.set(child.id, { x: origin.x + child.x, y: origin.y + child.y });
+      rawOrigins.set(child.id, {
+        x: origin.x + child.x,
+        y: origin.y + child.y,
+      });
       queue.push(child);
     }
   }
-  const collected = queue.flatMap((node) => (node.edges ?? [])
-    .filter(({ id }) => id === 'e:yw')
-    .map((edge) => ({ collection: node.id, edge })))[0];
+  const collected = queue.flatMap((node) =>
+    (node.edges ?? [])
+      .filter(({ id }) => id === 'e:yw')
+      .map((edge) => ({ collection: node.id, edge })),
+  )[0];
   const native = collected?.edge.labels?.[0];
   const owner = collected?.edge.container ?? collected?.collection;
   const origin = rawOrigins.get(owner);
   const rawSection = collected?.edge.sections?.[0];
   const rawPoints = rawSection
-    ? [rawSection.startPoint, ...(rawSection.bendPoints ?? []), rawSection.endPoint]
+    ? [
+        rawSection.startPoint,
+        ...(rawSection.bendPoints ?? []),
+        rawSection.endPoint,
+      ]
     : [];
-  const sectionOwnerMatches = Boolean(origin && target?.sections?.[0] &&
+  const sectionOwnerMatches = Boolean(
+    origin &&
+    target?.sections?.[0] &&
     rawPoints.length === target.sections[0].length &&
-    rawPoints.every(({ x, y }, index) =>
-      Math.abs(x + origin.x - target.sections[0][index].x) < 1e-7 &&
-      Math.abs(y + origin.y - target.sections[0][index].y) < 1e-7));
+    rawPoints.every(
+      ({ x, y }, index) =>
+        Math.abs(x + origin.x - target.sections[0][index].x) < 1e-7 &&
+        Math.abs(y + origin.y - target.sections[0][index].y) < 1e-7,
+    ),
+  );
   const routeDistance = (label, offset) => {
     if (!label || !target?.points) return null;
-    const center = { x: label.x + label.width / 2 + offset.x,
-      y: label.y + label.height / 2 + offset.y };
+    const center = {
+      x: label.x + label.width / 2 + offset.x,
+      y: label.y + label.height / 2 + offset.y,
+    };
     let shortest = Infinity;
     for (let i = 1; i < target.points.length; i++) {
       const a = target.points[i - 1];
       const b = target.points[i];
       const span = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
-      const fraction = span ? Math.max(0, Math.min(1,
-        ((center.x - a.x) * (b.x - a.x) + (center.y - a.y) * (b.y - a.y)) / span)) : 0;
-      shortest = Math.min(shortest, Math.hypot(center.x - a.x - fraction * (b.x - a.x),
-        center.y - a.y - fraction * (b.y - a.y)));
+      const fraction = span
+        ? Math.max(
+            0,
+            Math.min(
+              1,
+              ((center.x - a.x) * (b.x - a.x) +
+                (center.y - a.y) * (b.y - a.y)) /
+                span,
+            ),
+          )
+        : 0;
+      shortest = Math.min(
+        shortest,
+        Math.hypot(
+          center.x - a.x - fraction * (b.x - a.x),
+          center.y - a.y - fraction * (b.y - a.y),
+        ),
+      );
     }
     return Number(shortest.toFixed(3));
   };
   const report = {
     issue: 'CA059-finite-D0',
-    case: { orientation: state.orientation, collapsedGroupIds: state.collapsedGroupIds },
-    status: solution ? 'VALID_TEST_GEOMETRY_PENDING_X6_PIXELS'
-      : timedOut || truncatedIntervals ? 'UNRESOLVED' : 'NO_SOLUTION_IN_SAMPLED_ASSIGNMENTS',
-    limits: { labels: maxLabels, intervalsPerLabel: maxIntervals, attempts: maxAssignments, milliseconds: 2500 },
-    actual: { visibleLabels: visible.length, attempts, truncatedIntervals, timedOut },
-    searchCompleteness: 'Exact continuous obstacle-free intervals; only low/mid/high sampled per interval after reservations. No global continuous infeasibility proof.',
+    case: {
+      orientation: state.orientation,
+      collapsedGroupIds: state.collapsedGroupIds,
+    },
+    status: solution
+      ? 'VALID_TEST_GEOMETRY_PENDING_X6_PIXELS'
+      : timedOut || truncatedIntervals
+        ? 'UNRESOLVED'
+        : 'NO_SOLUTION_IN_SAMPLED_ASSIGNMENTS',
+    limits: {
+      labels: maxLabels,
+      intervalsPerLabel: maxIntervals,
+      attempts: maxAssignments,
+      milliseconds: 2500,
+    },
+    actual: {
+      visibleLabels: visible.length,
+      attempts,
+      truncatedIntervals,
+      timedOut,
+    },
+    searchCompleteness:
+      'Exact continuous obstacle-free intervals; only low/mid/high sampled per interval after reservations. No global continuous infeasibility proof.',
     declaredNormalGapsPx: normalGaps,
     intervals: domains.map(({ id, intervals }) => ({
-      id, count: intervals.length,
-      ranges: id === 'e:yw' ? intervals.map(({ axis, fixed, low, high, gap, side, segment }) =>
-        ({ axis, fixed, low, high, gap, side, segment })) : undefined,
+      id,
+      count: intervals.length,
+      ranges:
+        id === 'e:yw'
+          ? intervals.map(({ axis, fixed, low, high, gap, side, segment }) => ({
+              axis,
+              fixed,
+              low,
+              high,
+              gap,
+              side,
+              segment,
+            }))
+          : undefined,
     })),
     originalSemanticLabels: visible.map(({ id }) => ({
-      id, from: originals.get(id).fromNodeId, to: originals.get(id).toNodeId,
-      label: originals.get(id).label, status: originals.get(id).executionStatus,
+      id,
+      from: originals.get(id).fromNodeId,
+      to: originals.get(id).toNodeId,
+      label: originals.get(id).label,
+      status: originals.get(id).executionStatus,
     })),
-    nativeLabelFrame: native ? {
-      collection: collected.collection, reportedContainer: collected.edge.container ?? null,
-      sectionOwner: owner, ownerOrigin: origin ?? null,
-      sectionOwnerMatchesFlattenedWorld: sectionOwnerMatches,
-      raw: { x: native.x, y: native.y, width: native.width, height: native.height },
-      ownerTranslated: origin ? { x: native.x + origin.x, y: native.y + origin.y } : null,
-      distanceToWorldRoutePx: {
-        collectionFrame: routeDistance(native, { x: 0, y: 0 }),
-        containerFrame: origin ? routeDistance(native, origin) : null,
-      },
-      classification: 'frame inferred by route proximity, NOT independently verified; X6 ignores raw ELK label coordinates',
-    } : null,
+    nativeLabelFrame: native
+      ? {
+          collection: collected.collection,
+          reportedContainer: collected.edge.container ?? null,
+          sectionOwner: owner,
+          ownerOrigin: origin ?? null,
+          sectionOwnerMatchesFlattenedWorld: sectionOwnerMatches,
+          raw: {
+            x: native.x,
+            y: native.y,
+            width: native.width,
+            height: native.height,
+          },
+          ownerTranslated: origin
+            ? { x: native.x + origin.x, y: native.y + origin.y }
+            : null,
+          distanceToWorldRoutePx: {
+            collectionFrame: routeDistance(native, { x: 0, y: 0 }),
+            containerFrame: origin ? routeDistance(native, origin) : null,
+          },
+          classification:
+            'frame inferred by route proximity, NOT independently verified; X6 ignores raw ELK label coordinates',
+        }
+      : null,
     unchangedRoute: target?.points,
     solution,
-    performance: 'Node test-only interval/assignment CPU; not ELK Worker or X6 glyph timing',
+    performance:
+      'Node test-only interval/assignment CPU; not ELK Worker or X6 glyph timing',
   };
   return report;
 }
 
 test('CA059 D0: finite joint assignment retains four original IDs and rejects fully obstructed routes', () => {
   const ids = ['e:xz:a', 'e:xz:b', 'e:wx', 'e:yw'];
-  const variant = { graph: { edges: ids.map((id) => ({
-    id, fromNodeId: 'X', toNodeId: 'W', label: id,
-  })) } };
+  const variant = {
+    graph: {
+      edges: ids.map((id) => ({
+        id,
+        fromNodeId: 'X',
+        toNodeId: 'W',
+        label: id,
+      })),
+    },
+  };
   const geometry = {
-    width: 400, height: 300, nodes: [], groups: [],
+    width: 400,
+    height: 300,
+    nodes: [],
+    groups: [],
     edges: ids.map((id, index) => ({
-      id, points: [{ x: 40, y: 35 + index * 60 }, { x: 360, y: 35 + index * 60 }],
+      id,
+      points: [
+        { x: 40, y: 35 + index * 60 },
+        { x: 360, y: 35 + index * 60 },
+      ],
     })),
   };
   const state = { orientation: 'horizontal', collapsedGroupIds: ['inner'] };
@@ -1819,45 +1990,81 @@ test('CA059 D0: finite joint assignment retains four original IDs and rejects fu
       assert.equal(ca059Collides(box, later.box), false);
   }
   const blocked = structuredClone(geometry);
-  blocked.nodes.push({ id: 'obstruction', x: 0, y: 0, width: 400, height: 300 });
-  assert.equal(ca059FiniteJointPlacement(variant, state, raw, blocked).status,
-    'NO_SOLUTION_IN_SAMPLED_ASSIGNMENTS');
+  blocked.nodes.push({
+    id: 'obstruction',
+    x: 0,
+    y: 0,
+    width: 400,
+    height: 300,
+  });
+  assert.equal(
+    ca059FiniteJointPlacement(variant, state, raw, blocked).status,
+    'NO_SOLUTION_IN_SAMPLED_ASSIGNMENTS',
+  );
 });
 
 // One-factor probes only. The bundled ELK registry supplies supported option
 // IDs, numeric types and defaults; no option ID is fabricated by this test.
-async function ca059FiniteElkOptions(elk, variant, state, input, container, GraphClass) {
+async function ca059FiniteElkOptions(
+  elk,
+  variant,
+  state,
+  input,
+  container,
+  GraphClass,
+) {
   const started = performance.now();
   const maxTrials = 12;
   const timeBudgetMs = 15_000;
   let known;
   try {
     known = await elk.knownLayoutOptions();
-    if (!Array.isArray(known)) throw new Error('ELK option registry is not an array');
+    if (!Array.isArray(known))
+      throw new Error('ELK option registry is not an array');
   } catch (error) {
-    return { phase: 'finite one-factor native ELK variations', status: 'UNRESOLVED_NO_VERIFIED_REGISTRY',
-      reason: String(error?.message).slice(0, 160) };
+    return {
+      phase: 'finite one-factor native ELK variations',
+      status: 'UNRESOLVED_NO_VERIFIED_REGISTRY',
+      reason: String(error?.message).slice(0, 160),
+    };
   }
-  const candidates = known.filter((option) => {
-    const description = `${option.id ?? ''} ${option.name ?? ''}`.toLowerCase();
-    const numeric = Number(option.defaultValue);
-    return /spacing/.test(description) && /(edge.*label|label.*edge|edge.*node|node.*edge|edge.*edge)/.test(description) &&
-      /double|float|integer|int/i.test(option.type ?? '') &&
-      Number.isFinite(numeric) && numeric >= 0;
-  }).sort((a, b) => a.id.localeCompare(b.id)).slice(0, 6);
+  const candidates = known
+    .filter((option) => {
+      const description =
+        `${option.id ?? ''} ${option.name ?? ''}`.toLowerCase();
+      const numeric = Number(option.defaultValue);
+      return (
+        /spacing/.test(description) &&
+        /(edge.*label|label.*edge|edge.*node|node.*edge|edge.*edge)/.test(
+          description,
+        ) &&
+        /double|float|integer|int/i.test(option.type ?? '') &&
+        Number.isFinite(numeric) &&
+        numeric >= 0
+      );
+    })
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .slice(0, 6);
   const prepared = prepareV3LayoutInput(variant, state);
-  const originalById = new Map(variant.graph.edges.map((edge) => [edge.id, edge]));
+  const originalById = new Map(
+    variant.graph.edges.map((edge) => [edge.id, edge]),
+  );
   const probes = [];
   let timeCapped = false;
   for (const option of candidates) {
     for (const scope of ['root', 'outer']) {
-      if (probes.length >= maxTrials || performance.now() - started > timeBudgetMs) {
+      if (
+        probes.length >= maxTrials ||
+        performance.now() - started > timeBudgetMs
+      ) {
         timeCapped = true;
         break;
       }
       const detached = structuredClone(input);
-      const target = scope === 'root'
-        ? detached : detached.children.find(({ id }) => id === 'outer');
+      const target =
+        scope === 'root'
+          ? detached
+          : detached.children.find(({ id }) => id === 'outer');
       if (!target?.layoutOptions) continue;
       const old = Number(option.defaultValue);
       const value = Number(Math.max(old * 1.5, old + 6, 12).toFixed(3));
@@ -1869,19 +2076,36 @@ async function ca059FiniteElkOptions(elk, variant, state, input, container, Grap
         trial.elkMainThreadMs = Number((performance.now() - start).toFixed(2));
         const geometry = flattenV3ElkGraph(raw, variant, prepared);
         trial.scene = { width: geometry.width, height: geometry.height };
-        trial.areaRatio = Number((geometry.width * geometry.height / (1128 * 296)).toFixed(3));
-        trial.reviewAlarm = trial.areaRatio > 1.25 ||
-          geometry.width > 1128 * 1.2 || geometry.height > 296 * 1.2;
-        trial.targetRoute = geometry.edges.find(({ id }) => id === 'e:yw')?.points ?? null;
+        trial.areaRatio = Number(
+          ((geometry.width * geometry.height) / (1128 * 296)).toFixed(3),
+        );
+        trial.reviewAlarm =
+          trial.areaRatio > 1.25 ||
+          geometry.width > 1128 * 1.2 ||
+          geometry.height > 296 * 1.2;
+        trial.targetRoute =
+          geometry.edges.find(({ id }) => id === 'e:yw')?.points ?? null;
         try {
-          const painted = await renderV3Scene(container, variant, geometry, state, {
-            GraphClass,
-          });
-          const correct = painted.graph.edges.length === prepared.edges.length &&
-            painted.graph.edges.every((edge) =>
-              edge.labels?.length === 1 &&
-              edge.labels[0].attrs.label.text === originalById.get(edge.id)?.label);
-          trial.strictRenderer = correct ? 'GREEN_TEST_CONFIG' : 'SEMANTIC_MISMATCH';
+          const painted = await renderV3Scene(
+            container,
+            variant,
+            geometry,
+            state,
+            {
+              GraphClass,
+            },
+          );
+          const correct =
+            painted.graph.edges.length === prepared.edges.length &&
+            painted.graph.edges.every(
+              (edge) =>
+                edge.labels?.length === 1 &&
+                edge.labels[0].attrs.label.text ===
+                  originalById.get(edge.id)?.label,
+            );
+          trial.strictRenderer = correct
+            ? 'GREEN_TEST_CONFIG'
+            : 'SEMANTIC_MISMATCH';
           painted.dispose();
         } catch (error) {
           trial.strictRenderer = 'RED';
@@ -1897,17 +2121,32 @@ async function ca059FiniteElkOptions(elk, variant, state, input, container, Grap
   }
   return {
     phase: 'finite one-factor native ELK variations',
-    case: { orientation: state.orientation, collapsedGroupIds: state.collapsedGroupIds },
-    status: timeCapped || performance.now() - started > timeBudgetMs
-      ? 'UNRESOLVED_TIME_CAP'
-      : candidates.length ? 'BOUNDED_PROBES_FINISHED' : 'UNRESOLVED_NO_VERIFIED_OPTIONS',
-    registrySupportedCandidates: candidates.map(({ id, type, defaultValue }) =>
-      ({ id, type, defaultValue })),
-    caps: { trials: maxTrials, elapsedMs: timeBudgetMs,
-      note: 'soft alarm checked between layouts; individual synchronous ELK calls cannot be interrupted' },
-    actual: { trials: probes.length, elapsedMs: Number((performance.now() - started).toFixed(2)) },
-    measurement: 'synchronous bundled ELK Node layout, NOT 30s Worker/X6 DOM or 10k preparation',
-    visual: '900x600 actual glyph checks and seven browser screenshots still required',
+    case: {
+      orientation: state.orientation,
+      collapsedGroupIds: state.collapsedGroupIds,
+    },
+    status:
+      timeCapped || performance.now() - started > timeBudgetMs
+        ? 'UNRESOLVED_TIME_CAP'
+        : candidates.length
+          ? 'BOUNDED_PROBES_FINISHED'
+          : 'UNRESOLVED_NO_VERIFIED_OPTIONS',
+    registrySupportedCandidates: candidates.map(
+      ({ id, type, defaultValue }) => ({ id, type, defaultValue }),
+    ),
+    caps: {
+      trials: maxTrials,
+      elapsedMs: timeBudgetMs,
+      note: 'soft alarm checked between layouts; individual synchronous ELK calls cannot be interrupted',
+    },
+    actual: {
+      trials: probes.length,
+      elapsedMs: Number((performance.now() - started).toFixed(2)),
+    },
+    measurement:
+      'synchronous bundled ELK Node layout, NOT 30s Worker/X6 DOM or 10k preparation',
+    visual:
+      '900x600 actual glyph checks and seven browser screenshots still required',
     probes,
   };
 }
@@ -1947,7 +2186,10 @@ function ca059TraceFailedOriginalLabel(variant, state, input, raw, geometry) {
   if (obstacles.length > 128)
     return JSON.stringify({
       issue: 'CA059-D0',
-      case: { orientation: state.orientation, collapsedGroupIds: state.collapsedGroupIds },
+      case: {
+        orientation: state.orientation,
+        collapsedGroupIds: state.collapsedGroupIds,
+      },
       targetId,
       obstacleCount: obstacles.length,
       diagnosticsTruncated: '128-obstacle investigation cap',
@@ -1959,7 +2201,12 @@ function ca059TraceFailedOriginalLabel(variant, state, input, raw, geometry) {
     if (edge.id === targetId) break;
     const label = byId.get(edge.id)?.label;
     if (!label) continue;
-    const placement = reserveRouteLabel(edge.points, label, obstacles, reserved);
+    const placement = reserveRouteLabel(
+      edge.points,
+      label,
+      obstacles,
+      reserved,
+    );
     preceding.push({
       id: edge.id,
       placed: Boolean(placement),
@@ -2021,7 +2268,8 @@ function ca059TraceFailedOriginalLabel(variant, state, input, raw, geometry) {
           : reservation >= 0
             ? { kind: 'preceding-label', id: preceding[reservation]?.id ?? '?' }
             : null;
-        const collidingBox = obstacle ?? (reservation >= 0 ? reserved[reservation] : null);
+        const collidingBox =
+          obstacle ?? (reservation >= 0 ? reserved[reservation] : null);
         totalCandidates++;
         if (candidates.length < 32)
           candidates.push({
@@ -2067,13 +2315,19 @@ function ca059TraceFailedOriginalLabel(variant, state, input, raw, geometry) {
     const relativeTo = edge.container ?? node.id;
     const ownerOrigin = origins.get(relativeTo);
     const sections = (edge.sections ?? []).slice(0, 8).map((section) => {
-      const local = [section.startPoint, ...(section.bendPoints ?? []), section.endPoint]
+      const local = [
+        section.startPoint,
+        ...(section.bendPoints ?? []),
+        section.endPoint,
+      ]
         .filter(Boolean)
         .slice(0, 16);
       return {
         local: local.map(point),
         inferredWorld: ownerOrigin
-          ? local.map(({ x, y }) => point({ x: x + ownerOrigin.x, y: y + ownerOrigin.y }))
+          ? local.map(({ x, y }) =>
+              point({ x: x + ownerOrigin.x, y: y + ownerOrigin.y }),
+            )
           : null,
       };
     });
@@ -2106,14 +2360,18 @@ function ca059TraceFailedOriginalLabel(variant, state, input, raw, geometry) {
       target: original.toNodeId,
       label: original.label,
       rendererBox: { width, height },
-      nativeElkBox: input.edges.find(({ id }) => id === targetId)?.labels?.[0] ?? null,
+      nativeElkBox:
+        input.edges.find(({ id }) => id === targetId)?.labels?.[0] ?? null,
     },
     rawEdge,
     flattened: {
       scene: { width: number(geometry.width), height: number(geometry.height) },
       points: target.points.slice(0, 32).map(point),
       pointCount: target.points.length,
-      sections: target.sections?.slice(0, 8).map((section) => section.slice(0, 16).map(point)) ?? null,
+      sections:
+        target.sections
+          ?.slice(0, 8)
+          .map((section) => section.slice(0, 16).map(point)) ?? null,
     },
     rendererObstacleCount: obstacles.length,
     obstacles: obstacles.slice(0, 128).map((item) => ({
@@ -2133,15 +2391,21 @@ function ca059TraceFailedOriginalLabel(variant, state, input, raw, geometry) {
     candidateSearchTruncated: segments.length * 10 > 32,
     candidates,
     reconstructionFirstAccepted: firstAccepted,
-    unchangedHelperMirror: reserveRouteLabel(
-      target.points,
-      original.label,
-      obstacles,
-      reserved.slice(),
-    ) == null
-      ? null
-      : 'position-available',
-    diagnosticCaps: { edgeCount: 1, obstacles: 128, candidates: 32, bytes: 16384 },
+    unchangedHelperMirror:
+      reserveRouteLabel(
+        target.points,
+        original.label,
+        obstacles,
+        reserved.slice(),
+      ) == null
+        ? null
+        : 'position-available',
+    diagnosticCaps: {
+      edgeCount: 1,
+      obstacles: 128,
+      candidates: 32,
+      bytes: 16384,
+    },
   };
   let serialized = JSON.stringify(trace);
   if (Buffer.byteLength(serialized, 'utf8') > 16384)
@@ -2215,19 +2479,44 @@ test('CA058: official ELK/X6 preflight preserves original labels across orientat
           error?.message === 'No collision-free V3 edge label position for e:yw'
         ) {
           try {
-            const originalTrace = ca059TraceFailedOriginalLabel(variant, state, input, raw, geometry);
+            const originalTrace = ca059TraceFailedOriginalLabel(
+              variant,
+              state,
+              input,
+              raw,
+              geometry,
+            );
             t.diagnostic(originalTrace);
-            const phase1 = ca059FiniteJointPlacement(variant, state, raw, geometry);
-            const phase2 = phase1.status === 'VALID_TEST_GEOMETRY_PENDING_X6_PIXELS'
-              ? { status: 'SKIPPED_VALID_PHASE1' }
-              : await ca059FiniteElkOptions(elk, variant, state, input, container, FakeGraph);
+            const phase1 = ca059FiniteJointPlacement(
+              variant,
+              state,
+              raw,
+              geometry,
+            );
+            const phase2 =
+              phase1.status === 'VALID_TEST_GEOMETRY_PENDING_X6_PIXELS'
+                ? { status: 'SKIPPED_VALID_PHASE1' }
+                : await ca059FiniteElkOptions(
+                    elk,
+                    variant,
+                    state,
+                    input,
+                    container,
+                    FakeGraph,
+                  );
             const finiteTrace = JSON.stringify({ phase1, phase2 });
             const remaining = 16_384 - Buffer.byteLength(originalTrace, 'utf8');
             if (remaining > 256)
-              t.diagnostic(Buffer.byteLength(finiteTrace, 'utf8') <= remaining
-                ? finiteTrace
-                : JSON.stringify({ issue: 'CA059-finite-D0', status: 'UNRESOLVED',
-                    reason: '16KiB trace limit', traceBytes: Buffer.byteLength(finiteTrace, 'utf8') }));
+              t.diagnostic(
+                Buffer.byteLength(finiteTrace, 'utf8') <= remaining
+                  ? finiteTrace
+                  : JSON.stringify({
+                      issue: 'CA059-finite-D0',
+                      status: 'UNRESOLVED',
+                      reason: '16KiB trace limit',
+                      traceBytes: Buffer.byteLength(finiteTrace, 'utf8'),
+                    }),
+              );
           } catch (diagnosticError) {
             t.diagnostic(
               `CA059 D0 trace failed: ${String(diagnosticError?.message).slice(0, 160)}`,

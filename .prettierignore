@@ -10,3 +10,6 @@ public/vendor/cytoscape-dagre.min.js
 public/vendor/dagre.min.js
 public/vendor/elk-worker.min.js
 public/vendor/elkjs/LICENSE.md
+# Immutable sanitized CA063 forensic witness bytes; verify JSON syntax and SHA separately.
+docs/v3/ca063-final-local-bundle-trace.json
+docs/v3/ca063-vite-root-entry-baseline-hook-trace-sanitized.json

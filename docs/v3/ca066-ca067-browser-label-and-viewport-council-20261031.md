@@ -8,28 +8,28 @@
 
 ## Chronology and frozen provenance
 
-| Order / stage | Exact artifact under `tmp/ca066067/council/` | SHA-256 |
-| --- | --- | --- |
-| 1 — neutral brief (before opinions) | `neutral-brief.md` | `fcae4bde664b1e2cc43c629d1285556c9a9cd4520b6f2ec7651eb6f15209b8b1` |
-| 2 — EDO blind provisional, 02:52:03Z | `edo/provisional.md` | `263b54ad2b0cc16337017f5210a9f74cc64f27d66820f81c6c7624c592b84f4a` |
-| 3a — A1 Systems Architect | `advisors/a1.md` | `aa9d283e717d838630876d5c60e3401a69d461d62f4b0b1eadada658d0304d15` |
-| 3b — A2 Implementation Lead | `advisors/a2.md` | `1c81675754968f36ed29c3cadba9ecd2a007e4bd25f8fa1137d104d03e2e942c` |
-| 3c — A3 Reliability/Security/Accessibility | `advisors/a3.md` | `0f96086ed2dbde1f0b7aaf5f903bb6a9bfc7e6729c5942964065bc468b04c293` |
-| 3d — A4 Quality & Verification | `advisors/a4.md` | `9156d443a74151cb7d0226cb5a51c80f6667aa4807ebacf433a3081c6a6781cc` |
-| 3e — A5 Devil's Advocate | `advisors/a5.md` | `68ce5988618ba1b21017b7fdf9c344231c1f4385de6f5199676419250d16987b` |
-| 4 — sanitized blind packet | `anonymous-peer-packet.md` | `ea55c531ca990ea979419f040bb5e27778f6f193bddc444f5234dd02856e9808` |
-| 5a — peer R1 | `peers/r1.md` | `74eee6754cced3d631fe67016571d8c1a76f836bb1a15abf215d9d831e08fab2` |
-| 5b — peer R2 | `peers/r2.md` | `70623bf5498c90c25ad3858c50f357bb8e6d835f7e2518dd84d955d41bdb74ab` |
-| 5c — peer R3 | `peers/r3.md` | `4563df0c2a51ddd8afd1dab29eb4fca6b949f85879fe612ddddc73f996e8ff4f` |
-| 5d — peer R4 | `peers/r4.md` | `8bf6c3698db702eda7073e5748686064a7a0eae78e974bffd06d501f91ce7aca` |
-| 5e — peer R5 | `peers/r5.md` | `a9252be6875a335e6038ce411a595d73fe73e57d8f15d514eee813c3665a1453` |
-| 6 — EDO challenges, 02:58:46Z | `edo/challenges.md` | `6e03a1687c13b260b78450c010af2171964652b0e5f5208d82d8bfb087d35eb0` |
-| 7a — original A1 rebuttal, 03:00:18Z | `rebuttals/a1.md` | `4cf96e48fa722375572fce7f4b70068b3da849305ce64ed95cca386ff308736f` |
-| 7b — original A2 rebuttal, 03:01:27Z | `rebuttals/a2.md` | `c7f16c131f308f6e043c18dd4abc6f4272c2f564b895696c2be84568762d3f80` |
-| 7c — original A3 rebuttal, 03:02:00Z | `rebuttals/a3.md` | `f28fd334c41a679d9a8c8e5f3e9cd6d8b5d84f4f60bea61dc73ed9c5969c32a6` |
-| 7d — original A4 rebuttal, 03:00:13Z | `rebuttals/a4.md` | `7e0d20557c9ca5861a15bc7f1af4c0b55f84328ab760e68ba43acad07f0d6743` |
-| 7e — original A5 rebuttal, 03:00:08Z | `rebuttals/a5.md` | `8eebc30eb6210908db42b808aca11e486bc7963b1537ee656aa336b8213d91ad` |
-| 8 — EDO signed final, 03:02:53Z | `edo/final.md` | `16767c015651e506be4e61a5a8d4f16d94cb22218e124a2177982e69a3a934b5` |
+| Order / stage                              | Exact artifact under `tmp/ca066067/council/` | SHA-256                                                            |
+| ------------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------ |
+| 1 — neutral brief (before opinions)        | `neutral-brief.md`                           | `fcae4bde664b1e2cc43c629d1285556c9a9cd4520b6f2ec7651eb6f15209b8b1` |
+| 2 — EDO blind provisional, 02:52:03Z       | `edo/provisional.md`                         | `263b54ad2b0cc16337017f5210a9f74cc64f27d66820f81c6c7624c592b84f4a` |
+| 3a — A1 Systems Architect                  | `advisors/a1.md`                             | `aa9d283e717d838630876d5c60e3401a69d461d62f4b0b1eadada658d0304d15` |
+| 3b — A2 Implementation Lead                | `advisors/a2.md`                             | `1c81675754968f36ed29c3cadba9ecd2a007e4bd25f8fa1137d104d03e2e942c` |
+| 3c — A3 Reliability/Security/Accessibility | `advisors/a3.md`                             | `0f96086ed2dbde1f0b7aaf5f903bb6a9bfc7e6729c5942964065bc468b04c293` |
+| 3d — A4 Quality & Verification             | `advisors/a4.md`                             | `9156d443a74151cb7d0226cb5a51c80f6667aa4807ebacf433a3081c6a6781cc` |
+| 3e — A5 Devil's Advocate                   | `advisors/a5.md`                             | `68ce5988618ba1b21017b7fdf9c344231c1f4385de6f5199676419250d16987b` |
+| 4 — sanitized blind packet                 | `anonymous-peer-packet.md`                   | `ea55c531ca990ea979419f040bb5e27778f6f193bddc444f5234dd02856e9808` |
+| 5a — peer R1                               | `peers/r1.md`                                | `74eee6754cced3d631fe67016571d8c1a76f836bb1a15abf215d9d831e08fab2` |
+| 5b — peer R2                               | `peers/r2.md`                                | `70623bf5498c90c25ad3858c50f357bb8e6d835f7e2518dd84d955d41bdb74ab` |
+| 5c — peer R3                               | `peers/r3.md`                                | `4563df0c2a51ddd8afd1dab29eb4fca6b949f85879fe612ddddc73f996e8ff4f` |
+| 5d — peer R4                               | `peers/r4.md`                                | `8bf6c3698db702eda7073e5748686064a7a0eae78e974bffd06d501f91ce7aca` |
+| 5e — peer R5                               | `peers/r5.md`                                | `a9252be6875a335e6038ce411a595d73fe73e57d8f15d514eee813c3665a1453` |
+| 6 — EDO challenges, 02:58:46Z              | `edo/challenges.md`                          | `6e03a1687c13b260b78450c010af2171964652b0e5f5208d82d8bfb087d35eb0` |
+| 7a — original A1 rebuttal, 03:00:18Z       | `rebuttals/a1.md`                            | `4cf96e48fa722375572fce7f4b70068b3da849305ce64ed95cca386ff308736f` |
+| 7b — original A2 rebuttal, 03:01:27Z       | `rebuttals/a2.md`                            | `c7f16c131f308f6e043c18dd4abc6f4272c2f564b895696c2be84568762d3f80` |
+| 7c — original A3 rebuttal, 03:02:00Z       | `rebuttals/a3.md`                            | `f28fd334c41a679d9a8c8e5f3e9cd6d8b5d84f4f60bea61dc73ed9c5969c32a6` |
+| 7d — original A4 rebuttal, 03:00:13Z       | `rebuttals/a4.md`                            | `7e0d20557c9ca5861a15bc7f1af4c0b55f84328ab760e68ba43acad07f0d6743` |
+| 7e — original A5 rebuttal, 03:00:08Z       | `rebuttals/a5.md`                            | `8eebc30eb6210908db42b808aca11e486bc7963b1537ee656aa336b8213d91ad` |
+| 8 — EDO signed final, 03:02:53Z            | `edo/final.md`                               | `16767c015651e506be4e61a5a8d4f16d94cb22218e124a2177982e69a3a934b5` |
 
 **Peer-review provenance qualification:** Five reviewers were instructed to assess the `anonymous-peer-packet.md` without author identities; TL held an A–E map for release after submissions, and the EDO's recorded mapping release occurred afterward. However signed `peers/r5.md` itself says “Any A5 dissent” despite that anonymous packet using A–E labels. **It is unknown why R5 used A5 nomenclature**; it does not prove access to the withheld map, but perfect blinding cannot be certified. Preserve this discrepancy rather than calling the peer stage unequivocally blind. Chronological stage numbers denote review sequence, not each file's signing order. The five real signed reviews are retained; majority vote is not the decision rule. Task skill manifest `tmp/ca066067-skills/manifest.md` SHA-256 `09164822349e7d328d45ea87f51d71e801c3fc00a3cde1475d1fed98a5ab1e3c` pins Council/Superpowers/Caveman instructions.
 

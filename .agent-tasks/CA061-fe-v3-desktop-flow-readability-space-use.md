@@ -28,15 +28,15 @@
 
 All paths are under `/workspace/scratch/7f30f1f647be/qa-screenshots-41083389952/` after extraction of Actions screenshot artifact **12989908371**. SHA-256 values identify the exact PNG bytes actually viewed, not a claim of remote test acceptance.
 
-| Native Chromium screenshot (relative to extraction root) | SHA-256 | Visual QA |
-| --- | --- | --- |
-| `v3-preview-scaffold-native-6dba6-600-horizontal-and-vertical/ui-v3-900x600-horizontal.png` | `6b392c33202f36b35e16b707aa9edc86455321fcc09338678eb304b5f0f44471` | Expanded horizontal; microscopic captions, compact rendered scene. |
-| `v3-preview-scaffold-native-6dba6-600-horizontal-and-vertical/ui-v3-900x600-vertical.png` | `05eedd87392b19a026eb299f0267494dcf0d8230cb56c17bd4a54d4e6a40be28` | Expanded vertical; tiny edge/node captions despite abundant side space. |
-| `v3-preview-scaffold-native-9dece-900-horizontal-and-vertical/ui-v3-1440x900-horizontal.png` | `559b0560f8f645c12195658953aa8881959c77443a00a9f88c33d76287a7c874` | Expanded horizontal comparison; graph spans much of pane width. |
-| `v3-preview-scaffold-native-9dece-900-horizontal-and-vertical/ui-v3-1440x900-vertical.png` | `d12f290abd46611cd4174709e5e4028b7a190844e4a7897d740ec50da4d59d67` | Expanded vertical; `unresolved` caption near nested orange border; clipping unverified. |
-| `v3-preview-scaffold-native-9dece-900-horizontal-and-vertical/ui-v3-1440x900-collapsed.png` | `ba4160b87fa5bcd3d6c47531df02d688e74778a4261f65be61eb74ec2ca58af8` | Collapsed `scope` counterexample; compact, readable `next` and node/group text. |
-| `v3-preview-scaffold-native-c01d8-080-horizontal-and-vertical/ui-v3-1920x1080-horizontal.png` | `56f89e817cd7489e4cd3eaa157c1777bf8c5b9022f0b5a53c49d7eba154b196f` | Expanded horizontal; substantial pane-width use. |
-| `v3-preview-scaffold-native-c01d8-080-horizontal-and-vertical/ui-v3-1920x1080-vertical.png` | `f0dee0f1ee20725a65f6b8ad4cba43541b927059f042cd3d401e51e5961ed4a0` | Expanded vertical; graph roughly 512/1630 px, ~31% pane-width use. |
+| Native Chromium screenshot (relative to extraction root)                                      | SHA-256                                                            | Visual QA                                                                               |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| `v3-preview-scaffold-native-6dba6-600-horizontal-and-vertical/ui-v3-900x600-horizontal.png`   | `6b392c33202f36b35e16b707aa9edc86455321fcc09338678eb304b5f0f44471` | Expanded horizontal; microscopic captions, compact rendered scene.                      |
+| `v3-preview-scaffold-native-6dba6-600-horizontal-and-vertical/ui-v3-900x600-vertical.png`     | `05eedd87392b19a026eb299f0267494dcf0d8230cb56c17bd4a54d4e6a40be28` | Expanded vertical; tiny edge/node captions despite abundant side space.                 |
+| `v3-preview-scaffold-native-9dece-900-horizontal-and-vertical/ui-v3-1440x900-horizontal.png`  | `559b0560f8f645c12195658953aa8881959c77443a00a9f88c33d76287a7c874` | Expanded horizontal comparison; graph spans much of pane width.                         |
+| `v3-preview-scaffold-native-9dece-900-horizontal-and-vertical/ui-v3-1440x900-vertical.png`    | `d12f290abd46611cd4174709e5e4028b7a190844e4a7897d740ec50da4d59d67` | Expanded vertical; `unresolved` caption near nested orange border; clipping unverified. |
+| `v3-preview-scaffold-native-9dece-900-horizontal-and-vertical/ui-v3-1440x900-collapsed.png`   | `ba4160b87fa5bcd3d6c47531df02d688e74778a4261f65be61eb74ec2ca58af8` | Collapsed `scope` counterexample; compact, readable `next` and node/group text.         |
+| `v3-preview-scaffold-native-c01d8-080-horizontal-and-vertical/ui-v3-1920x1080-horizontal.png` | `56f89e817cd7489e4cd3eaa157c1777bf8c5b9022f0b5a53c49d7eba154b196f` | Expanded horizontal; substantial pane-width use.                                        |
+| `v3-preview-scaffold-native-c01d8-080-horizontal-and-vertical/ui-v3-1920x1080-vertical.png`   | `f0dee0f1ee20725a65f6b8ad4cba43541b927059f042cd3d401e51e5961ed4a0` | Expanded vertical; graph roughly 512/1630 px, ~31% pane-width use.                      |
 
 ## Investigation and UX decision gate
 
@@ -63,38 +63,38 @@ All paths are under `/workspace/scratch/7f30f1f647be/qa-screenshots-41083389952/
 - **Procedure:** GitHub plugin first listed the live `.agent-tasks` directory on `fix/react-layout-collapse` (CA051–CA060 present; CA061 absent). The plugin independently resolved all six canonical repositories' current default-branch `commits/HEAD` to full SHAs, then successfully fetched all **22 required prior-manifest instruction/reference files at those exact commit SHAs**. The six heads remained identical to the prior CA060 pin; 22 locally retained exact-revision files were SHA-256 rechecked against their verified manifest. This is a fresh **CA061 provenance check**, not permission to reuse a stale HEAD if it changes on another task. No GitHub plugin error, Git CLI fallback, remote mutation or new local skill-copy file occurred.
 - **Uploaded user agent-team skill:** `upload/agent-team-skill(2).md` SHA-256 `6c2e6a18fcb6bcc61e733fb7ec9f218e3f6e86fff8aec890e873f2d49bc6bed1`; read in full.
 
-| Canonical source | Current default-branch HEAD SHA |
-| --- | --- |
-| `obra/superpowers` | `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b` |
+| Canonical source                     | Current default-branch HEAD SHA            |
+| ------------------------------------ | ------------------------------------------ |
+| `obra/superpowers`                   | `2ce8aa15d05bd57213e6f746f953aafb7ded7a8b` |
 | `EmpRider/claude-skills-llm-council` | `a7565e21d5ab03551fe66e36818e05af245467b8` |
-| `JuliusBrussee/caveman` | `9b68f7ed12b05e7efaff18e65c5a3fc2849fd0a4` |
-| `DietrichGebert/ponytail` | `96608e078b2d5ea607c5c3b8b5a54d1c1fba6846` |
-| `ayghri/i-have-adhd` | `1ecea1993b7fce257ffbd686c070948b5e07eda6` |
-| `alexgreensh/attention-span` | `8a6e2250dbc1dfb1b4186e03a92484d8c799c1b0` |
+| `JuliusBrussee/caveman`              | `9b68f7ed12b05e7efaff18e65c5a3fc2849fd0a4` |
+| `DietrichGebert/ponytail`            | `96608e078b2d5ea607c5c3b8b5a54d1c1fba6846` |
+| `ayghri/i-have-adhd`                 | `1ecea1993b7fce257ffbd686c070948b5e07eda6` |
+| `alexgreensh/attention-span`         | `8a6e2250dbc1dfb1b4186e03a92484d8c799c1b0` |
 
-| Exact-revision cached instruction/reference file | SHA-256 |
-| --- | --- |
-| `attention/attention-kind.md` | `959c0ff96c80ae5f6c007618951cae339340ed586b3b1a7bb5970cf229344ece` |
-| `attention/rundown.md` | `c78fd3f8e2c8e6a96515a48e4c32acef2dc6456cdec9aafadd5c53524bd19ced` |
-| `superpowers/systematic-debugging/root-cause-tracing.md` | `75b933b6a8c40bdb2031b10f21654395b56ec6ab6bc7b018c18d3fe57aeb7fb8` |
-| `superpowers/systematic-debugging/SKILL.md` | `51c6435d98c83c42c96ba7c35725a0b2c376cd487fb1a4e6bd0ddbe7e33ef202` |
-| `superpowers/systematic-debugging/defense-in-depth.md` | `1e175fb86fc357e58c6aebf5441e481e1b7868b4380c0456b63a17eefbd18ba7` |
-| `superpowers/test-driven-development/writing-good-tests.md` | `51471c853306ff92ca8bb41dcaea05f31c0e46b03651f8f3c99754b7172f4ae1` |
-| `superpowers/test-driven-development/SKILL.md` | `64b03fce4aee5a97a93160cea8111f3ba13a17b7c001db4bd5836d67fd10705d` |
-| `superpowers/requesting-code-review/code-reviewer.md` | `82e370be6b3447523816286195571e4216ba56ba1ad6ad0e87862294c4c78dcb` |
-| `superpowers/requesting-code-review/SKILL.md` | `2180e14a448e9410bec88e6646a2d1f0ce7fdd58de27388c1e052e929679d2bc` |
-| `superpowers/dispatching-parallel-agents/SKILL.md` | `1968923066f3b707eb01d1992cdf4c42284c3855f70253b9cd5000ff45fca13c` |
-| `superpowers/finishing-a-development-branch/SKILL.md` | `8db5a922b242dd4e1bf824cb91c13b3e8d8e8a86d6ceaf7f0774eb9cce909d65` |
-| `superpowers/verification-before-completion/SKILL.md` | `2befe7fc55bcadaa3d97dd9e8efeb633d2561c0ebe74c5a8b17c4d9e7e4520b3` |
-| `superpowers/using-superpowers/SKILL.md` | `82c5c8866ad7f5dd4440ce66bd7806ba48a2f13771beae5cf112e53f08fe36ba` |
-| `superpowers/executing-plans/SKILL.md` | `e4649e59880ef2643d1da128e3d607e87e3f969410d72095a5bf65811b6036dc` |
-| `superpowers/subagent-driven-development/implementer-prompt.md` | `81dd9d5a3fb0b09b96b5829f03b9796842f3199ef7591d1ba1c2db2a515f64d0` |
+| Exact-revision cached instruction/reference file                  | SHA-256                                                            |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `attention/attention-kind.md`                                     | `959c0ff96c80ae5f6c007618951cae339340ed586b3b1a7bb5970cf229344ece` |
+| `attention/rundown.md`                                            | `c78fd3f8e2c8e6a96515a48e4c32acef2dc6456cdec9aafadd5c53524bd19ced` |
+| `superpowers/systematic-debugging/root-cause-tracing.md`          | `75b933b6a8c40bdb2031b10f21654395b56ec6ab6bc7b018c18d3fe57aeb7fb8` |
+| `superpowers/systematic-debugging/SKILL.md`                       | `51c6435d98c83c42c96ba7c35725a0b2c376cd487fb1a4e6bd0ddbe7e33ef202` |
+| `superpowers/systematic-debugging/defense-in-depth.md`            | `1e175fb86fc357e58c6aebf5441e481e1b7868b4380c0456b63a17eefbd18ba7` |
+| `superpowers/test-driven-development/writing-good-tests.md`       | `51471c853306ff92ca8bb41dcaea05f31c0e46b03651f8f3c99754b7172f4ae1` |
+| `superpowers/test-driven-development/SKILL.md`                    | `64b03fce4aee5a97a93160cea8111f3ba13a17b7c001db4bd5836d67fd10705d` |
+| `superpowers/requesting-code-review/code-reviewer.md`             | `82e370be6b3447523816286195571e4216ba56ba1ad6ad0e87862294c4c78dcb` |
+| `superpowers/requesting-code-review/SKILL.md`                     | `2180e14a448e9410bec88e6646a2d1f0ce7fdd58de27388c1e052e929679d2bc` |
+| `superpowers/dispatching-parallel-agents/SKILL.md`                | `1968923066f3b707eb01d1992cdf4c42284c3855f70253b9cd5000ff45fca13c` |
+| `superpowers/finishing-a-development-branch/SKILL.md`             | `8db5a922b242dd4e1bf824cb91c13b3e8d8e8a86d6ceaf7f0774eb9cce909d65` |
+| `superpowers/verification-before-completion/SKILL.md`             | `2befe7fc55bcadaa3d97dd9e8efeb633d2561c0ebe74c5a8b17c4d9e7e4520b3` |
+| `superpowers/using-superpowers/SKILL.md`                          | `82c5c8866ad7f5dd4440ce66bd7806ba48a2f13771beae5cf112e53f08fe36ba` |
+| `superpowers/executing-plans/SKILL.md`                            | `e4649e59880ef2643d1da128e3d607e87e3f969410d72095a5bf65811b6036dc` |
+| `superpowers/subagent-driven-development/implementer-prompt.md`   | `81dd9d5a3fb0b09b96b5829f03b9796842f3199ef7591d1ba1c2db2a515f64d0` |
 | `superpowers/subagent-driven-development/references/preflight.md` | `3ea21c5fc1af1a190ac8a9d19ceb0849b47bf2ffe27b87dffcc21b6a0539776c` |
-| `superpowers/subagent-driven-development/SKILL.md` | `ba41f697136cba88a7962d60c8e2f97488ba04a8688b1d0fbeb27f6953808e75` |
+| `superpowers/subagent-driven-development/SKILL.md`                | `ba41f697136cba88a7962d60c8e2f97488ba04a8688b1d0fbeb27f6953808e75` |
 | `superpowers/subagent-driven-development/task-reviewer-prompt.md` | `bfed55c8f19d0ff6ed57b0fe09127c92890e9311c6c73917129598826bf9ebe8` |
-| `council/SKILL.md` | `6387755b0cd0f069720549c7e81d90b724433d4ff46cb127271b902939ad586d` |
-| `caveman/SKILL.md` | `415d43518f2b1a9498c15a445d4657117b129ee5e81b19454ce348439cc6672b` |
-| `adhd/SKILL.md` | `88955c019bbb1419ff4b49dbb1f80a867467de6233d7865af2e06a7d7b76c7d3` |
-| `ponytail/SKILL.md` | `9badd22a32e19cb884e46dfa8d3aae82bb81dfa5484105b8b4f0262df823a509` |
+| `council/SKILL.md`                                                | `6387755b0cd0f069720549c7e81d90b724433d4ff46cb127271b902939ad586d` |
+| `caveman/SKILL.md`                                                | `415d43518f2b1a9498c15a445d4657117b129ee5e81b19454ce348439cc6672b` |
+| `adhd/SKILL.md`                                                   | `88955c019bbb1419ff4b49dbb1f80a867467de6233d7865af2e06a7d7b76c7d3` |
+| `ponytail/SKILL.md`                                               | `9badd22a32e19cb884e46dfa8d3aae82bb81dfa5484105b8b4f0262df823a509` |
 
 **Applicability:** Council is required before any new remedy or UX design choice. Superpowers systematic-debugging guides evidence collection; implementation/review skills and Ponytail become applicable only after actual approvals. Caveman constrains technical handoff style; ADHD and Attention Span apply to BA communication, not this private specialist draft.

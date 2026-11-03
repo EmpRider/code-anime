@@ -68,7 +68,10 @@ async function installCspDiagnostics(page: Page): Promise<void> {
     );
 
     // Test-only provenance for inline styles when blockedURI is just "inline".
-    const styleCreation = new WeakMap<Element, { stackHash: string; frame: string }>();
+    const styleCreation = new WeakMap<
+      Element,
+      { stackHash: string; frame: string }
+    >();
     const originalCreateElement = document.createElement;
     document.createElement = function (
       this: Document,
