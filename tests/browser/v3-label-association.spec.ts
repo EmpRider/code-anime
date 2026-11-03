@@ -1,93 +1,93 @@
-import { test, expect, type Page } from "@playwright/test";
-import { createServer, type Server } from "node:http";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { build, normalizePath } from "vite";
-import { createWebApp } from "../../src/web/app.js";
-import type { SessionStore } from "../../src/domain/flow.js";
+import { test, expect, type Page } from '@playwright/test';
+import { createServer, type Server } from 'node:http';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { build, normalizePath } from 'vite';
+import { createWebApp } from '../../src/web/app.js';
+import type { SessionStore } from '../../src/domain/flow.js';
 
 // CA059 CI1: HARNESS_SMOKE_ONLY. One of at most two authorized confirming CI
 // cycles. No label-clearance, foreign-stroke, keyboard/ARIA, nine-chain, 10k,
 // CA060/CSP or FE acceptance may be inferred from this test.
 const baselinePath = fileURLToPath(
-  new URL("../fixtures/v3/proposed-baseline.json", import.meta.url),
+  new URL('../fixtures/v3/proposed-baseline.json', import.meta.url),
 );
 const nestedPath = fileURLToPath(
-  new URL("../fixtures/v3/nested-multilingual.json", import.meta.url),
+  new URL('../fixtures/v3/nested-multilingual.json', import.meta.url),
 );
 const rendererPath = fileURLToPath(
-  new URL("../../public/v3-scene-diagram.js", import.meta.url),
+  new URL('../../public/v3-scene-diagram.js', import.meta.url),
 );
 const geometryPath = fileURLToPath(
-  new URL("../../public/v3-scene-geometry.js", import.meta.url),
+  new URL('../../public/v3-scene-geometry.js', import.meta.url),
 );
-const SCRIPT_PATH = "/__ca059_harness_smoke.js";
-const STYLE_PATH = "/__ca059_harness_smoke.css";
+const SCRIPT_PATH = '/__ca059_harness_smoke.js';
+const STYLE_PATH = '/__ca059_harness_smoke.css';
 const LABELS = [
-  ["e:xz:a", "parallel A", 736.5, 133, 80, 26],
-  ["e:xz:b", "parallel B", 745.5, 76, 80, 26],
-  ["e:wx", "sibling-to-inner", 301, 160, 116, 26],
-  ["e:yw", "return-to-sibling", 264.5, 194, 122, 26],
-  ["e:zw", "external-to-sibling", 385.5, 13, 134, 26],
+  ['e:xz:a', 'parallel A', 736.5, 133, 80, 26],
+  ['e:xz:b', 'parallel B', 745.5, 76, 80, 26],
+  ['e:wx', 'sibling-to-inner', 301, 160, 116, 26],
+  ['e:yw', 'return-to-sibling', 264.5, 194, 122, 26],
+  ['e:zw', 'external-to-sibling', 385.5, 13, 134, 26],
 ] as const;
 let server: Server;
 let baseUrl: string;
 
 function collapseVariant() {
   const variant = structuredClone(
-    JSON.parse(readFileSync(baselinePath, "utf8")).variantsById.proposed,
+    JSON.parse(readFileSync(baselinePath, 'utf8')).variantsById.proposed,
   );
   const node = variant.graph.nodes[0];
   const edge = variant.graph.edges[0];
-  const group = JSON.parse(readFileSync(nestedPath, "utf8")).variantsById
+  const group = JSON.parse(readFileSync(nestedPath, 'utf8')).variantsById
     .proposed.graph.groups[0];
   variant.graph.groups = [
-    { ...group, id: "outer", parentGroupId: null, memberNodeIds: ["W"] },
+    { ...group, id: 'outer', parentGroupId: null, memberNodeIds: ['W'] },
     {
       ...group,
-      id: "inner",
-      parentGroupId: "outer",
-      memberNodeIds: ["X", "Y"],
+      id: 'inner',
+      parentGroupId: 'outer',
+      memberNodeIds: ['X', 'Y'],
     },
   ];
   variant.graph.nodes = [
-    { ...node, id: "X", groupPathIds: ["outer", "inner"], order: 0 },
-    { ...node, id: "Y", groupPathIds: ["outer", "inner"], order: 1 },
-    { ...node, id: "W", groupPathIds: ["outer"], order: 2 },
-    { ...node, id: "Z", groupPathIds: [], order: 3 },
+    { ...node, id: 'X', groupPathIds: ['outer', 'inner'], order: 0 },
+    { ...node, id: 'Y', groupPathIds: ['outer', 'inner'], order: 1 },
+    { ...node, id: 'W', groupPathIds: ['outer'], order: 2 },
+    { ...node, id: 'Z', groupPathIds: [], order: 3 },
   ];
   variant.graph.edges = [
-    ["e:xy", "X", "Y", "inner-only"],
-    ["e:xz:a", "X", "Z", "parallel A"],
-    ["e:xz:b", "X", "Z", "parallel B"],
-    ["e:wx", "W", "X", "sibling-to-inner"],
-    ["e:yw", "Y", "W", "return-to-sibling"],
-    ["e:zw", "Z", "W", "external-to-sibling"],
+    ['e:xy', 'X', 'Y', 'inner-only'],
+    ['e:xz:a', 'X', 'Z', 'parallel A'],
+    ['e:xz:b', 'X', 'Z', 'parallel B'],
+    ['e:wx', 'W', 'X', 'sibling-to-inner'],
+    ['e:yw', 'Y', 'W', 'return-to-sibling'],
+    ['e:zw', 'Z', 'W', 'external-to-sibling'],
   ].map(([id, fromNodeId, toNodeId, label], index) => ({
     ...edge,
     id,
     fromNodeId,
     toNodeId,
     label,
-    certainty: index % 2 ? "unresolved" : "mock",
+    certainty: index % 2 ? 'unresolved' : 'mock',
   }));
-  variant.artifact.revision = "revision:collapse";
+  variant.artifact.revision = 'revision:collapse';
   return variant;
 }
 
 function boundedJson(value: unknown): string {
   const output = JSON.stringify(value);
-  if (typeof output !== "string")
-    throw new Error("CA059_UNRESOLVED_HARNESS: invalid JSON evidence");
-  if (Buffer.byteLength(output, "utf8") <= 16 * 1024) return output;
+  if (typeof output !== 'string')
+    throw new Error('CA059_UNRESOLVED_HARNESS: invalid JSON evidence');
+  if (Buffer.byteLength(output, 'utf8') <= 16 * 1024) return output;
   const fallback = JSON.stringify({
-    status: "UNRESOLVED_LIMIT",
-    reason: "case output exceeded 16KiB UTF8",
-    originalBytes: Buffer.byteLength(output, "utf8"),
+    status: 'UNRESOLVED_LIMIT',
+    reason: 'case output exceeded 16KiB UTF8',
+    originalBytes: Buffer.byteLength(output, 'utf8'),
   });
-  if (Buffer.byteLength(fallback, "utf8") > 16 * 1024)
-    throw new Error("CA059_UNRESOLVED_LIMIT: even fallback JSON too large");
+  if (Buffer.byteLength(fallback, 'utf8') > 16 * 1024)
+    throw new Error('CA059_UNRESOLVED_LIMIT: even fallback JSON too large');
   return fallback;
 }
 
@@ -109,12 +109,12 @@ function classifyCsp(events: CspEvent[], styles: StyleInsertion[]) {
   // an X6-looking script name alone exempts a new CSP violation.
   const candidates = events.filter(
     (event) =>
-      event.directive === "style-src-elem" && event.blockedUri === "inline",
+      event.directive === 'style-src-elem' && event.blockedUri === 'inline',
   );
   const matchingStyles = candidates.map((event) =>
     styles.flatMap((style, index) =>
       style.contentLength === 2854 &&
-      style.contentHash === "a73d50ec" &&
+      style.contentHash === 'a73d50ec' &&
       event.source.length > 0 &&
       style.createFrame.includes(event.source) &&
       Math.abs(style.timingMs - event.timingMs) < 1500
@@ -167,19 +167,19 @@ function classifyCsp(events: CspEvent[], styles: StyleInsertion[]) {
     unexpected,
     attribution:
       candidates.length > 0 && !everyInsertionIsSourceLinkedX6
-        ? "UNKNOWN_CSP_SOURCE"
-        : "SOURCE_LINKED_X6_CORE_ONLY",
+        ? 'UNKNOWN_CSP_SOURCE'
+        : 'SOURCE_LINKED_X6_CORE_ONLY',
     styleInsertionCount: styles.length,
     sourceMatchCount: matchingAssignments,
     sourceMatchAttempts: searchAttempts,
-    ca060Status: "SEPARATE_RED_NOT_VERIFIED_BY_CA059",
+    ca060Status: 'SEPARATE_RED_NOT_VERIFIED_BY_CA059',
   };
 }
 
 async function bundleSmoke() {
-  const entry = "virtual:ca059-harness-entry";
-  const entryId = "\0" + entry;
-  const helperId = "\0virtual:ca059-harness-helper";
+  const entry = 'virtual:ca059-harness-entry';
+  const entryId = '\0' + entry;
+  const helperId = '\0virtual:ca059-harness-helper';
   let expectedRootId: string | undefined;
   const placements = Object.fromEntries(
     LABELS.map(([, text, x, y, width, height]) => [
@@ -189,22 +189,22 @@ async function bundleSmoke() {
   );
   let aliasHits = 0;
   const helperSource = [
-    "const placements = " + JSON.stringify(placements) + ";",
-    "export function reserveRouteLabel(points,text,obstacles,reservations) {",
-    "  if (!Array.isArray(points) || points.length < 2 || !Array.isArray(reservations))",
+    'const placements = ' + JSON.stringify(placements) + ';',
+    'export function reserveRouteLabel(points,text,obstacles,reservations) {',
+    '  if (!Array.isArray(points) || points.length < 2 || !Array.isArray(reservations))',
     '    throw Error("CA059_UNRESOLVED_HARNESS: invalid helper signature");',
-    "  const selected = placements[String(text)];",
+    '  const selected = placements[String(text)];',
     '  if (!selected) throw Error("CA059_ALIAS_NEGATIVE_REJECTED:" + String(text));',
-    "  (window.__ca059AliasCalls ??= []).push(String(text));",
-    "  const box = {...selected}; reservations.push(box); return box;",
-    "}",
-  ].join("\n");
+    '  (window.__ca059AliasCalls ??= []).push(String(text));',
+    '  const box = {...selected}; reservations.push(box); return box;',
+    '}',
+  ].join('\n');
   const entrySource = [
     'import { Graph } from "@antv/x6";',
-    "import { renderV3Scene } from " + JSON.stringify(rendererPath) + ";",
-    "import { createV3SceneLayout } from " + JSON.stringify(geometryPath) + ";",
+    'import { renderV3Scene } from ' + JSON.stringify(rendererPath) + ';',
+    'import { createV3SceneLayout } from ' + JSON.stringify(geometryPath) + ';',
     'import { reserveRouteLabel } from "virtual:ca059-direct-helper";',
-    "let layout,rendered;",
+    'let layout,rendered;',
     String.raw`
 function ca066TextMatches(expected, candidate) {
   if (typeof expected !== "string" || typeof candidate !== "string") return false;
@@ -292,67 +292,67 @@ function ca066InspectEdge(edge, oldExact = false) {
       Number.isFinite(rect?.height) && rect.height > 0};
 }
 `,
-    "window.__ca059Harness = {",
-    "  inspectEdge(id, oldExact=false) { return ca066InspectEdge(rendered?.graph?.getCellById(id), oldExact); },",
-    "  matchesText: ca066TextMatches,",
-    "  paintColor: ca066PaintColor,",
+    'window.__ca059Harness = {',
+    '  inspectEdge(id, oldExact=false) { return ca066InspectEdge(rendered?.graph?.getCellById(id), oldExact); },',
+    '  matchesText: ca066TextMatches,',
+    '  paintColor: ca066PaintColor,',
     "  routeElement(id) { const edge=rendered?.graph?.getCellById(id); return edge && rendered.graph.findViewByCell(edge)?.findOne('line'); },",
-    "  negative() {",
+    '  negative() {',
     '    try { reserveRouteLabel([{x:0,y:0},{x:1,y:1}],"__invalid_probe_label__",[],[]);',
-    "      return {rejected:false};",
-    "    } catch(error) {",
+    '      return {rejected:false};',
+    '    } catch(error) {',
     '      return {rejected:String(error).includes("CA059_ALIAS_NEGATIVE_REJECTED"),',
-    "        message:String(error).slice(0,120)};",
-    "    }",
-    "  },",
-    "  async render(variant,state) {",
-    "    window.__ca059AliasCalls = [];",
-    "    layout = createV3SceneLayout();",
-    "    const workerStart=performance.now();",
-    "    const geometry = await layout.layout(variant,{...state,presentationState:state,timeoutMs:30000});",
-    "    const workerMs=performance.now()-workerStart;",
+    '        message:String(error).slice(0,120)};',
+    '    }',
+    '  },',
+    '  async render(variant,state) {',
+    '    window.__ca059AliasCalls = [];',
+    '    layout = createV3SceneLayout();',
+    '    const workerStart=performance.now();',
+    '    const geometry = await layout.layout(variant,{...state,presentationState:state,timeoutMs:30000});',
+    '    const workerMs=performance.now()-workerStart;',
     '    const canvas=document.getElementById("ca059-smoke-canvas");',
     '    if (!canvas) throw Error("CA059_UNRESOLVED_HARNESS: canvas missing");',
-    "    const x6Start=performance.now();",
-    "    rendered = await renderV3Scene(canvas,variant,geometry,state,{GraphClass:Graph});",
-    "    rendered.graph.zoomToFit({padding:24});",
-    "    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));",
-    "    const seen=[];",
-    "    for (const edge of rendered.graph.getEdges()) {",
-    "      seen.push({id:edge.id,...ca066InspectEdge(edge)});",
-    "    }",
-    "    return {workerMs,x6Ms:performance.now()-x6Start,",
-    "      scene:{width:geometry.width,height:geometry.height},",
-    "      aliasCalls:[...(window.__ca059AliasCalls??[])],",
+    '    const x6Start=performance.now();',
+    '    rendered = await renderV3Scene(canvas,variant,geometry,state,{GraphClass:Graph});',
+    '    rendered.graph.zoomToFit({padding:24});',
+    '    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));',
+    '    const seen=[];',
+    '    for (const edge of rendered.graph.getEdges()) {',
+    '      seen.push({id:edge.id,...ca066InspectEdge(edge)});',
+    '    }',
+    '    return {workerMs,x6Ms:performance.now()-x6Start,',
+    '      scene:{width:geometry.width,height:geometry.height},',
+    '      aliasCalls:[...(window.__ca059AliasCalls??[])],',
     '      domCells:canvas.querySelectorAll("[data-cell-id]").length,edges:seen};',
-    "  },",
-    "  dispose() {try {rendered?.dispose();} finally {layout?.dispose();}}",
-    "};",
-  ].join("\n");
+    '  },',
+    '  dispose() {try {rendered?.dispose();} finally {layout?.dispose();}}',
+    '};',
+  ].join('\n');
   const output = await build({
     configFile: false,
     publicDir: false,
-    logLevel: "error",
+    logLevel: 'error',
     plugins: [
       {
-        name: "ca059-exact-renderer-import-smoke",
-        enforce: "pre",
+        name: 'ca059-exact-renderer-import-smoke',
+        enforce: 'pre',
         configResolved(config) {
           expectedRootId = normalizePath(resolve(config.root, entry));
         },
         resolveId(id, importer, options) {
           if (id === entry) return entryId;
-          if (id === "virtual:ca059-direct-helper") return helperId;
+          if (id === 'virtual:ca059-direct-helper') return helperId;
           if (
-            id === "./diagram-label-placement.js" &&
-            /[/\\]public[/\\]v3-scene-diagram\.js$/.test(importer ?? "")
+            id === './diagram-label-placement.js' &&
+            /[/\\]public[/\\]v3-scene-diagram\.js$/.test(importer ?? '')
           ) {
             aliasHits++;
             return helperId;
           }
           if (
             expectedRootId !== undefined &&
-            id === expectedRootId &&
+            normalizePath(id) === expectedRootId &&
             importer == null &&
             options?.isEntry === true
           )
@@ -371,62 +371,62 @@ function ca066InspectEdge(edge, oldExact = false) {
       rollupOptions: { output: { inlineDynamicImports: true } },
       lib: {
         entry,
-        formats: ["iife"],
-        name: "CA059HarnessSmoke",
-        fileName: () => "ca059-harness-smoke.js",
+        formats: ['iife'],
+        name: 'CA059HarnessSmoke',
+        fileName: () => 'ca059-harness-smoke.js',
       },
     },
   });
   if (aliasHits !== 1)
     throw new Error(
-      "CA059_UNRESOLVED_HARNESS: renderer-only Vite import alias hits=" +
+      'CA059_UNRESOLVED_HARNESS: renderer-only Vite import alias hits=' +
         aliasHits,
     );
   const chunks = (Array.isArray(output) ? output : [output]).flatMap(
-    (record) => ("output" in record ? record.output : []),
+    (record) => ('output' in record ? record.output : []),
   );
-  const chunk = chunks.find((item) => item.type === "chunk");
+  const chunk = chunks.find((item) => item.type === 'chunk');
   if (
     !chunk ||
-    chunk.type !== "chunk" ||
-    Buffer.byteLength(chunk.code, "utf8") > 8 * 1024 * 1024
+    chunk.type !== 'chunk' ||
+    Buffer.byteLength(chunk.code, 'utf8') > 8 * 1024 * 1024
   )
     throw new Error(
-      "CA059_UNRESOLVED_LIMIT: in-memory bundle missing/exceeds 8MiB",
+      'CA059_UNRESOLVED_LIMIT: in-memory bundle missing/exceeds 8MiB',
     );
   return chunk.code;
 }
 
 async function mount(page: Page, code: string) {
-  await page.route("**" + SCRIPT_PATH, (route) =>
+  await page.route('**' + SCRIPT_PATH, (route) =>
     route.fulfill({
       status: 200,
-      contentType: "application/javascript",
+      contentType: 'application/javascript',
       body: code,
     }),
   );
-  await page.route("**" + STYLE_PATH, (route) =>
+  await page.route('**' + STYLE_PATH, (route) =>
     route.fulfill({
       status: 200,
-      contentType: "text/css",
-      body: "html,body{margin:0;padding:0}#ca059-smoke-canvas{width:100vw;height:100vh;overflow:hidden}",
+      contentType: 'text/css',
+      body: 'html,body{margin:0;padding:0}#ca059-smoke-canvas{width:100vw;height:100vh;overflow:hidden}',
     }),
   );
-  const response = await page.goto(baseUrl + "/v3-preview.html");
+  const response = await page.goto(baseUrl + '/v3-preview.html');
   expect(response?.status()).toBe(200);
-  expect(response?.headers()["content-security-policy"]).toContain(
+  expect(response?.headers()['content-security-policy']).toContain(
     "script-src 'self'",
   );
-  expect(response?.headers()["content-security-policy"]).toContain(
+  expect(response?.headers()['content-security-policy']).toContain(
     "style-src 'self'",
   );
   await page.evaluate(() => {
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "/__ca059_harness_smoke.css";
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/__ca059_harness_smoke.css';
     document.head.appendChild(link);
-    const canvas = document.createElement("div");
-    canvas.id = "ca059-smoke-canvas";
+    const canvas = document.createElement('div');
+    canvas.id = 'ca059-smoke-canvas';
     document.body.replaceChildren(canvas);
   });
   await page.addScriptTag({ url: baseUrl + SCRIPT_PATH });
@@ -438,7 +438,7 @@ async function mount(page: Page, code: string) {
 test.beforeAll(async () => {
   const store: SessionStore = {
     async create() {
-      throw new Error("CA059 smoke never creates sessions");
+      throw new Error('CA059 smoke never creates sessions');
     },
     async get() {
       return undefined;
@@ -449,13 +449,13 @@ test.beforeAll(async () => {
     async close() {},
   };
   server = createServer(createWebApp(store));
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
-  if (!address || typeof address === "string")
+  if (!address || typeof address === 'string')
     throw new Error(
-      "CA059_UNRESOLVED_HARNESS: ephemeral server port unavailable",
+      'CA059_UNRESOLVED_HARNESS: ephemeral server port unavailable',
     );
-  baseUrl = "http://127.0.0.1:" + address.port;
+  baseUrl = 'http://127.0.0.1:' + address.port;
 });
 
 test.afterAll(async () => {
@@ -463,12 +463,12 @@ test.afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
-test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", async ({
+test('CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY', async ({
   browser,
 }, testInfo) => {
   testInfo.setTimeout(45_000);
-  let status = "UNRESOLVED_HARNESS";
-  let reason = "";
+  let status = 'UNRESOLVED_HARNESS';
+  let reason = '';
   let observed: unknown = null;
   const started = Date.now();
   const context = await browser.newContext({
@@ -487,10 +487,10 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
           hash ^= value.charCodeAt(i);
           hash = Math.imul(hash, 16777619);
         }
-        return (hash >>> 0).toString(16).padStart(8, "0");
+        return (hash >>> 0).toString(16).padStart(8, '0');
       };
       document.addEventListener(
-        "securitypolicyviolation",
+        'securitypolicyviolation',
         (event) => {
           const records = (window as any).__ca059Csp;
           if (records.length >= 24) {
@@ -500,7 +500,7 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
           records.push({
             directive: event.effectiveDirective,
             blockedUri: event.blockedURI,
-            source: event.sourceFile?.split("/").pop() ?? "",
+            source: event.sourceFile?.split('/').pop() ?? '',
             timingMs: Math.round(performance.now()),
           });
         },
@@ -514,8 +514,8 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
         options?: ElementCreationOptions,
       ) {
         const element = originalCreateElement.call(this, tagName, options);
-        if (tagName.toLowerCase() === "style")
-          creation.set(element, (new Error().stack ?? "").split("\n")[2] ?? "");
+        if (tagName.toLowerCase() === 'style')
+          creation.set(element, (new Error().stack ?? '').split('\n')[2] ?? '');
         return element;
       } as typeof document.createElement;
       const captured = new WeakSet<Element>();
@@ -527,11 +527,11 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
           (window as any).__ca059RecorderOverflow = true;
           return;
         }
-        const content = style.textContent ?? "";
+        const content = style.textContent ?? '';
         records.push({
           contentLength: content.length,
           contentHash: fingerprint(content),
-          createFrame: (creation.get(style) ?? "").slice(0, 180),
+          createFrame: (creation.get(style) ?? '').slice(0, 180),
           timingMs: Math.round(performance.now()),
         });
       };
@@ -539,8 +539,8 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
         for (const change of changes)
           change.addedNodes.forEach((node) => {
             if (!(node instanceof Element)) return;
-            if (node.tagName === "STYLE") capture(node);
-            node.querySelectorAll("style").forEach(capture);
+            if (node.tagName === 'STYLE') capture(node);
+            node.querySelectorAll('style').forEach(capture);
           });
       }).observe(document, { childList: true, subtree: true });
     });
@@ -550,14 +550,14 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
     );
     expect(
       negative.rejected,
-      "test-only helper must reject unknown label",
+      'test-only helper must reject unknown label',
     ).toBe(true);
     const variant = collapseVariant();
     const state = {
-      variantId: "proposed",
-      orientation: "horizontal",
+      variantId: 'proposed',
+      orientation: 'horizontal',
       viewport: { width: 800, height: 600 },
-      collapsedGroupIds: ["inner"],
+      collapsedGroupIds: ['inner'],
     };
     const probe = await page.evaluate(
       ({ variant, state }) =>
@@ -570,10 +570,10 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
       const harness = (window as any).__ca059Harness;
       const owner = document.querySelector('[data-cell-id="e:xz:a"]');
       const foreign = document.querySelector('[data-cell-id="e:xz:b"]');
-      const glyph = owner?.querySelector("text");
+      const glyph = owner?.querySelector('text');
       if (!owner || !foreign || !glyph)
-        throw Error("CA066_UNRESOLVED: real X6 edge text owner missing");
-      const inspect = () => Boolean(harness.inspectEdge("e:xz:a").hasDomGlyph);
+        throw Error('CA066_UNRESOLVED: real X6 edge text owner missing');
+      const inspect = () => Boolean(harness.inspectEdge('e:xz:a').hasDomGlyph);
       const temporarily = (change: () => () => void) => {
         const undo = change();
         try {
@@ -587,32 +587,32 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
         glyph.replaceChildren(document.createTextNode(value));
         return () => glyph.replaceChildren(...nodes);
       };
-      const originalCodePoints = Array.from(glyph.textContent ?? "", (char) =>
+      const originalCodePoints = Array.from(glyph.textContent ?? '', (char) =>
         char.codePointAt(0),
       );
-      const originalExactRed = glyph.textContent?.trim() !== "parallel A";
-      const oldComparatorNegative = !harness.inspectEdge("e:xz:a", true)
+      const originalExactRed = glyph.textContent?.trim() !== 'parallel A';
+      const oldComparatorNegative = !harness.inspectEdge('e:xz:a', true)
         .hasDomGlyph;
       const matcher = {
-        plain: harness.matchesText("parallel A", "parallel A"),
-        candidateNbsp: harness.matchesText("parallel A", "parallel\u00a0A"),
-        modelNbspReverse: harness.matchesText("parallel\u00a0A", "parallel A"),
+        plain: harness.matchesText('parallel A', 'parallel A'),
+        candidateNbsp: harness.matchesText('parallel A', 'parallel\u00a0A'),
+        modelNbspReverse: harness.matchesText('parallel\u00a0A', 'parallel A'),
       };
       const paintColors = {
-        opaqueBlackRgb: harness.paintColor("rgb(0, 0, 0)"),
-        opaqueRedRgb: harness.paintColor("rgb(255, 0, 0)"),
-        rgbaZeroAlpha: harness.paintColor("rgba(0, 0, 0, 0)"),
-        rgbSlashZeroAlpha: harness.paintColor("rgb(255 0 0 / 0)"),
-        none: harness.paintColor("none"),
-        transparent: harness.paintColor("transparent"),
-        unresolvedPaintServer: harness.paintColor("url(#missing)"),
+        opaqueBlackRgb: harness.paintColor('rgb(0, 0, 0)'),
+        opaqueRedRgb: harness.paintColor('rgb(255, 0, 0)'),
+        rgbaZeroAlpha: harness.paintColor('rgba(0, 0, 0, 0)'),
+        rgbSlashZeroAlpha: harness.paintColor('rgb(255 0 0 / 0)'),
+        none: harness.paintColor('none'),
+        transparent: harness.paintColor('transparent'),
+        unresolvedPaintServer: harness.paintColor('url(#missing)'),
       };
       const positive = inspect();
-      const wrongLabel = temporarily(swapText("parallel C"));
-      const doubledSpace = temporarily(swapText("parallel  A"));
-      const narrowNoBreak = temporarily(swapText("parallel\u202fA"));
-      const zeroWidthSpace = temporarily(swapText("parallel\u200bA"));
-      const bidiChanged = temporarily(swapText("parallel\u202eA"));
+      const wrongLabel = temporarily(swapText('parallel C'));
+      const doubledSpace = temporarily(swapText('parallel  A'));
+      const narrowNoBreak = temporarily(swapText('parallel\u202fA'));
+      const zeroWidthSpace = temporarily(swapText('parallel\u200bA'));
+      const bidiChanged = temporarily(swapText('parallel\u202eA'));
       const duplicate = temporarily(() => {
         const copy = glyph.cloneNode(true);
         glyph.parentNode?.appendChild(copy);
@@ -628,10 +628,10 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
         const parent = glyph.parentNode;
         const next = glyph.nextSibling;
         const wrapper = document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "g",
+          'http://www.w3.org/2000/svg',
+          'g',
         );
-        wrapper.setAttribute("data-cell-id", "ca066-foreign-nested");
+        wrapper.setAttribute('data-cell-id', 'ca066-foreign-nested');
         parent?.insertBefore(wrapper, glyph);
         wrapper.appendChild(glyph);
         return () => {
@@ -642,108 +642,108 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
       const hiddenChild = temporarily(() => {
         const nodes = Array.from(glyph.childNodes);
         const visible = document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "tspan",
+          'http://www.w3.org/2000/svg',
+          'tspan',
         );
-        visible.textContent = "parallel";
+        visible.textContent = 'parallel';
         const hidden = document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "tspan",
+          'http://www.w3.org/2000/svg',
+          'tspan',
         );
-        hidden.textContent = "\u00a0A";
-        hidden.setAttribute("display", "none");
+        hidden.textContent = '\u00a0A';
+        hidden.setAttribute('display', 'none');
         glyph.replaceChildren(visible, hidden);
         return () => glyph.replaceChildren(...nodes);
       });
       const zeroFontChild = temporarily(() => {
         const nodes = Array.from(glyph.childNodes);
         const visible = document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "tspan",
+          'http://www.w3.org/2000/svg',
+          'tspan',
         );
-        visible.textContent = "parallel";
+        visible.textContent = 'parallel';
         const zeroFont = document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "tspan",
+          'http://www.w3.org/2000/svg',
+          'tspan',
         );
-        zeroFont.textContent = "\u00a0A";
-        zeroFont.style.fontSize = "0px";
+        zeroFont.textContent = '\u00a0A';
+        zeroFont.style.fontSize = '0px';
         glyph.replaceChildren(visible, zeroFont);
         return () => glyph.replaceChildren(...nodes);
       });
       const transparentChild = temporarily(() => {
-        const child = glyph.querySelector("tspan") ?? glyph;
-        const opacity = child.style.getPropertyValue("opacity");
-        const priority = child.style.getPropertyPriority("opacity");
-        child.style.setProperty("opacity", "0", "important");
+        const child = glyph.querySelector('tspan') ?? glyph;
+        const opacity = child.style.getPropertyValue('opacity');
+        const priority = child.style.getPropertyPriority('opacity');
+        child.style.setProperty('opacity', '0', 'important');
         return () =>
           opacity
-            ? child.style.setProperty("opacity", opacity, priority)
-            : child.style.removeProperty("opacity");
+            ? child.style.setProperty('opacity', opacity, priority)
+            : child.style.removeProperty('opacity');
       });
       const zeroWidth = temporarily(() => {
-        const previous = glyph.getAttribute("transform");
-        glyph.setAttribute("transform", "scale(0, 1)");
+        const previous = glyph.getAttribute('transform');
+        glyph.setAttribute('transform', 'scale(0, 1)');
         return () =>
           previous === null
-            ? glyph.removeAttribute("transform")
-            : glyph.setAttribute("transform", previous);
+            ? glyph.removeAttribute('transform')
+            : glyph.setAttribute('transform', previous);
       });
       const zeroHeight = temporarily(() => {
-        const previous = glyph.getAttribute("transform");
-        glyph.setAttribute("transform", "scale(1, 0)");
+        const previous = glyph.getAttribute('transform');
+        glyph.setAttribute('transform', 'scale(1, 0)');
         return () =>
           previous === null
-            ? glyph.removeAttribute("transform")
-            : glyph.setAttribute("transform", previous);
+            ? glyph.removeAttribute('transform')
+            : glyph.setAttribute('transform', previous);
       });
-      const route = harness.routeElement("e:xz:a") as SVGPathElement | null;
-      const decoy = Array.from(owner.querySelectorAll("path")).find(
+      const route = harness.routeElement('e:xz:a') as SVGPathElement | null;
+      const decoy = Array.from(owner.querySelectorAll('path')).find(
         (path) => path !== route,
       );
       if (!route || !decoy)
         throw Error(
-          "CA066_UNRESOLVED: exact X6 line/wrap route mapping missing",
+          'CA066_UNRESOLVED: exact X6 line/wrap route mapping missing',
         );
       const setRouteStyle = (property: string, value: string) => () => {
         const previous = route.style.getPropertyValue(property);
         const priority = route.style.getPropertyPriority(property);
-        route.style.setProperty(property, value, "important");
+        route.style.setProperty(property, value, 'important');
         return () =>
           previous
             ? route.style.setProperty(property, previous, priority)
             : route.style.removeProperty(property);
       };
       const transparentPath = temporarily(
-        setRouteStyle("stroke", "transparent"),
+        setRouteStyle('stroke', 'transparent'),
       );
       const zeroRouteStrokeWidth = temporarily(
-        setRouteStyle("stroke-width", "0"),
+        setRouteStyle('stroke-width', '0'),
       );
       const zeroRouteStrokeOpacity = temporarily(
-        setRouteStyle("stroke-opacity", "0"),
+        setRouteStyle('stroke-opacity', '0'),
       );
       const hiddenRouteWithPaintedDecoy = temporarily(() => {
-        const restoreRoute = setRouteStyle("display", "none")();
-        const previousStroke = decoy.style.getPropertyValue("stroke");
-        const previousPriority = decoy.style.getPropertyPriority("stroke");
-        decoy.style.setProperty("stroke", "rgb(255, 0, 0)", "important");
+        const restoreRoute = setRouteStyle('display', 'none')();
+        const previousStroke = decoy.style.getPropertyValue('stroke');
+        const previousPriority = decoy.style.getPropertyPriority('stroke');
+        decoy.style.setProperty('stroke', 'rgb(255, 0, 0)', 'important');
         return () => {
           restoreRoute();
           if (previousStroke)
-            decoy.style.setProperty("stroke", previousStroke, previousPriority);
-          else decoy.style.removeProperty("stroke");
+            decoy.style.setProperty('stroke', previousStroke, previousPriority);
+          else decoy.style.removeProperty('stroke');
         };
       });
       const degeneratePath = temporarily(() => {
-        const previous = route.getAttribute("d");
-        route.setAttribute("d", "M0 0");
+        const previous = route.getAttribute('d');
+        route.setAttribute('d', 'M0 0');
         return () =>
           previous === null
-            ? route.removeAttribute("d")
-            : route.setAttribute("d", previous);
+            ? route.removeAttribute('d')
+            : route.setAttribute('d', previous);
       });
-      const repeatedOldComparatorNegative = !harness.inspectEdge("e:xz:a", true)
+      const repeatedOldComparatorNegative = !harness.inspectEdge('e:xz:a', true)
         .hasDomGlyph;
       const guardedAfterNegativeControls = inspect();
       return {
@@ -780,11 +780,11 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
     ]);
     expect(
       ca066.originalExactRed,
-      "old exact comparator must reject observed U+00A0",
+      'old exact comparator must reject observed U+00A0',
     ).toBe(true);
     expect(
       ca066.oldComparatorNegative,
-      "old exact-comparator diagnostic must reject candidate NBSP",
+      'old exact-comparator diagnostic must reject candidate NBSP',
     ).toBe(true);
     expect(ca066.matcher).toEqual({
       plain: true,
@@ -800,25 +800,25 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
       transparent: false,
       unresolvedPaintServer: false,
     });
-    expect(ca066.positive, "guarded same-edge NBSP candidate").toBe(true);
+    expect(ca066.positive, 'guarded same-edge NBSP candidate').toBe(true);
     expect(
       ca066.repeatedOldComparatorNegative,
-      "repeated old-comparator diagnostic remains negative",
+      'repeated old-comparator diagnostic remains negative',
     ).toBe(true);
     expect(
       ca066.guardedAfterNegativeControls,
-      "guarded inspector remains eligible after reversible negative controls",
+      'guarded inspector remains eligible after reversible negative controls',
     ).toBe(true);
     for (const [name, eligible] of Object.entries(ca066)) {
       if (
-        name === "originalCodePoints" ||
-        name === "originalExactRed" ||
-        name === "matcher" ||
-        name === "paintColors" ||
-        name === "positive" ||
-        name === "oldComparatorNegative" ||
-        name === "repeatedOldComparatorNegative" ||
-        name === "guardedAfterNegativeControls"
+        name === 'originalCodePoints' ||
+        name === 'originalExactRed' ||
+        name === 'matcher' ||
+        name === 'paintColors' ||
+        name === 'positive' ||
+        name === 'oldComparatorNegative' ||
+        name === 'repeatedOldComparatorNegative' ||
+        name === 'guardedAfterNegativeControls'
       )
         continue;
       expect(eligible, `CA066 negative ${name} must remain RED`).toBe(false);
@@ -849,13 +849,13 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
     observed = { ...probe, negative, csp };
     expect(
       recorder.overflow,
-      "CA059_UNRESOLVED_LIMIT: CSP/style source recorder exceeded bounded capture",
+      'CA059_UNRESOLVED_LIMIT: CSP/style source recorder exceeded bounded capture',
     ).toBe(false);
     expect(
       csp.unexpected,
-      "CA059_UNKNOWN_CSP_SOURCE: any non-X6-core style or new script/style violation",
+      'CA059_UNKNOWN_CSP_SOURCE: any non-X6-core style or new script/style violation',
     ).toEqual([]);
-    expect(probe.scene, "real Worker/ELK scene, not preparation-only").toEqual({
+    expect(probe.scene, 'real Worker/ELK scene, not preparation-only').toEqual({
       width: 1128,
       height: 296,
     });
@@ -870,19 +870,19 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
         (edge: { hasDomGlyph: boolean; hasSvgPath: boolean }) =>
           edge.hasDomGlyph && edge.hasSvgPath,
       ),
-      "actual real X6 SVG paths and DOM glyphs",
+      'actual real X6 SVG paths and DOM glyphs',
     ).toBe(true);
     expect(probe.domCells).toBeGreaterThanOrEqual(5);
     await page.evaluate(() => (window as any).__ca059Harness.dispose());
-    status = "HARNESS_ONLY_NO_SEMANTIC_PROOF";
+    status = 'HARNESS_ONLY_NO_SEMANTIC_PROOF';
   } catch (error) {
     reason = String(error instanceof Error ? error.message : error).slice(
       0,
       240,
     );
-    status = reason.includes("CA059_UNRESOLVED_LIMIT")
-      ? "UNRESOLVED_LIMIT"
-      : "UNRESOLVED_HARNESS";
+    status = reason.includes('CA059_UNRESOLVED_LIMIT')
+      ? 'UNRESOLVED_LIMIT'
+      : 'UNRESOLVED_HARNESS';
     throw error; // fail closed: no fixture-only or manual-Graph fallback
   } finally {
     try {
@@ -892,36 +892,289 @@ test("CA059 CI1: renderer Vite alias + real Worker/ELK/X6 glyph smoke ONLY", asy
         observed,
         elapsedMs: Date.now() - started,
         untested: [
-          "six-pixel clearance",
-          "tab-hover-focus-ARIA",
-          "foreign stroke/arrow",
-          "nine-label transactional rollback",
-          "10k Worker/ELK/X6",
-          "screenshot readability",
-          "unchanged original e:yw strict preflight RED, separately verified",
+          'six-pixel clearance',
+          'tab-hover-focus-ARIA',
+          'foreign stroke/arrow',
+          'nine-label transactional rollback',
+          '10k Worker/ELK/X6',
+          'screenshot readability',
+          'unchanged original e:yw strict preflight RED, separately verified',
         ],
-        ca060: "SEPARATE_RED_NOT_SECURITY_ACCEPTANCE",
+        ca060: 'SEPARATE_RED_NOT_SECURITY_ACCEPTANCE',
       });
-      await testInfo.attach("ca059-ci1-harness-only", {
+      await testInfo.attach('ca059-ci1-harness-only', {
         body,
-        contentType: "application/json",
+        contentType: 'application/json',
       });
-      if (JSON.parse(body).status === "UNRESOLVED_LIMIT") {
-        status = "UNRESOLVED_LIMIT";
+      if (JSON.parse(body).status === 'UNRESOLVED_LIMIT') {
+        status = 'UNRESOLVED_LIMIT';
         throw new Error(
-          "CA059_UNRESOLVED_LIMIT: evidence over 16KiB UTF8; smoke invalid",
+          'CA059_UNRESOLVED_LIMIT: evidence over 16KiB UTF8; smoke invalid',
         );
       }
     } catch (error) {
-      if (status !== "UNRESOLVED_LIMIT") status = "UNRESOLVED_HARNESS";
+      if (status !== 'UNRESOLVED_LIMIT') status = 'UNRESOLVED_HARNESS';
       throw error;
     } finally {
       try {
         await context.close();
       } catch (error) {
-        status = "UNRESOLVED_HARNESS";
+        status = 'UNRESOLVED_HARNESS';
         throw error;
       }
     }
+  }
+});
+
+test('CA059: native X6 glyph versus foreign edge clearance is measured, not inferred from boxes', async ({
+  browser,
+}, testInfo) => {
+  testInfo.setTimeout(45_000);
+  const context = await browser.newContext({
+    viewport: { width: 900, height: 600 },
+  });
+  try {
+    const page = await context.newPage();
+    await mount(page, await bundleSmoke());
+    const variant = collapseVariant();
+    await page.evaluate(
+      ({ variant, state }) =>
+        (window as any).__ca059Harness.render(variant, state),
+      {
+        variant,
+        state: {
+          variantId: 'proposed',
+          orientation: 'horizontal',
+          viewport: { width: 800, height: 600 },
+          collapsedGroupIds: ['inner'],
+        },
+      },
+    );
+    const observed = await page.evaluate(async () => {
+      await document.fonts.ready;
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      const harness = (window as any).__ca059Harness;
+      const measure = (labelEdgeId: string, foreignEdgeId: string) => {
+        const owner = document.querySelector(
+          '[data-cell-id="' + labelEdgeId + '"]',
+        );
+        const foreignOwner = document.querySelector(
+          '[data-cell-id="' + foreignEdgeId + '"]',
+        );
+        const glyph = owner?.querySelector('text') as SVGGraphicsElement | null;
+        const path = harness.routeElement(
+          foreignEdgeId,
+        ) as SVGPathElement | null;
+        const textMatrix = glyph?.getScreenCTM();
+        const pathMatrix = path?.getScreenCTM();
+        if (
+          !owner ||
+          !glyph ||
+          !path ||
+          !textMatrix ||
+          !pathMatrix ||
+          !foreignOwner
+        )
+          return {
+            status: 'INCONCLUSIVE',
+            reason: 'native glyph/route/CTM absent',
+          };
+        if (
+          glyph.closest('[data-cell-id]') !== owner ||
+          path.closest('[data-cell-id]') !== foreignOwner
+        )
+          return {
+            status: 'INCONCLUSIVE',
+            reason: 'edge owner identity mismatch',
+          };
+        const local = glyph.getBBox();
+        const corners = [
+          [local.x, local.y],
+          [local.x + local.width, local.y],
+          [local.x, local.y + local.height],
+          [local.x + local.width, local.y + local.height],
+        ].map(([x, y]) => new DOMPoint(x, y).matrixTransform(textMatrix));
+        const rect = {
+          left: Math.min(...corners.map((p) => p.x)),
+          right: Math.max(...corners.map((p) => p.x)),
+          top: Math.min(...corners.map((p) => p.y)),
+          bottom: Math.max(...corners.map((p) => p.y)),
+        };
+        const scale = Math.min(
+          Math.hypot(pathMatrix.a, pathMatrix.b),
+          Math.hypot(pathMatrix.c, pathMatrix.d),
+        );
+        const clearance = 6 * scale;
+        const pathLength = path.getTotalLength();
+        const style = getComputedStyle(path);
+        const painted =
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          style.stroke !== 'none' &&
+          style.stroke !== 'transparent' &&
+          Number.parseFloat(style.strokeWidth) > 0 &&
+          Number(style.strokeOpacity) > 0;
+        const minimumDistance = () => {
+          const length = path.getTotalLength();
+          if (!Number.isFinite(length) || length <= 0) return NaN;
+          const steps = Math.min(4096, Math.max(1, Math.ceil(length * 2)));
+          let result = Infinity;
+          for (let i = 0; i <= steps; i++) {
+            const point = path
+              .getPointAtLength((length * i) / steps)
+              .matrixTransform(pathMatrix);
+            const dx = Math.max(rect.left - point.x, 0, point.x - rect.right);
+            const dy = Math.max(rect.top - point.y, 0, point.y - rect.bottom);
+            result = Math.min(result, Math.hypot(dx, dy));
+          }
+          return result;
+        };
+        const distance = minimumDistance();
+        const natural = glyph.getBoundingClientRect();
+        const previousTextStyle = glyph.getAttribute('style');
+        let hiddenBaselineRejected = false;
+        try {
+          glyph.style.setProperty('visibility', 'hidden', 'important');
+          hiddenBaselineRejected =
+            !harness.inspectEdge(labelEdgeId).hasDomGlyph;
+        } finally {
+          if (previousTextStyle === null) glyph.removeAttribute('style');
+          else glyph.setAttribute('style', previousTextStyle);
+        }
+        const oldParent = glyph.parentNode;
+        const oldNext = glyph.nextSibling;
+        let wrongOwnerRejected = false;
+        try {
+          foreignOwner.appendChild(glyph);
+          wrongOwnerRejected = !harness.inspectEdge(labelEdgeId).hasDomGlyph;
+        } finally {
+          oldParent?.insertBefore(glyph, oldNext);
+        }
+        const oldD = path.getAttribute('d');
+        const oldPathStyle = path.getAttribute('style');
+        const probePath = (a: [number, number], b: [number, number]) => {
+          const inverse = pathMatrix.inverse();
+          const p = new DOMPoint(...a).matrixTransform(inverse);
+          const q = new DOMPoint(...b).matrixTransform(inverse);
+          path.setAttribute(
+            'd',
+            'M' + p.x + ',' + p.y + ' L' + q.x + ',' + q.y,
+          );
+          path.style.setProperty('stroke', 'rgb(255, 0, 0)', 'important');
+          path.style.setProperty('stroke-width', '2', 'important');
+          return minimumDistance();
+        };
+        let opaqueCrossingDetected = false;
+        let onePixelIntrusionDetected = false;
+        try {
+          const middle = (rect.top + rect.bottom) / 2;
+          const crossing = probePath(
+            [rect.left - 10, middle],
+            [rect.right + 10, middle],
+          );
+          opaqueCrossingDetected =
+            Number.isFinite(crossing) && crossing < clearance;
+          const nearX = rect.right + clearance - 1;
+          const intruding = probePath(
+            [nearX, middle - 10],
+            [nearX, middle + 10],
+          );
+          onePixelIntrusionDetected =
+            Number.isFinite(intruding) && intruding < clearance;
+        } finally {
+          if (oldD === null) path.removeAttribute('d');
+          else path.setAttribute('d', oldD);
+          if (oldPathStyle === null) path.removeAttribute('style');
+          else path.setAttribute('style', oldPathStyle);
+        }
+        const validGeometry =
+          [local.width, local.height, pathLength, scale, clearance].every(
+            (value) => Number.isFinite(value) && value > 0,
+          ) &&
+          Number.isFinite(distance) &&
+          distance >= 0 &&
+          natural.width > 0 &&
+          natural.height > 0 &&
+          painted &&
+          harness.inspectEdge(labelEdgeId).hasDomGlyph;
+        const ownerCell = owner.getAttribute('data-cell-id');
+        return {
+          labelEdgeId,
+          foreignEdgeId,
+          status: !validGeometry
+            ? 'INCONCLUSIVE'
+            : distance < clearance
+              ? 'FAIL'
+              : 'PASS',
+          reason: validGeometry
+            ? ''
+            : 'unpainted or unmeasurable native glyph/route',
+          ownerCell,
+          foreignCell: foreignOwner.getAttribute('data-cell-id'),
+          glyphScreen: Object.fromEntries(
+            Object.entries(rect).map(([key, value]) => [
+              key,
+              +value.toFixed(2),
+            ]),
+          ),
+          glyphNaturalWidth: +natural.width.toFixed(2),
+          markerEnd:
+            path.getAttribute('marker-end') ?? style.markerEnd ?? 'none',
+          pathStroke: style.stroke,
+          pathLength: +pathLength.toFixed(2),
+          foreignDistancePx: +distance.toFixed(2),
+          clearancePx: +clearance.toFixed(2),
+          controls: {
+            hiddenBaselineRejected,
+            wrongOwnerRejected,
+            opaqueCrossingDetected,
+            onePixelIntrusionDetected,
+          },
+        };
+      };
+      return {
+        returnLabel: measure('e:yw', 'e:wx'),
+        siblingLabel: measure('e:wx', 'e:yw'),
+      };
+    });
+    await testInfo.attach('ca059-native-glyph-foreign-edge-evidence', {
+      body: boundedJson({
+        status: 'REAL_X6_MEASURED_NOT_PRODUCTION_FIX',
+        observed,
+        unverified: [
+          'full 10k Worker/X6',
+          'nine-label joint rollback',
+          'release',
+        ],
+      }),
+      contentType: 'application/json',
+    });
+    for (const item of [observed.returnLabel, observed.siblingLabel]) {
+      expect(item.status, JSON.stringify(item)).not.toBe('INCONCLUSIVE');
+      expect(
+        item.controls,
+        'native negative controls must detect tampering',
+      ).toEqual({
+        hiddenBaselineRejected: true,
+        wrongOwnerRejected: true,
+        opaqueCrossingDetected: true,
+        onePixelIntrusionDetected: true,
+      });
+    }
+    // A witnessed native collision is diagnostic RED, not proof of an
+    // impossible route and never permission to hide an original edge.
+    expect(
+      observed.returnLabel.status,
+      JSON.stringify(observed.returnLabel),
+    ).toBe('PASS');
+    expect(
+      observed.siblingLabel.status,
+      JSON.stringify(observed.siblingLabel),
+    ).toBe('PASS');
+    await page.evaluate(() => (window as any).__ca059Harness.dispose());
+  } finally {
+    await context.close();
   }
 });
