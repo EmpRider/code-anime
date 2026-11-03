@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build, normalizePath } from 'vite';
 import { createWebApp } from '../../src/web/app.js';
+import { x6CSSLifecyclePlugin } from '../../scripts/x6-css-lifecycle-plugin.mjs';
 import type { SessionStore } from '../../src/domain/flow.js';
 
 const fixturePath = fileURLToPath(
@@ -20,6 +21,7 @@ async function bundledX6Probe(): Promise<string> {
     publicDir: false,
     logLevel: 'error',
     plugins: [
+      x6CSSLifecyclePlugin(),
       {
         name: 'ca060-x6-lifecycle-entry',
         enforce: 'pre',
@@ -78,7 +80,9 @@ test('CA060: same-module G2 opt-out disposal cannot drop live G1 X6 core CSS', a
     const result = await page.evaluate(() => {
       const probe = (window as any).__ca060X6Probe;
       if (!probe?.Graph || !probe?.Config)
-        throw new Error('CA060 bundled Config/Graph module identity unavailable');
+        throw new Error(
+          'CA060 bundled Config/Graph module identity unavailable',
+        );
       const { Graph, Config } = probe;
       const previousFlag = Config.autoInsertCSS;
       const fingerprint = (value: string): string => {
@@ -151,6 +155,186 @@ test('CA060: same-module G2 opt-out disposal cannot drop live G1 X6 core CSS', a
   }
 });
 
+test('CA060: X6 core CSS survives both disposal orders and HMR-skipped owners', async ({
+  browser,
+}) => {
+  const code = await bundledX6Probe();
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await page.goto('about:blank');
+    await page.addScriptTag({ content: code });
+    const cases = [
+      {
+        name: 'two owners, first graph disposed',
+        flags: [true, true],
+        first: 0,
+        expected: [0, 1, 1, 1, 0],
+      },
+      {
+        name: 'two owners, second graph disposed',
+        flags: [true, true],
+        first: 1,
+        expected: [0, 1, 1, 1, 0],
+      },
+      {
+        name: 'no owners',
+        flags: [false, false],
+        first: 0,
+        expected: [0, 0, 0, 0, 0],
+      },
+      {
+        name: 'opt-out graph before owner',
+        flags: [false, true],
+        first: 0,
+        expected: [0, 0, 1, 1, 0],
+      },
+      {
+        name: 'owner before opt-out graph',
+        flags: [true, false],
+        first: 0,
+        expected: [0, 1, 1, 0, 0],
+      },
+      {
+        name: 'HMR skips initial ownership',
+        flags: [true, true],
+        hmr: 0,
+        first: 0,
+        expected: [0, 0, 1, 1, 0],
+      },
+      {
+        name: 'HMR preserves existing ownership',
+        flags: [true, true],
+        hmr: 1,
+        first: 0,
+        expected: [0, 1, 1, 1, 0],
+      },
+    ];
+    for (const scenario of cases) {
+      const observed = await page.evaluate(({ flags, hmr, first }) => {
+        const { Graph, Config } = (window as any).__ca060X6Probe;
+        const oldFlag = Config.autoInsertCSS;
+        const oldModule = (window as any).module;
+        const coreStyles = () =>
+          Array.from(document.querySelectorAll('style')).filter((style) => {
+            const content = style.textContent ?? '';
+            if (content.length !== 2854) return false;
+            let hash = 2166136261;
+            for (let i = 0; i < content.length; i++) {
+              hash ^= content.charCodeAt(i);
+              hash = Math.imul(hash, 16777619);
+            }
+            return (hash >>> 0).toString(16).padStart(8, '0') === 'a73d50ec';
+          }).length;
+        document.body.innerHTML = '<div id="g1"></div><div id="g2"></div>';
+        const graphs: any[] = [];
+        const counts = [coreStyles()];
+        try {
+          for (let i = 0; i < 2; i++) {
+            Config.autoInsertCSS = flags[i];
+            (window as any).module =
+              hmr === i ? { hot: { status: () => 'apply' } } : oldModule;
+            try {
+              graphs.push(
+                new Graph({
+                  container: document.getElementById(`g${i + 1}`),
+                  width: 200,
+                  height: 120,
+                  autoResize: false,
+                }),
+              );
+            } finally {
+              (window as any).module = oldModule;
+            }
+            counts.push(coreStyles());
+          }
+          graphs[first].dispose();
+          counts.push(coreStyles());
+          graphs[1 - first].dispose();
+          counts.push(coreStyles());
+          return counts;
+        } finally {
+          (window as any).module = oldModule;
+          Config.autoInsertCSS = oldFlag;
+        }
+      }, scenario);
+      expect(observed, scenario.name).toEqual(scenario.expected);
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test('CA060: repeated CSS init and dispose never leak or release another Graph owner', async ({
+  browser,
+}) => {
+  const code = await bundledX6Probe();
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await page.goto('about:blank');
+    await page.addScriptTag({ content: code });
+    const counts = await page.evaluate(() => {
+      const { Graph, Config } = (window as any).__ca060X6Probe;
+      const previousFlag = Config.autoInsertCSS;
+      document.body.innerHTML = '<div id="g1"></div><div id="g2"></div>';
+      const coreStyles = () =>
+        Array.from(document.querySelectorAll('style')).filter((style) => {
+          const content = style.textContent ?? '';
+          if (content.length !== 2854) return false;
+          let hash = 2166136261;
+          for (let i = 0; i < content.length; i++) {
+            hash ^= content.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+          }
+          return (hash >>> 0).toString(16).padStart(8, '0') === 'a73d50ec';
+        }).length;
+      let g1: any;
+      let g2: any;
+      try {
+        Config.autoInsertCSS = true;
+        const results = [coreStyles()];
+        g1 = new Graph({
+          container: document.getElementById('g1'),
+          width: 200,
+          height: 120,
+        });
+        results.push(coreStyles());
+        // Graph.css is the actual X6 3.1.8 CSSManager instance under test.
+        g1.css.init();
+        g1.css.init();
+        results.push(coreStyles());
+        g2 = new Graph({
+          container: document.getElementById('g2'),
+          width: 200,
+          height: 120,
+        });
+        results.push(coreStyles());
+        g1.css.dispose();
+        g1.css.dispose();
+        results.push(coreStyles());
+        g1.dispose();
+        g1 = undefined;
+        results.push(coreStyles());
+        g2.dispose();
+        g2 = undefined;
+        results.push(coreStyles());
+        return results;
+      } finally {
+        try {
+          g1?.dispose();
+        } finally {
+          g2?.dispose();
+          Config.autoInsertCSS = previousFlag;
+        }
+      }
+    });
+    expect(counts).toEqual([0, 1, 1, 1, 1, 1, 0]);
+  } finally {
+    await context.close();
+  }
+});
+
 let server: Server;
 let baseUrl: string;
 test.beforeAll(async () => {
@@ -209,4 +393,57 @@ test('CA060: native V3 preview uses its own script bundle, not legacy X6 entry',
   ).toEqual([]);
   // Standalone script isolation does not prove safety if legacy and V3 share
   // the same document. The G1/G2 test above characterizes that risk.
+});
+
+test('CA060: native V3 trusted X6 CSS works under strict CSP while inline CSS stays blocked', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).__ca060CspEvents = [];
+    document.addEventListener('securitypolicyviolation', (event) => {
+      (window as any).__ca060CspEvents.push({
+        directive: event.effectiveDirective,
+        blockedUri: event.blockedURI,
+      });
+    });
+  });
+  const response = await page.goto(`${baseUrl}/v3-preview.html`);
+  expect(response?.headers()['content-security-policy']).toContain(
+    "style-src 'self'",
+  );
+  await page.locator('#v3-file').setInputFiles(fixturePath);
+  await expect(page.locator('#v3-preview')).toHaveAttribute(
+    'data-v3-state',
+    'ready',
+  );
+  const css = await page
+    .locator('.x6-graph')
+    .first()
+    .evaluate((graph) => ({
+      touchAction: getComputedStyle(graph).touchAction,
+      external: [...document.styleSheets].some((sheet) =>
+        sheet.href?.endsWith('/vendor/x6.css'),
+      ),
+    }));
+  expect(css).toEqual({ touchAction: 'none', external: true });
+  expect(await page.evaluate(() => (window as any).__ca060CspEvents)).toEqual(
+    [],
+  );
+
+  await page.evaluate(() => {
+    const injected = document.createElement('style');
+    injected.textContent = 'body { --ca060-inline-probe: 1 }';
+    document.head.append(injected);
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__ca060CspEvents.some(
+          (event: { directive: string; blockedUri: string }) =>
+            event.directive === 'style-src-elem' &&
+            event.blockedUri === 'inline',
+        ),
+      ),
+    )
+    .toBe(true);
 });

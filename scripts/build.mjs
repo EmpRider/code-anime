@@ -4,6 +4,7 @@ import { content as x6CSS } from '@antv/x6/es/style/raw.js';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { build } from 'vite';
+import { x6CSSLifecyclePlugin } from './x6-css-lifecycle-plugin.mjs';
 const root = resolve(import.meta.dirname, '..');
 // Preserve official GWT Worker bytes; do not rebundle JavaScript.
 const worker = readFileSync(
@@ -25,6 +26,7 @@ await build({
   configFile: false,
   root,
   publicDir: false,
+  plugins: [x6CSSLifecyclePlugin()],
   build: {
     outDir: resolve(root, 'public/diagram'),
     emptyOutDir: true,
@@ -44,6 +46,7 @@ await build({
   configFile: false,
   root,
   publicDir: false,
+  plugins: [x6CSSLifecyclePlugin()],
   build: {
     outDir: resolve(root, 'public/v3-preview'),
     emptyOutDir: true,

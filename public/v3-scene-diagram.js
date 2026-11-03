@@ -366,8 +366,10 @@ export async function renderV3Scene(
       );
     labels.set(original.id, labelPosition(points, label));
   }
-  // Node tests inject a graph; Vite resolves the installed X6 module at browser runtime.
-  const GraphClass = options.GraphClass ?? (await import('@antv/x6')).Graph;
+  // V3 loads trusted /vendor/x6.css; block X6's default inline core CSS.
+  const x6 = options.GraphClass ? null : await import('@antv/x6');
+  if (x6) x6.Config.autoInsertCSS = false;
+  const GraphClass = options.GraphClass ?? x6.Graph;
   if (typeof GraphClass !== 'function') throw new Error('X6 Graph unavailable');
   container.replaceChildren();
   container.tabIndex = 0;
