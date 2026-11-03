@@ -382,3 +382,61 @@ New discovered defects require separate unique `CA069-Ixx` records with observed
 - CA068 PNG/CSP work: still separately paused, not included.
 
 Final completion requires independent Council/agent review, all required verified remote tasks and honest limitations, then BA asks the user to accept completion. Completion acceptance does NOT authorize deletion. Any later cleanup requires a separate explicit approval listing the exact temporary paths and authorizing delete-and-publish. Preserve approved permanent docs and Git history; no cleanup authority has been granted.
+
+## 2026-11-03 supersession — Real V3 player integration
+
+**Authority:** The owner approved integration of V3 into the
+actual /flow/:id player and directed all implementation work
+to finish before testing begins. Earlier V3 design and
+implementation approvals remain applicable.
+
+**Current task states:**
+- T05 / CA035-A: BLOCKED — Windows durability,
+  persistent ownership and recovery decisions unresolved.
+- T06 / CA035-B: WAITING_ON T05 — V3 publication facade.
+- T07 / CA031: WAITING_ON T02; candidate player work may
+  be separately scheduled, but final acceptance requires T06.
+- T10 / CA038: WAITING_ON T01–T09 — main route,
+  API and MCP activation.
+- T11 / CA039: WAITING_ON T10 replacement proof.
+No task is newly marked DONE.
+
+**Production target:** The genuine /flow/:id player,
+not /v3-preview.html. Preserve current desktop panel
+locations, source, Visits, Values, Follow, playback,
+keyboard behavior and relevant current contracts.
+V3 semantics remain CodeGraph evidence plus explicitly
+identified host-AI mock data. No analyzed-user-code execution.
+
+**Synthetic fixture:** Preserve
+test-results/code-anime-v3-preview-20261103.json
+(76 prepared frames) as UI TEST-ONLY evidence.
+Its placeholder provenance is not a real CodeGraph receipt.
+Do not claim native producer or end-to-end acceptance.
+
+**Exclusive ownership:** CA059 retains its existing dirty
+geometry/renderer/test worktree and Stage-1 owner.
+CA060 retains its CSS/CSP/build ownership.
+No new integration agent may overwrite those files without
+explicit owner release and integration coordination.
+T07 owns its separate V3 player/controller modules;
+T10 alone owns production shell/API activation.
+One PM/publication coordinator controls shared branch writes.
+
+**Implementation-first gate:** Complete all authorized
+implementation edits before beginning tests, builds,
+browser verification or CI. Do not run piecemeal tests.
+Read-only reviews and ownership checks remain permitted.
+Consolidated verification begins only after implementation
+assembly and independent review.
+
+**CI reservation:** Ledger and permitted intermediate
+publication use [skip ci]. Reserve exactly one final
+five-job CI run for the assembled, independently reviewed
+production candidate at a verified remote HEAD.
+No premature CI, release or acceptance claim.
+
+**PM intake:** READ_ONLY_DONE.
+Ledger amendment: PROPOSED / AWAITING_BA_APPROVAL.
+Implementation: NOT_STARTED under this new effort.
+
