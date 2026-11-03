@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build } from 'vite';
+import { build, normalizePath } from 'vite';
 import { createWebApp } from '../../src/web/app.js';
 import type { SessionStore } from '../../src/domain/flow.js';
 
@@ -13,6 +14,7 @@ const fixturePath = fileURLToPath(
 async function bundledX6Probe(): Promise<string> {
   const entry = 'virtual:ca060-x6-lifecycle';
   const resolved = `\0${entry}`;
+  let expectedRootId: string | undefined;
   const output = await build({
     configFile: false,
     publicDir: false,
@@ -20,8 +22,19 @@ async function bundledX6Probe(): Promise<string> {
     plugins: [
       {
         name: 'ca060-x6-lifecycle-entry',
-        resolveId(id) {
+        enforce: 'pre',
+        configResolved(config) {
+          expectedRootId = normalizePath(resolve(config.root, entry));
+        },
+        resolveId(id, importer, options) {
           if (id === entry) return resolved;
+          if (
+            expectedRootId !== undefined &&
+            normalizePath(id) === expectedRootId &&
+            importer == null &&
+            options?.isEntry === true
+          )
+            return resolved;
         },
         load(id) {
           if (id === resolved)
